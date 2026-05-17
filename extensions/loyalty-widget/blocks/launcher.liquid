@@ -1,0 +1,166 @@
+{% comment %}
+  Royal Loyalty — floating launcher + slide-in panel.
+  App embed block (rendered site-wide via theme app embed). Graceful: if the
+  customer is signed out it shows a sign-in prompt; on network error a friendly
+  inline message. Accessible: button, aria-expanded, focus-managed panel.
+{% endcomment %}
+
+<link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
+
+{%- assign pos = block.settings.position | default: 'bottom-right' -%}
+{%- assign primary = block.settings.primary_color | default: '#5C3D2E' -%}
+{%- assign secondary = block.settings.secondary_color | default: '#FFFFFF' -%}
+
+<div
+  id="royal-launcher-root"
+  style="--royal-primary: {{ primary }}; --royal-secondary: {{ secondary }};"
+  data-royal-config='{
+    "proxy": {{ block.settings.proxy_base | default: "/apps/royal" | json }},
+    "loggedIn": {% if customer %}true{% else %}false{% endif %},
+    "customerId": {{ customer.id | json }}
+  }'
+>
+  <button
+    type="button"
+    class="royal-launcher {% if pos == 'bottom-left' %}royal-launcher--left{% else %}royal-launcher--right{% endif %}"
+    aria-haspopup="dialog"
+    aria-expanded="false"
+    aria-controls="royal-panel"
+    id="royal-launcher-btn"
+  >
+    <span aria-hidden="true">&#9819;</span>
+    {{ block.settings.launcher_text | default: 'Rewards' | escape }}
+  </button>
+
+  <div
+    id="royal-panel"
+    class="royal-panel {% if pos == 'bottom-left' %}royal-panel--left{% endif %}"
+    role="dialog"
+    aria-label="{{ block.settings.title | default: 'Your rewards' | escape }}"
+    hidden
+  >
+    <button type="button" id="royal-panel-close" class="royal-btn" style="float:right;background:transparent;color:#666;padding:4px 8px;" aria-label="Close">&times;</button>
+    <h2 style="margin:0 0 8px;">{{ block.settings.title | default: 'Your rewards' | escape }}</h2>
+
+    {%- if customer -%}
+      <p id="royal-balance" class="royal-points">Loading…</p>
+      <p id="royal-tier" class="royal-muted"></p>
+      <h3 style="margin:12px 0 4px;">Rewards</h3>
+      <div id="royal-rewards"><p class="royal-muted">Loading rewards…</p></div>
+    {%- else -%}
+      <p>Sign in to see your points and rewards.</p>
+      <a class="royal-btn" href="/account/login" style="display:inline-block;text-decoration:none;">Sign in</a>
+    {%- endif -%}
+
+    <p id="royal-status" class="royal-status" aria-live="polite"></p>
+  </div>
+</div>
+
+<script src="{{ 'loyalty.js' | asset_url }}" defer></script>
+<script>
+  (function () {
+    function init() {
+      var root = document.getElementById('royal-launcher-root');
+      if (!root || !window.RoyalLoyalty) { return setTimeout(init, 50); }
+      var R = window.RoyalLoyalty;
+      var cfg = R.readConfig(root);
+      var btn = document.getElementById('royal-launcher-btn');
+      var panel = document.getElementById('royal-panel');
+      var closeBtn = document.getElementById('royal-panel-close');
+      var status = document.getElementById('royal-status');
+      var loaded = false;
+
+      function open() {
+        panel.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        closeBtn.focus();
+        if (!loaded && cfg.loggedIn) { loaded = true; load(); }
+      }
+      function close() {
+        panel.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+        btn.focus();
+      }
+      btn.addEventListener('click', function () {
+        panel.hidden ? open() : close();
+      });
+      if (closeBtn) closeBtn.addEventListener('click', close);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !panel.hidden) close();
+      });
+
+      function load() {
+        R.setStatus(status, 'loading', '');
+        R.loadBalance(cfg, function (d) {
+          var b = document.getElementById('royal-balance');
+          var t = document.getElementById('royal-tier');
+          if (b) b.textContent = (d.balance || 0) + ' points';
+          if (t) t.textContent = d.tier ? 'Your tier: ' + d.tier : '';
+          var wrap = document.getElementById('royal-rewards');
+          if (!wrap) return;
+          if (!d.rewards || !d.rewards.length) {
+            wrap.innerHTML = '<p class="royal-muted">No rewards available yet — check back soon.</p>';
+            return;
+          }
+          wrap.innerHTML = '';
+          d.rewards.forEach(function (rw) {
+            var card = document.createElement('div');
+            card.className = 'royal-card';
+            var canAfford = (d.balance || 0) >= rw.pointsCost;
+            card.innerHTML =
+              '<div><strong>' + (rw.label || rw.type) + '</strong></div>' +
+              '<div class="royal-muted">' + rw.pointsCost + ' points</div>';
+            var rb = document.createElement('button');
+            rb.className = 'royal-btn';
+            rb.type = 'button';
+            rb.textContent = 'Redeem';
+            rb.disabled = !canAfford;
+            if (!canAfford) rb.title = 'Not enough points yet';
+            rb.addEventListener('click', function () {
+              rb.disabled = true;
+              R.setStatus(status, 'loading', 'Redeeming…');
+              R.redeem(cfg, rw.id).then(function (res) {
+                R.setStatus(status, 'success',
+                  res.discountCode
+                    ? 'Reward redeemed — your code is ' + res.discountCode + '.'
+                    : 'Reward redeemed.');
+              }).catch(function () {
+                rb.disabled = false;
+                R.setStatus(status, 'error',
+                  "We couldn't redeem that reward. Please try again.");
+              });
+            });
+            card.appendChild(rb);
+            wrap.appendChild(card);
+          });
+        }, function () {
+          R.setStatus(status, 'error',
+            "We couldn't load your rewards right now. Please try again later.");
+        });
+      }
+    }
+    init();
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Loyalty launcher",
+  "target": "body",
+  "settings": [
+    { "type": "text", "id": "launcher_text", "label": "Launcher text", "default": "Rewards" },
+    { "type": "text", "id": "title", "label": "Panel title", "default": "Your rewards" },
+    {
+      "type": "select", "id": "position", "label": "Position",
+      "options": [
+        { "value": "bottom-right", "label": "Bottom right" },
+        { "value": "bottom-left", "label": "Bottom left" }
+      ],
+      "default": "bottom-right"
+    },
+    { "type": "color", "id": "primary_color", "label": "Primary color", "default": "#5C3D2E" },
+    { "type": "color", "id": "secondary_color", "label": "Text color", "default": "#FFFFFF" },
+    { "type": "text", "id": "proxy_base", "label": "App proxy base path", "default": "/apps/royal" }
+  ]
+}
+{% endschema %}

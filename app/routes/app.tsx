@@ -17,9 +17,26 @@ export default function App() {
 
   return (
     <AppProvider embedded apiKey={apiKey}>
+      {/* Official Shopify React Router template ships <s-app-nav> (Polaris Web
+          Components). The dev-plan/audit note preferred <ui-nav-menu> from an
+          older App Bridge v4.x context; this template version is authoritative
+          for this stack, so we follow it. Reconciliation logged in ACTION-REQUIRED. */}
       <s-app-nav>
-        <s-link href="/app">Home</s-link>
-        <s-link href="/app/additional">Additional page</s-link>
+        <s-link href="/app" rel="home">Home</s-link>
+        <s-link href="/app/onboarding">Setup</s-link>
+        <s-link href="/app/program">Program</s-link>
+        <s-link href="/app/tiers">VIP Tiers</s-link>
+        <s-link href="/app/rewards">Rewards</s-link>
+        <s-link href="/app/referrals">Referrals</s-link>
+        <s-link href="/app/storecredit">Store Credit</s-link>
+        <s-link href="/app/members">Members</s-link>
+        <s-link href="/app/analytics">Analytics</s-link>
+        <s-link href="/app/suggestions">Suggestions</s-link>
+        <s-link href="/app/branding">Branding</s-link>
+        <s-link href="/app/integrations">Integrations</s-link>
+        <s-link href="/app/import">Import</s-link>
+        <s-link href="/app/support">Support</s-link>
+        <s-link href="/app/settings">Settings</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>

@@ -4,6 +4,8 @@ Everything in this file needs **you** (account access, money, live infra, or a b
 
 Status key: ☐ todo · ☑ done
 
+> **BUILD STATUS (2026-05-17): code-complete for all 9 phases.** Scaffold, Phase 0–6 implementation, storefront + POS extensions, App Proxy, billing, GDPR, and the Phase 7 test checklist / Phase 8 submission spec are all written and committed locally. Nothing else needs Claude to write code. What remains is entirely on your side: the items below (accounts, env, `npm install`, dev store, testing). Runtime behavior (CSP, token exchange, webhook delivery, incognito) can only be verified by you running `shopify app dev` — see PHASE-7-TESTING.md.
+
 ---
 
 ## A. Accounts & money (do first)
@@ -32,6 +34,9 @@ See `.env.example` for the full list. Critical ones:
 - ☐ `ANTHROPIC_API_KEY` = Claude API key (for AI onboarding/optimization — get at console.anthropic.com)
 - ☐ **`NODE_ENV=production` MUST be explicitly set on the production environment** (if unset, billing silently runs in test mode and no merchant is ever charged)
 - ☐ Sign the **Anthropic DPA** before the AI feature goes live (console.anthropic.com → legal). Add to SUBPROCESSORS.md.
+- ☐ `DATA_REGION` = the Railway region you picked (§B), e.g. `EU-West`. Must match SUBPROCESSORS.md + the privacy policy verbatim. The public privacy page (`/privacy`) reads this.
+- ☐ `SHOPIFY_APP_HANDLE` = your app's handle (defaults to `royal-loyalty`) — used for the Managed Pricing redirect URL.
+- ☐ After `shopify app config link`, the App Proxy URL fills in (`shopify.app.toml [app_proxy] url`). Confirm it points to your env URL `+/proxy` so the storefront widget + POS work.
 
 ## D. Local toolchain (one-time, to run/verify the app)
 - ☐ `cd C:\Users\User\royalloyalty`

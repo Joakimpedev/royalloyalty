@@ -1,0 +1,15 @@
+# Royal Loyalty — Theme App Extension (Phase 4, brief storefront).
+# Liquid + vanilla JS only (no React), <=100KB Liquid, no Asset API.
+# Surfaces: floating launcher, loyalty page, product-page points, cart/checkout
+# redeem prompt, customer-account block. Every block degrades gracefully and is
+# accessible. Any endpoint it calls is server-side validated (App Proxy).
+api_version = "2026-01"
+
+[[extensions]]
+name = "Royal Loyalty Widget"
+handle = "loyalty-widget"
+type = "theme"
+
+  [extensions.capabilities]
+  api_access = false
+  block_progress = false

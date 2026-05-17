@@ -1,0 +1,77 @@
+/* Royal Loyalty storefront styles. Colors are themed via CSS custom properties
+   set inline from block settings (no hardcoded brand color). Accessible focus
+   states, no fixed px layout traps, prefers-reduced-motion honored. */
+.royal-launcher {
+  position: fixed;
+  bottom: 20px;
+  z-index: 2147483000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--royal-secondary, #fff);
+  background: var(--royal-primary, #5c3d2e);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+.royal-launcher--right { right: 20px; }
+.royal-launcher--left { left: 20px; }
+.royal-launcher:focus-visible {
+  outline: 3px solid var(--royal-primary, #5c3d2e);
+  outline-offset: 2px;
+}
+
+.royal-panel {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.22);
+  padding: 20px;
+  z-index: 2147483001;
+}
+.royal-panel[hidden] { display: none; }
+.royal-panel--left { left: 20px; right: auto; }
+
+.royal-card {
+  border: 1px solid #e3e3e3;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+}
+.royal-btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 0;
+  cursor: pointer;
+  color: var(--royal-secondary, #fff);
+  background: var(--royal-primary, #5c3d2e);
+}
+.royal-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.royal-btn:focus-visible {
+  outline: 3px solid var(--royal-primary, #5c3d2e);
+  outline-offset: 2px;
+}
+.royal-status[data-state="error"] { color: #b3261e; }
+.royal-status[data-state="success"] { color: #0a6b3b; }
+.royal-points {
+  display: inline-block;
+  font-weight: 700;
+  color: var(--royal-primary, #5c3d2e);
+}
+.royal-muted { color: #6b6b6b; font-size: 0.9em; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .royal-panel { transition: opacity 0.15s ease; }
+}

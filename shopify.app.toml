@@ -7,6 +7,17 @@ name = "Royal Loyalty"
 application_url = ""
 embedded = true
 
+# App Proxy — required so the Theme App Extension widget and POS extension can
+# reach the server (member balance, redeem, POS earn/redeem). Reconciles DEC-02:
+# the dev plan deferred App Proxy, but the storefront/POS surfaces cannot
+# function without a server endpoint. Requests to {shop}/apps/royal/* are
+# forwarded to {application_url}/proxy/* and validated via the proxy HMAC
+# signature in app/routes/proxy.$.tsx (authenticate.public.appProxy).
+[app_proxy]
+url = ""
+prefix = "apps"
+subpath = "royal"
+
 [access_scopes]
 # Minimal set. High-scrutiny (justified in SCOPE-JUSTIFICATIONS.md):
 #   write_customers (tag-only), read_orders (compute points; 60-day window),

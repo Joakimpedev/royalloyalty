@@ -1,0 +1,476 @@
+// Branding — edit the Widget, Loyalty page and Emails (colors, logo, copy,
+// section toggles) with a live preview per surface. Free plan = colors + logo
+// only; paid = full copy / section control (the only non-volume gate, per the
+// plan §3d). Save bar + useBlocker(). Branding is stored on
+// Shop.aiConfigSnapshot.branding (schema is owned by another agent / locked).
+import { useEffect, useRef, useState, useCallback } from "react";
+import type {
+  ActionFunctionArgs,
+  HeadersFunction,
+  LoaderFunctionArgs,
+} from "react-router";
+import {
+  useLoaderData,
+  useActionData,
+  useNavigation,
+  useSubmit,
+  useBlocker,
+  useRouteError,
+} from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
+import { authenticate } from "../shopify.server";
+import prisma from "../db.server";
+
+export interface BrandingConfig {
+  widget: {
+    position: "bottom-right" | "bottom-left";
+    primaryColor: string;
+    secondaryColor: string;
+    icon: string;
+    launcherText: string;
+    title: string;
+  };
+  page: {
+    heroTitle: string;
+    heroSubtitle: string;
+    themeColor: string;
+    logoUrl: string;
+    showEarn: boolean;
+    showRewards: boolean;
+    showReferral: boolean;
+  };
+  emails: {
+    accentColor: string;
+    logoUrl: string;
+    pointsEarnedSubject: string;
+    rewardAvailableSubject: string;
+    tierChangeSubject: string;
+  };
+}
+
+const DEFAULTS: BrandingConfig = {
+  widget: {
+    position: "bottom-right",
+    primaryColor: "#5C3D2E",
+    secondaryColor: "#E8D8C3",
+    icon: "crown",
+    launcherText: "Rewards",
+    title: "Your rewards",
+  },
+  page: {
+    heroTitle: "Earn points. Get rewards.",
+    heroSubtitle: "Join the program and earn on every order.",
+    themeColor: "#5C3D2E",
+    logoUrl: "",
+    showEarn: true,
+    showRewards: true,
+    showReferral: true,
+  },
+  emails: {
+    accentColor: "#5C3D2E",
+    logoUrl: "",
+    pointsEarnedSubject: "You earned {points} points",
+    rewardAvailableSubject: "A reward is ready for you",
+    tierChangeSubject: "Welcome to {tier}",
+  },
+};
+
+function readBranding(snapshot: unknown): BrandingConfig {
+  const snap =
+    snapshot && typeof snapshot === "object"
+      ? ((snapshot as Record<string, unknown>).branding as
+          | Partial<BrandingConfig>
+          | undefined)
+      : undefined;
+  return {
+    widget: { ...DEFAULTS.widget, ...(snap?.widget ?? {}) },
+    page: { ...DEFAULTS.page, ...(snap?.page ?? {}) },
+    emails: { ...DEFAULTS.emails, ...(snap?.emails ?? {}) },
+  };
+}
+
+async function requireShop(shopDomain: string) {
+  const shop = await prisma.shop.findUnique({ where: { shopDomain } });
+  if (!shop) throw new Response("Shop not found", { status: 404 });
+  return shop;
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = await requireShop(session.shop);
+  const paid = shop.plan !== "FREE";
+  return { branding: readBranding(shop.aiConfigSnapshot), paid };
+};
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = await requireShop(session.shop);
+  const paid = shop.plan !== "FREE";
+  const form = await request.formData();
+  const incoming = JSON.parse(
+    String(form.get("branding") ?? "{}"),
+  ) as BrandingConfig;
+
+  const current = readBranding(shop.aiConfigSnapshot);
+
+  // Free plan: only colors + logo are persisted; copy/section toggles are
+  // ignored server-side (defense in depth — the UI also disables them).
+  const next: BrandingConfig = paid
+    ? incoming
+    : {
+        widget: {
+          ...current.widget,
+          primaryColor: incoming.widget.primaryColor,
+          secondaryColor: incoming.widget.secondaryColor,
+        },
+        page: {
+          ...current.page,
+          themeColor: incoming.page.themeColor,
+          logoUrl: incoming.page.logoUrl,
+        },
+        emails: {
+          ...current.emails,
+          accentColor: incoming.emails.accentColor,
+          logoUrl: incoming.emails.logoUrl,
+        },
+      };
+
+  const base =
+    shop.aiConfigSnapshot && typeof shop.aiConfigSnapshot === "object"
+      ? (shop.aiConfigSnapshot as Record<string, unknown>)
+      : {};
+  await prisma.shop.update({
+    where: { id: shop.id },
+    data: { aiConfigSnapshot: { ...base, branding: next } },
+  });
+  return { ok: true, message: "Branding saved." };
+};
+
+export default function BrandingPage() {
+  const { branding, paid } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const nav = useNavigation();
+  const submit = useSubmit();
+  const saveBarRef = useRef<HTMLElement | null>(null);
+
+  const [form, setForm] = useState<BrandingConfig>(branding);
+  const [baseline, setBaseline] = useState<BrandingConfig>(branding);
+  const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  const saving = nav.state === "submitting";
+
+  const blocker = useBlocker(
+    useCallback(
+      ({ currentLocation, nextLocation }) =>
+        dirty && currentLocation.pathname !== nextLocation.pathname,
+      [dirty],
+    ),
+  );
+
+  useEffect(() => {
+    if (blocker.state === "blocked" && !dirty) blocker.reset?.();
+  }, [blocker, dirty]);
+
+  useEffect(() => {
+    const el = saveBarRef.current as
+      | (HTMLElement & { show?: () => void; hide?: () => void })
+      | null;
+    if (!el) return;
+    if (dirty) el.show?.();
+    else el.hide?.();
+  }, [dirty]);
+
+  useEffect(() => {
+    if (actionData?.ok) setBaseline(form);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionData]);
+
+  const save = useCallback(() => {
+    const fd = new FormData();
+    fd.set("branding", JSON.stringify(form));
+    submit(fd, { method: "POST" });
+  }, [form, submit]);
+
+  const setW = (k: keyof BrandingConfig["widget"], v: string) =>
+    setForm((f) => ({ ...f, widget: { ...f.widget, [k]: v } }));
+  const setP = (
+    k: keyof BrandingConfig["page"],
+    v: string | boolean,
+  ) => setForm((f) => ({ ...f, page: { ...f.page, [k]: v } }));
+  const setE = (k: keyof BrandingConfig["emails"], v: string) =>
+    setForm((f) => ({ ...f, emails: { ...f.emails, [k]: v } }));
+
+  return (
+    <s-page heading="Branding">
+      <s-button slot="primary-action" href="/app">
+        Back to Home
+      </s-button>
+
+      {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
+      <ui-save-bar id="branding-save-bar" ref={saveBarRef}>
+        <button
+          variant="primary"
+          onClick={save}
+          {...(saving ? { loading: "" } : {})}
+        >
+          Save
+        </button>
+        <button onClick={() => setForm(baseline)}>Discard</button>
+        {/* @ts-expect-error - ui-save-bar custom element */}
+      </ui-save-bar>
+
+      {actionData && actionData.ok && (
+        <s-section>
+          <s-banner tone="success">
+            <s-paragraph>{actionData.message}</s-paragraph>
+          </s-banner>
+        </s-section>
+      )}
+
+      {!paid && (
+        <s-section>
+          <s-banner tone="info" heading="Colors and logo on your plan">
+            <s-paragraph>
+              Copy and section controls are available on a paid plan. Color and
+              logo customization is included on every plan and is enabled below.
+            </s-paragraph>
+          </s-banner>
+        </s-section>
+      )}
+
+      {/* ---- Widget ---- */}
+      <s-section heading="Widget">
+        <s-stack direction="block" gap="base">
+          <s-text-field
+            label="Primary color (hex)"
+            value={form.widget.primaryColor}
+            onChange={(e: { target: { value: string } }) =>
+              setW("primaryColor", e.target.value)
+            }
+          />
+          <s-text-field
+            label="Secondary color (hex)"
+            value={form.widget.secondaryColor}
+            onChange={(e: { target: { value: string } }) =>
+              setW("secondaryColor", e.target.value)
+            }
+          />
+          <s-select
+            label="Launcher position"
+            value={form.widget.position}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { value: string } }) =>
+              setW("position", e.target.value)
+            }
+          >
+            <s-option value="bottom-right">Bottom right</s-option>
+            <s-option value="bottom-left">Bottom left</s-option>
+          </s-select>
+          <s-text-field
+            label="Launcher text"
+            value={form.widget.launcherText}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { value: string } }) =>
+              setW("launcherText", e.target.value)
+            }
+          />
+          <s-text-field
+            label="Widget title"
+            value={form.widget.title}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { value: string } }) =>
+              setW("title", e.target.value)
+            }
+          />
+          <s-box
+            padding="base"
+            borderWidth="base"
+            borderRadius="base"
+            background={undefined}
+          >
+            <s-text tone="subdued">Live preview</s-text>
+            <div
+              style={{
+                marginTop: 8,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 16px",
+                borderRadius: 999,
+                background: form.widget.primaryColor,
+                color: form.widget.secondaryColor,
+                fontWeight: 600,
+              }}
+            >
+              <span aria-hidden="true">♛</span>
+              {form.widget.launcherText}
+            </div>
+          </s-box>
+        </s-stack>
+      </s-section>
+
+      {/* ---- Loyalty page ---- */}
+      <s-section heading="Loyalty page">
+        <s-stack direction="block" gap="base">
+          <s-text-field
+            label="Theme color (hex)"
+            value={form.page.themeColor}
+            onChange={(e: { target: { value: string } }) =>
+              setP("themeColor", e.target.value)
+            }
+          />
+          <s-text-field
+            label="Logo URL"
+            value={form.page.logoUrl}
+            onChange={(e: { target: { value: string } }) =>
+              setP("logoUrl", e.target.value)
+            }
+          />
+          <s-text-field
+            label="Hero title"
+            value={form.page.heroTitle}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { value: string } }) =>
+              setP("heroTitle", e.target.value)
+            }
+          />
+          <s-text-field
+            label="Hero subtitle"
+            value={form.page.heroSubtitle}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { value: string } }) =>
+              setP("heroSubtitle", e.target.value)
+            }
+          />
+          <s-checkbox
+            checked={form.page.showEarn ? true : undefined}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { checked: boolean } }) =>
+              setP("showEarn", e.target.checked)
+            }
+          >
+            Show &quot;ways to earn&quot; section
+          </s-checkbox>
+          <s-checkbox
+            checked={form.page.showRewards ? true : undefined}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { checked: boolean } }) =>
+              setP("showRewards", e.target.checked)
+            }
+          >
+            Show rewards section
+          </s-checkbox>
+          <s-checkbox
+            checked={form.page.showReferral ? true : undefined}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { checked: boolean } }) =>
+              setP("showReferral", e.target.checked)
+            }
+          >
+            Show referral section
+          </s-checkbox>
+          <s-box padding="base" borderWidth="base" borderRadius="base">
+            <s-text tone="subdued">Live preview</s-text>
+            <div
+              style={{
+                marginTop: 8,
+                padding: 24,
+                borderRadius: 8,
+                background: form.page.themeColor,
+                color: "#fff",
+              }}
+            >
+              <div style={{ fontSize: 22, fontWeight: 700 }}>
+                {form.page.heroTitle}
+              </div>
+              <div style={{ opacity: 0.85 }}>{form.page.heroSubtitle}</div>
+            </div>
+          </s-box>
+        </s-stack>
+      </s-section>
+
+      {/* ---- Emails ---- */}
+      <s-section heading="Emails">
+        <s-stack direction="block" gap="base">
+          <s-text-field
+            label="Accent color (hex)"
+            value={form.emails.accentColor}
+            onChange={(e: { target: { value: string } }) =>
+              setE("accentColor", e.target.value)
+            }
+          />
+          <s-text-field
+            label="Email logo URL"
+            value={form.emails.logoUrl}
+            onChange={(e: { target: { value: string } }) =>
+              setE("logoUrl", e.target.value)
+            }
+          />
+          <s-text-field
+            label="&quot;Points earned&quot; subject"
+            value={form.emails.pointsEarnedSubject}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { value: string } }) =>
+              setE("pointsEarnedSubject", e.target.value)
+            }
+          />
+          <s-text-field
+            label="&quot;Reward available&quot; subject"
+            value={form.emails.rewardAvailableSubject}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { value: string } }) =>
+              setE("rewardAvailableSubject", e.target.value)
+            }
+          />
+          <s-text-field
+            label="&quot;Tier change&quot; subject"
+            value={form.emails.tierChangeSubject}
+            disabled={!paid ? true : undefined}
+            onChange={(e: { target: { value: string } }) =>
+              setE("tierChangeSubject", e.target.value)
+            }
+          />
+          <s-box padding="base" borderWidth="base" borderRadius="base">
+            <s-text tone="subdued">Live preview</s-text>
+            <div
+              style={{
+                marginTop: 8,
+                borderTop: `4px solid ${form.emails.accentColor}`,
+                padding: 16,
+                background: "#fff",
+                color: "#202223",
+              }}
+            >
+              <strong>{form.emails.pointsEarnedSubject}</strong>
+              <p style={{ marginTop: 8 }}>
+                Thanks for your order! You earned points.
+              </p>
+            </div>
+          </s-box>
+        </s-stack>
+      </s-section>
+
+      {blocker.state === "blocked" && (
+        <s-section>
+          <s-banner tone="warning" heading="You have unsaved changes">
+            <s-stack direction="inline" gap="base">
+              <s-button variant="primary" onClick={() => blocker.proceed?.()}>
+                Leave without saving
+              </s-button>
+              <s-button onClick={() => blocker.reset?.()}>
+                Stay on page
+              </s-button>
+            </s-stack>
+          </s-banner>
+        </s-section>
+      )}
+    </s-page>
+  );
+}
+
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
+}
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};

@@ -1,0 +1,115 @@
+{% comment %}
+  Royal Loyalty — customer-account block. Placed on the account page (the
+  storefront customer area) so a signed-in customer sees their full loyalty
+  status: balance, tier, recent activity, rewards and their referral link.
+  Requires a logged-in customer (the account page always has one); still
+  degrades gracefully on a network failure.
+{% endcomment %}
+
+<link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
+
+<section
+  id="royal-account-root"
+  style="--royal-primary: {{ block.settings.accent | default: '#5C3D2E' }}; --royal-secondary:#fff;"
+  data-royal-config='{
+    "proxy": {{ block.settings.proxy_base | default: "/apps/royal" | json }},
+    "loggedIn": {% if customer %}true{% else %}false{% endif %}
+  }'
+>
+  <h2>{{ block.settings.heading | default: 'Your loyalty' | escape }}</h2>
+
+  {%- if customer -%}
+    <div class="royal-card">
+      <p style="font-size:1.3em;">
+        <span id="royal-acc-balance" class="royal-points">…</span> points
+      </p>
+      <p id="royal-acc-tier" class="royal-muted"></p>
+    </div>
+
+    <h3>Recent activity</h3>
+    <div id="royal-acc-activity"><p class="royal-muted">Loading…</p></div>
+
+    <h3>Rewards</h3>
+    <div id="royal-acc-rewards"><p class="royal-muted">Loading…</p></div>
+
+    <h3>Refer a friend</h3>
+    <div class="royal-card">
+      <code id="royal-acc-ref" style="word-break:break-all;">…</code>
+      <button type="button" id="royal-acc-copy" class="royal-btn" style="margin-top:8px;">Copy link</button>
+    </div>
+  {%- else -%}
+    <p>Please sign in to view your loyalty status.</p>
+  {%- endif -%}
+
+  <p id="royal-acc-status" class="royal-status" aria-live="polite"></p>
+</section>
+
+<script src="{{ 'loyalty.js' | asset_url }}" defer></script>
+<script>
+  (function () {
+    function init() {
+      var root = document.getElementById('royal-account-root');
+      if (!root || !window.RoyalLoyalty) return setTimeout(init, 50);
+      var R = window.RoyalLoyalty, cfg = R.readConfig(root);
+      if (!cfg.loggedIn) return;
+      var status = document.getElementById('royal-acc-status');
+
+      R.loadBalance(cfg, function (d) {
+        var b = document.getElementById('royal-acc-balance');
+        var t = document.getElementById('royal-acc-tier');
+        if (b) b.textContent = (d.balance || 0);
+        if (t) t.textContent = d.tier ? 'Tier: ' + d.tier : 'No tier yet';
+
+        var act = document.getElementById('royal-acc-activity');
+        if (act) {
+          act.innerHTML = (d.activity && d.activity.length)
+            ? d.activity.map(function (a) {
+                return '<div class="royal-card">' + a.reason + ' — ' +
+                  (a.points > 0 ? '+' : '') + a.points + ' pts ' +
+                  '<span class="royal-muted">' + a.date + '</span></div>';
+              }).join('')
+            : '<p class="royal-muted">No activity yet. Place an order to start earning.</p>';
+        }
+        var rw = document.getElementById('royal-acc-rewards');
+        if (rw) {
+          rw.innerHTML = (d.rewards && d.rewards.length)
+            ? d.rewards.map(function (x) {
+                return '<div class="royal-card"><strong>' + (x.label || x.type) +
+                  '</strong> — ' + x.pointsCost + ' pts</div>';
+              }).join('')
+            : '<p class="royal-muted">No rewards available yet — check back soon.</p>';
+        }
+        var ref = document.getElementById('royal-acc-ref');
+        if (ref && d.referralLink) {
+          ref.textContent = d.referralLink;
+          var c = document.getElementById('royal-acc-copy');
+          if (c) c.addEventListener('click', function () {
+            try {
+              navigator.clipboard.writeText(d.referralLink);
+              R.setStatus(status, 'success', 'Link copied.');
+            } catch (e) {
+              R.setStatus(status, 'error', 'Could not copy automatically.');
+            }
+          });
+        }
+      }, function () {
+        R.setStatus(status, 'error',
+          "We couldn't load your loyalty status right now. Please try again later.");
+      });
+    }
+    init();
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Loyalty account",
+  "target": "section",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "Heading", "default": "Your loyalty" },
+    { "type": "color", "id": "accent", "label": "Accent", "default": "#5C3D2E" },
+    { "type": "text", "id": "proxy_base", "label": "App proxy base path", "default": "/apps/royal" }
+  ],
+  "presets": [{ "name": "Loyalty account" }]
+}
+{% endschema %}

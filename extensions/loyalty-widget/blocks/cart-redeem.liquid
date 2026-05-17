@@ -1,0 +1,105 @@
+{% comment %}
+  Royal Loyalty — cart/checkout redeem prompt. App block for the cart template.
+  Lets a signed-in customer with enough points redeem a reward and applies the
+  resulting discount code to the cart. Graceful: signed-out shows a sign-in
+  nudge; network error shows a friendly inline message; accessible select+button.
+{% endcomment %}
+
+<link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
+
+<div
+  id="royal-cart-root"
+  style="--royal-primary: {{ block.settings.accent | default: '#5C3D2E' }}; --royal-secondary:#fff;"
+  data-royal-config='{
+    "proxy": {{ block.settings.proxy_base | default: "/apps/royal" | json }},
+    "loggedIn": {% if customer %}true{% else %}false{% endif %}
+  }'
+>
+  {%- if customer -%}
+    <div class="royal-card">
+      <strong>{{ block.settings.heading | default: 'Use your points' | escape }}</strong>
+      <p id="royal-cart-balance" class="royal-muted">Checking your balance…</p>
+      <div id="royal-cart-rewards" hidden>
+        <label for="royal-cart-select">Choose a reward</label>
+        <select id="royal-cart-select" style="display:block;margin:6px 0;width:100%;"></select>
+        <button type="button" id="royal-cart-apply" class="royal-btn">Apply to cart</button>
+      </div>
+      <p id="royal-cart-status" class="royal-status" aria-live="polite"></p>
+    </div>
+  {%- else -%}
+    <div class="royal-card">
+      <a href="/account/login">Sign in</a> to redeem your loyalty points at checkout.
+    </div>
+  {%- endif -%}
+</div>
+
+<script src="{{ 'loyalty.js' | asset_url }}" defer></script>
+<script>
+  (function () {
+    function init() {
+      var root = document.getElementById('royal-cart-root');
+      if (!root || !window.RoyalLoyalty) return setTimeout(init, 50);
+      var R = window.RoyalLoyalty, cfg = R.readConfig(root);
+      if (!cfg.loggedIn) return;
+      var status = document.getElementById('royal-cart-status');
+
+      R.loadBalance(cfg, function (d) {
+        var bal = document.getElementById('royal-cart-balance');
+        if (bal) bal.textContent = 'You have ' + (d.balance || 0) + ' points.';
+        var affordable = (d.rewards || []).filter(function (r) {
+          return (d.balance || 0) >= r.pointsCost;
+        });
+        if (!affordable.length) {
+          if (bal) bal.textContent += ' Keep shopping to unlock a reward.';
+          return;
+        }
+        var box = document.getElementById('royal-cart-rewards');
+        var sel = document.getElementById('royal-cart-select');
+        affordable.forEach(function (r) {
+          var o = document.createElement('option');
+          o.value = r.id;
+          o.textContent = (r.label || r.type) + ' (' + r.pointsCost + ' pts)';
+          sel.appendChild(o);
+        });
+        box.hidden = false;
+        document.getElementById('royal-cart-apply').addEventListener('click', function () {
+          var btn = this;
+          btn.disabled = true;
+          R.setStatus(status, 'loading', 'Redeeming…');
+          R.redeem(cfg, sel.value).then(function (res) {
+            if (res.discountCode) {
+              // Apply via the storefront discount URL, then return to cart.
+              window.location.href =
+                '/discount/' + encodeURIComponent(res.discountCode) +
+                '?redirect=/cart';
+            } else {
+              R.setStatus(status, 'success', 'Reward redeemed.');
+              btn.disabled = false;
+            }
+          }).catch(function () {
+            btn.disabled = false;
+            R.setStatus(status, 'error',
+              "We couldn't apply that reward. Please try again.");
+          });
+        });
+      }, function () {
+        R.setStatus(status, 'error',
+          "We couldn't check your points right now. You can still complete checkout.");
+      });
+    }
+    init();
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Cart redeem",
+  "target": "section",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "Heading", "default": "Use your points" },
+    { "type": "color", "id": "accent", "label": "Accent", "default": "#5C3D2E" },
+    { "type": "text", "id": "proxy_base", "label": "App proxy base path", "default": "/apps/royal" }
+  ],
+  "presets": [{ "name": "Cart redeem" }]
+}
+{% endschema %}

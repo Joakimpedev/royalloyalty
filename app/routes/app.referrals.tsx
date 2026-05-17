@@ -1,0 +1,440 @@
+// Referrals — settings (rewards, fraud controls, holdback, review-before-payout)
+// + the referral list with a 3-element empty state + a manual review queue for
+// flagged/held referrals. Contextual save bar wired with useBlocker().
+import { useEffect, useRef, useState, useCallback } from "react";
+import type {
+  ActionFunctionArgs,
+  HeadersFunction,
+  LoaderFunctionArgs,
+} from "react-router";
+import {
+  useLoaderData,
+  useActionData,
+  useNavigation,
+  useSubmit,
+  useBlocker,
+  useRouteError,
+} from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
+import { authenticate } from "../shopify.server";
+import prisma from "../db.server";
+import {
+  getReferralSettings,
+  saveReferralSettings,
+  payoutReferral,
+  type ReferralSettings,
+} from "../lib/referrals.server";
+import { transitionStatus } from "../lib/status.server";
+
+async function requireShop(shopDomain: string) {
+  const shop = await prisma.shop.findUnique({ where: { shopDomain } });
+  if (!shop) throw new Response("Shop not found", { status: 404 });
+  return shop;
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = await requireShop(session.shop);
+  const settings = await getReferralSettings(shop.id);
+
+  const [referrals, heldForReview] = await Promise.all([
+    prisma.referral.findMany({
+      where: { shopId: shop.id, refereeEmail: { not: null } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.referral.findMany({
+      where: {
+        shopId: shop.id,
+        status: "ACTIVE",
+        qualifiedOrderId: { not: null },
+      },
+      orderBy: { statusChangedAt: "asc" },
+      take: 50,
+    }),
+  ]);
+
+  return {
+    settings,
+    referrals: referrals.map((r) => ({
+      id: r.id,
+      code: r.code,
+      // refereeEmail is PII for the merchant's own customer — shown in the
+      // merchant admin only (the merchant is the controller of this data).
+      refereeEmail: r.refereeEmail ?? "—",
+      status: r.status,
+      qualified: Boolean(r.qualifiedOrderId),
+      createdAt: r.createdAt.toISOString().slice(0, 10),
+    })),
+    heldForReview: heldForReview.map((r) => ({
+      id: r.id,
+      code: r.code,
+      refereeEmail: r.refereeEmail ?? "—",
+      since: r.statusChangedAt.toISOString().slice(0, 10),
+    })),
+  };
+};
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = await requireShop(session.shop);
+  const form = await request.formData();
+  const intent = String(form.get("_intent"));
+
+  if (intent === "approve") {
+    const id = String(form.get("id"));
+    const res = await payoutReferral({ shopId: shop.id, referralId: id });
+    return res.ok
+      ? { ok: true, message: "Referral approved and paid out." }
+      : { ok: false, message: `Could not pay out: ${res.reason}.` };
+  }
+  if (intent === "reject") {
+    const id = String(form.get("id"));
+    try {
+      await transitionStatus("referral", id, "CANCELLED");
+      return { ok: true, message: "Referral rejected." };
+    } catch (e) {
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : "Could not reject.",
+      };
+    }
+  }
+
+  const next: ReferralSettings = {
+    enabled: form.get("enabled") === "true",
+    referrerPoints: Math.max(
+      0,
+      Number.parseInt(String(form.get("referrerPoints")), 10) || 0,
+    ),
+    refereePoints: Math.max(
+      0,
+      Number.parseInt(String(form.get("refereePoints")), 10) || 0,
+    ),
+    reviewBeforePayout: form.get("reviewBeforePayout") === "true",
+    holdbackHours: Math.max(
+      0,
+      Number.parseInt(String(form.get("holdbackHours")), 10) || 0,
+    ),
+    sameIpBlocks: form.get("sameIpBlocks") === "true",
+  };
+  if (next.referrerPoints <= 0 && next.refereePoints <= 0) {
+    return {
+      ok: false,
+      message: "Set at least one reward (referrer or referee) above 0.",
+    };
+  }
+  await saveReferralSettings(shop.id, next);
+  return { ok: true, message: "Referral settings saved." };
+};
+
+export default function ReferralsPage() {
+  const { settings, referrals, heldForReview } =
+    useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const nav = useNavigation();
+  const submit = useSubmit();
+  const saveBarRef = useRef<HTMLElement | null>(null);
+
+  const [form, setForm] = useState(settings);
+  const [baseline, setBaseline] = useState(settings);
+  const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  const saving = nav.state === "submitting";
+
+  const blocker = useBlocker(
+    useCallback(
+      ({ currentLocation, nextLocation }) =>
+        dirty && currentLocation.pathname !== nextLocation.pathname,
+      [dirty],
+    ),
+  );
+
+  useEffect(() => {
+    if (blocker.state === "blocked" && !dirty) blocker.reset?.();
+  }, [blocker, dirty]);
+
+  useEffect(() => {
+    const el = saveBarRef.current as
+      | (HTMLElement & { show?: () => void; hide?: () => void })
+      | null;
+    if (!el) return;
+    if (dirty) el.show?.();
+    else el.hide?.();
+  }, [dirty]);
+
+  useEffect(() => {
+    if (actionData?.ok) setBaseline(form);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionData]);
+
+  const save = useCallback(() => {
+    const fd = new FormData();
+    fd.set("_intent", "save");
+    fd.set("enabled", String(form.enabled));
+    fd.set("referrerPoints", String(form.referrerPoints));
+    fd.set("refereePoints", String(form.refereePoints));
+    fd.set("reviewBeforePayout", String(form.reviewBeforePayout));
+    fd.set("holdbackHours", String(form.holdbackHours));
+    fd.set("sameIpBlocks", String(form.sameIpBlocks));
+    submit(fd, { method: "POST" });
+  }, [form, submit]);
+
+  return (
+    <s-page heading="Referrals">
+      <s-button slot="primary-action" href="/app">
+        Back to Home
+      </s-button>
+
+      {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
+      <ui-save-bar id="referrals-save-bar" ref={saveBarRef}>
+        <button
+          variant="primary"
+          onClick={save}
+          {...(saving ? { loading: "" } : {})}
+        >
+          Save
+        </button>
+        <button onClick={() => setForm(baseline)}>Discard</button>
+        {/* @ts-expect-error - ui-save-bar custom element */}
+      </ui-save-bar>
+
+      {actionData && !actionData.ok && (
+        <s-section>
+          <s-banner tone="critical" heading="Could not save">
+            <s-paragraph>{actionData.message}</s-paragraph>
+          </s-banner>
+        </s-section>
+      )}
+      {actionData && actionData.ok && (
+        <s-section>
+          <s-banner tone="success">
+            <s-paragraph>{actionData.message}</s-paragraph>
+          </s-banner>
+        </s-section>
+      )}
+
+      <s-section heading="Referral program">
+        <s-stack direction="block" gap="base">
+          <s-choice-list
+            label="Status"
+            value={form.enabled ? "on" : "off"}
+            onChange={(e: { target: { value: string } }) =>
+              setForm((f) => ({ ...f, enabled: e.target.value === "on" }))
+            }
+          >
+            <s-choice value="on">Enabled</s-choice>
+            <s-choice value="off">Disabled</s-choice>
+          </s-choice-list>
+          <s-text-field
+            label="Referrer reward (points)"
+            type="number"
+            value={String(form.referrerPoints)}
+            onChange={(e: { target: { value: string } }) =>
+              setForm((f) => ({
+                ...f,
+                referrerPoints: Math.max(
+                  0,
+                  Number.parseInt(e.target.value, 10) || 0,
+                ),
+              }))
+            }
+          />
+          <s-text-field
+            label="Referee reward (points)"
+            type="number"
+            value={String(form.refereePoints)}
+            onChange={(e: { target: { value: string } }) =>
+              setForm((f) => ({
+                ...f,
+                refereePoints: Math.max(
+                  0,
+                  Number.parseInt(e.target.value, 10) || 0,
+                ),
+              }))
+            }
+          />
+        </s-stack>
+      </s-section>
+
+      <s-section heading="Fraud &amp; anti-cheat">
+        <s-stack direction="block" gap="base">
+          <s-paragraph>
+            Self-referrals (referee email equals the referrer&apos;s) and
+            customers who were already members before the referral are always
+            blocked automatically.
+          </s-paragraph>
+          <s-choice-list
+            label="Same-IP referrals"
+            value={form.sameIpBlocks ? "block" : "flag"}
+            onChange={(e: { target: { value: string } }) =>
+              setForm((f) => ({
+                ...f,
+                sameIpBlocks: e.target.value === "block",
+              }))
+            }
+          >
+            <s-choice value="block">Block automatically</s-choice>
+            <s-choice value="flag">Flag for review</s-choice>
+          </s-choice-list>
+          <s-choice-list
+            label="Payout approval"
+            value={form.reviewBeforePayout ? "manual" : "auto"}
+            onChange={(e: { target: { value: string } }) =>
+              setForm((f) => ({
+                ...f,
+                reviewBeforePayout: e.target.value === "manual",
+              }))
+            }
+          >
+            <s-choice value="auto">
+              Pay out automatically after the holdback window
+            </s-choice>
+            <s-choice value="manual">
+              Require manual approval for every payout
+            </s-choice>
+          </s-choice-list>
+          <s-text-field
+            label="Post-order holdback (hours before payout)"
+            type="number"
+            value={String(form.holdbackHours)}
+            onChange={(e: { target: { value: string } }) =>
+              setForm((f) => ({
+                ...f,
+                holdbackHours: Math.max(
+                  0,
+                  Number.parseInt(e.target.value, 10) || 0,
+                ),
+              }))
+            }
+          />
+        </s-stack>
+      </s-section>
+
+      <s-section heading="Pending review">
+        {heldForReview.length === 0 ? (
+          <s-paragraph>
+            No referrals are waiting for approval. Flagged or held referrals
+            appear here for you to approve or reject before any points are paid
+            out.
+          </s-paragraph>
+        ) : (
+          <s-table>
+            <s-table-header-row>
+              <s-table-header>Code</s-table-header>
+              <s-table-header>Referee</s-table-header>
+              <s-table-header>Held since</s-table-header>
+              <s-table-header>Actions</s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              {heldForReview.map((r) => (
+                <s-table-row key={r.id}>
+                  <s-table-cell>{r.code}</s-table-cell>
+                  <s-table-cell>{r.refereeEmail}</s-table-cell>
+                  <s-table-cell>{r.since}</s-table-cell>
+                  <s-table-cell>
+                    <s-stack direction="inline" gap="base">
+                      <s-button
+                        variant="primary"
+                        onClick={() =>
+                          submit(
+                            { _intent: "approve", id: r.id },
+                            { method: "POST" },
+                          )
+                        }
+                      >
+                        Approve
+                      </s-button>
+                      <s-button
+                        tone="critical"
+                        onClick={() =>
+                          submit(
+                            { _intent: "reject", id: r.id },
+                            { method: "POST" },
+                          )
+                        }
+                      >
+                        Reject
+                      </s-button>
+                    </s-stack>
+                  </s-table-cell>
+                </s-table-row>
+              ))}
+            </s-table-body>
+          </s-table>
+        )}
+      </s-section>
+
+      <s-section heading="Referrals">
+        {referrals.length === 0 ? (
+          <s-stack direction="block" gap="base">
+            <s-heading>No referrals yet</s-heading>
+            <s-paragraph>
+              When a customer shares their referral link and a friend places a
+              qualifying order, the referral shows up here with its fraud and
+              payout status.
+            </s-paragraph>
+            <s-button variant="primary" href="/app/branding">
+              Customize the referral widget
+            </s-button>
+          </s-stack>
+        ) : (
+          <s-table>
+            <s-table-header-row>
+              <s-table-header>Code</s-table-header>
+              <s-table-header>Referee</s-table-header>
+              <s-table-header>Qualified</s-table-header>
+              <s-table-header>Status</s-table-header>
+              <s-table-header>Created</s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              {referrals.map((r) => (
+                <s-table-row key={r.id}>
+                  <s-table-cell>{r.code}</s-table-cell>
+                  <s-table-cell>{r.refereeEmail}</s-table-cell>
+                  <s-table-cell>{r.qualified ? "Yes" : "No"}</s-table-cell>
+                  <s-table-cell>
+                    <s-badge
+                      tone={
+                        r.status === "COMPLETED"
+                          ? "success"
+                          : r.status === "CANCELLED"
+                            ? "critical"
+                            : "neutral"
+                      }
+                    >
+                      {r.status}
+                    </s-badge>
+                  </s-table-cell>
+                  <s-table-cell>{r.createdAt}</s-table-cell>
+                </s-table-row>
+              ))}
+            </s-table-body>
+          </s-table>
+        )}
+      </s-section>
+
+      {blocker.state === "blocked" && (
+        <s-section>
+          <s-banner tone="warning" heading="You have unsaved changes">
+            <s-stack direction="inline" gap="base">
+              <s-button variant="primary" onClick={() => blocker.proceed?.()}>
+                Leave without saving
+              </s-button>
+              <s-button onClick={() => blocker.reset?.()}>
+                Stay on page
+              </s-button>
+            </s-stack>
+          </s-banner>
+        </s-section>
+      )}
+    </s-page>
+  );
+}
+
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
+}
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};

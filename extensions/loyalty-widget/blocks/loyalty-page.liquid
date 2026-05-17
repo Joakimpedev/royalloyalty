@@ -1,0 +1,130 @@
+{% comment %}
+  Royal Loyalty — full loyalty page block (add to a page template / section).
+  Shows hero, balance, ways to earn, rewards, referral share. Section toggles
+  are driven by block settings (Branding page on the paid plan). Graceful for
+  signed-out visitors; accessible headings + live region.
+{% endcomment %}
+
+<link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
+
+{%- assign theme = block.settings.theme_color | default: '#5C3D2E' -%}
+
+<section
+  id="royal-page-root"
+  style="--royal-primary: {{ theme }}; --royal-secondary: #fff;"
+  data-royal-config='{
+    "proxy": {{ block.settings.proxy_base | default: "/apps/royal" | json }},
+    "loggedIn": {% if customer %}true{% else %}false{% endif %}
+  }'
+>
+  <header style="background: {{ theme }}; color:#fff; padding:32px 20px; border-radius:10px;">
+    {%- if block.settings.logo_url != blank -%}
+      <img src="{{ block.settings.logo_url }}" alt="" style="max-height:48px;display:block;margin-bottom:12px;">
+    {%- endif -%}
+    <h1 style="margin:0;">{{ block.settings.hero_title | default: 'Earn points. Get rewards.' | escape }}</h1>
+    <p style="margin:8px 0 0;opacity:.9;">{{ block.settings.hero_subtitle | default: 'Join the program and earn on every order.' | escape }}</p>
+  </header>
+
+  {%- if customer -%}
+    <p style="margin:20px 0 4px;">Your balance: <span id="royal-page-balance" class="royal-points">…</span></p>
+    <p id="royal-page-tier" class="royal-muted"></p>
+  {%- else -%}
+    <p style="margin:20px 0;">
+      <a class="royal-btn" href="/account/login" style="display:inline-block;text-decoration:none;">Sign in to view your points</a>
+    </p>
+  {%- endif -%}
+
+  {%- if block.settings.show_earn -%}
+    <h2>Ways to earn</h2>
+    <div id="royal-page-earn"><p class="royal-muted">Loading…</p></div>
+  {%- endif -%}
+
+  {%- if block.settings.show_rewards -%}
+    <h2>Rewards</h2>
+    <div id="royal-page-rewards"><p class="royal-muted">Loading…</p></div>
+  {%- endif -%}
+
+  {%- if block.settings.show_referral and customer -%}
+    <h2>Refer a friend</h2>
+    <p>Share your link — you both get rewarded.</p>
+    <div class="royal-card">
+      <code id="royal-ref-link" style="word-break:break-all;">Loading your link…</code>
+      <button type="button" id="royal-ref-copy" class="royal-btn" style="margin-top:8px;">Copy link</button>
+    </div>
+  {%- endif -%}
+
+  <p id="royal-page-status" class="royal-status" aria-live="polite"></p>
+</section>
+
+<script src="{{ 'loyalty.js' | asset_url }}" defer></script>
+<script>
+  (function () {
+    function init() {
+      var root = document.getElementById('royal-page-root');
+      if (!root || !window.RoyalLoyalty) return setTimeout(init, 50);
+      var R = window.RoyalLoyalty, cfg = R.readConfig(root);
+      var status = document.getElementById('royal-page-status');
+      if (!cfg.loggedIn) return;
+
+      R.loadBalance(cfg, function (d) {
+        var b = document.getElementById('royal-page-balance');
+        var t = document.getElementById('royal-page-tier');
+        if (b) b.textContent = (d.balance || 0) + ' points';
+        if (t && d.tier) t.textContent = 'Your tier: ' + d.tier;
+
+        var earn = document.getElementById('royal-page-earn');
+        if (earn) {
+          earn.innerHTML = (d.earnRules && d.earnRules.length)
+            ? d.earnRules.map(function (e) {
+                return '<div class="royal-card">' + (e.label || e.action) + ' — ' + e.points + ' pts</div>';
+              }).join('')
+            : '<p class="royal-muted">Earn rules will appear here soon.</p>';
+        }
+        var rw = document.getElementById('royal-page-rewards');
+        if (rw) {
+          rw.innerHTML = (d.rewards && d.rewards.length)
+            ? d.rewards.map(function (x) {
+                return '<div class="royal-card"><strong>' + (x.label || x.type) +
+                  '</strong> — ' + x.pointsCost + ' pts</div>';
+              }).join('')
+            : '<p class="royal-muted">No rewards available yet — check back soon.</p>';
+        }
+        var link = document.getElementById('royal-ref-link');
+        if (link && d.referralLink) {
+          link.textContent = d.referralLink;
+          var copy = document.getElementById('royal-ref-copy');
+          if (copy) copy.addEventListener('click', function () {
+            try {
+              navigator.clipboard.writeText(d.referralLink);
+              R.setStatus(status, 'success', 'Link copied.');
+            } catch (e) {
+              R.setStatus(status, 'error', 'Could not copy — select and copy manually.');
+            }
+          });
+        }
+      }, function () {
+        R.setStatus(status, 'error',
+          "We couldn't load your loyalty details right now. Please try again later.");
+      });
+    }
+    init();
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Loyalty page",
+  "target": "section",
+  "settings": [
+    { "type": "text", "id": "hero_title", "label": "Hero title", "default": "Earn points. Get rewards." },
+    { "type": "text", "id": "hero_subtitle", "label": "Hero subtitle", "default": "Join the program and earn on every order." },
+    { "type": "color", "id": "theme_color", "label": "Theme color", "default": "#5C3D2E" },
+    { "type": "text", "id": "logo_url", "label": "Logo URL" },
+    { "type": "checkbox", "id": "show_earn", "label": "Show \"ways to earn\"", "default": true },
+    { "type": "checkbox", "id": "show_rewards", "label": "Show rewards", "default": true },
+    { "type": "checkbox", "id": "show_referral", "label": "Show referral section", "default": true },
+    { "type": "text", "id": "proxy_base", "label": "App proxy base path", "default": "/apps/royal" }
+  ],
+  "presets": [{ "name": "Loyalty page" }]
+}
+{% endschema %}

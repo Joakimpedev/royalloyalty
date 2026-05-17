@@ -1,0 +1,9 @@
+{
+  "name": "loyalty-pos",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.2.0",
+    "@shopify/ui-extensions-react": "^2024.10.x"
+  }
+}
