@@ -1,34 +1,265 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Royal Loyalty — Prisma schema
+// Phase 1 of ROYAL-LOYALTY-DEVELOPMENT.md. Datasource: Railway PostgreSQL.
+// Append-only point ledger; PII redaction designed in from day one (redactedAt);
+// billing/quota + reviewPromptState on Shop NOW (not retrofitted in billing phase).
 
 generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
+// --- Shopify session (template baseline + expiring-token fields) ---
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+  // DB lock for single-use refresh-token race (background jobs)
+  refreshTokenLock    DateTime?
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum PlanStatus {
+  ACTIVE
+  FROZEN
+  CANCELLED
+  EXPIRED
+}
+
+enum ReviewPromptState {
+  NOT_SHOWN
+  SHOWN
+  DISMISSED_DONT_ASK
+  COMPLETED
+}
+
+model Shop {
+  id                       String     @id @default(cuid())
+  shopDomain               String     @unique
+  installedAt              DateTime   @default(now())
+  isActive                 Boolean    @default(true)
+  // Billing / quota — created in Phase 1, NOT retrofitted in the billing phase
+  plan                     PlanTier   @default(FREE)
+  planStatus               PlanStatus @default(ACTIVE)
+  subscriptionId           String?
+  monthlyLoyaltyOrderCount Int        @default(0)
+  quotaPeriodStart         DateTime   @default(now())
+  aiConfigSnapshot         Json?
+  // Review prompt dismissal persisted to DB (never localStorage)
+  reviewPromptState        ReviewPromptState @default(NOT_SHOWN)
+  // Time-to-value instrumentation
+  programActivatedAt       DateTime?
+  primaryLocale            String?
+  currencyCode             String?
+
+  members       Member[]
+  tiers         Tier[]
+  earnRules     EarnRule[]
+  rewards       Reward[]
+  redemptions   Redemption[]
+  referrals     Referral[]
+  pointTxns     PointTransaction[]
+  storeCredit   StoreCreditLedger[]
+  aiSuggestions AiSuggestion[]
+  integrations  Integration[]
+}
+
+model Member {
+  id                String    @id @default(cuid())
+  shopId            String
+  shop              Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopifyCustomerId String
+  // PII — redaction designed in Phase 1 (not retrofitted in GDPR phase)
+  email             String?
+  name              String?
+  redactedAt        DateTime?
+  enrolledAt        DateTime  @default(now())
+  currentTierId     String?
+  currentTier       Tier?     @relation(fields: [currentTierId], references: [id])
+
+  pointTxns     PointTransaction[]
+  redemptions   Redemption[]
+  referralsMade Referral[] @relation("Referrer")
+
+  @@unique([shopId, shopifyCustomerId])
+  @@index([shopId, email])
+}
+
+enum PointTxnType {
+  EARN
+  REDEEM
+  ADJUST
+  CLAWBACK
+  IMPORT
+}
+
+// Append-only ledger. Balance = SUM(points). NEVER mutated. Only recordPointTransaction writes here.
+model PointTransaction {
+  id                 String       @id @default(cuid())
+  shopId             String
+  shop               Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  memberId           String
+  member             Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  type               PointTxnType
+  points             Int
+  reason             String
+  orderId            String?
+  // Per-order clawback idempotency guard (prevents double-clawback on partial-refund-then-cancel)
+  reversedForOrderId String?
+  createdAt          DateTime     @default(now())
+
+  @@index([shopId, memberId])
+  @@index([shopId, orderId])
+}
+
+model Tier {
+  id             String   @id @default(cuid())
+  shopId         String
+  shop           Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name           String
+  thresholdType  String   // "points" | "spend"
+  threshold      Int
+  earnMultiplier Float    @default(1.0)
+  perks          Json?
+  sortOrder      Int      @default(0)
+  members        Member[]
+}
+
+model EarnRule {
+  id        String  @id @default(cuid())
+  shopId    String
+  shop      Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  action    String  // purchase | signup | birthday | newsletter | social | review | anniversary
+  points    Int
+  perDollar Boolean @default(false)
+  enabled   Boolean @default(true)
+  config    Json?
+}
+
+model Reward {
+  id         String  @id @default(cuid())
+  shopId     String
+  shop       Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type       String  // amount_off | percent_off | free_shipping | free_product | store_credit
+  pointsCost Int
+  value      Float?
+  productId  String?
+  enabled    Boolean @default(true)
+}
+
+enum RecordStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  REVERSED
+}
+
+model Redemption {
+  id              String       @id @default(cuid())
+  shopId          String
+  shop            Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  memberId        String
+  member          Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  rewardId        String
+  pointsSpent     Int
+  status          RecordStatus @default(PENDING)
+  discountCode    String?
+  createdAt       DateTime     @default(now())
+  statusChangedAt DateTime     @default(now())
+}
+
+model Referral {
+  id               String       @id @default(cuid())
+  shopId           String
+  shop             Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  referrerId       String
+  referrer         Member       @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  code             String       @unique
+  refereeEmail     String?
+  refereeIp        String?
+  status           RecordStatus @default(PENDING)
+  qualifiedOrderId String?
+  createdAt        DateTime     @default(now())
+  statusChangedAt  DateTime     @default(now())
+}
+
+enum ReconcileState {
+  OK
+  PENDING
+  DRIFT
+  REPAIRED
+}
+
+// Mirror of Shopify-native store credit txns for history/analytics + reconciliation
+model StoreCreditLedger {
+  id                 String         @id @default(cuid())
+  shopId             String
+  shop               Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopifyCustomerId  String
+  amount             Float
+  direction          String         // credit | debit
+  reason             String
+  orderId            String?
+  reversedForOrderId String?
+  shopifyTxnId       String?
+  reconcileState     ReconcileState @default(PENDING)
+  createdAt          DateTime       @default(now())
+
+  @@index([shopId, shopifyCustomerId])
+}
+
+model AiSuggestion {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String
+  payload   Json?
+  status    String   @default("open") // open | applied | dismissed
+  createdAt DateTime @default(now())
+}
+
+model Integration {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  service   String   // klaviyo | gorgias | judgeme | flow | webhook
+  status    String   @default("disconnected")
+  config    Json?
+  createdAt DateTime @default(now())
+
+  @@unique([shopId, service])
+}
+
+// Webhook dedup — keyed on X-Shopify-Event-Id (NOT X-Shopify-Webhook-Id, which does not exist)
+model ProcessedWebhook {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  topic       String
+  processedAt DateTime @default(now())
 }

@@ -1,41 +1,57 @@
-# This file stores configurations for your Shopify app.
+# Royal Loyalty — Shopify app configuration.
+# Scopes per ROYAL-LOYALTY-DEVELOPMENT.md Phase 0. Each maps to a real GraphQL
+# call (see SCOPE-JUSTIFICATIONS.md). API version pinned 2026-01 — must match
+# shopify.server.ts and .graphqlrc.ts. client_id set by `shopify app config link`.
 client_id = ""
+name = "Royal Loyalty"
+application_url = ""
+embedded = true
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+# Minimal set. High-scrutiny (justified in SCOPE-JUSTIFICATIONS.md):
+#   write_customers (tag-only), read_orders (compute points; 60-day window),
+#   write_store_credit_account_transactions (cashback + store-credit reward).
+scopes = "read_customers,write_customers,read_orders,write_discounts,read_products,read_store_credit_account_transactions,write_store_credit_account_transactions"
 
 [webhooks]
-api_version = "2025-10"
+api_version = "2026-01"
 
-  # Handled by: /app/routes/webhooks.app.uninstalled.tsx
+  # Operational
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
   topics = ["app/uninstalled"]
 
-  # Handled by: /app/routes/webhooks.app.scopes_update.tsx
   [[webhooks.subscriptions]]
-  topics = [ "app/scopes_update" ]
+  topics = ["app/scopes_update"]
   uri = "/webhooks/app/scopes_update"
 
-  # Webhooks can have filters
-  # Only receive webhooks for product updates with a product price >= 10.00
-  # See: https://shopify.dev/docs/apps/build/webhooks/customize/filters
-  # [[webhooks.subscriptions]]
-  # topics = ["products/update"]
-  # uri = "/webhooks/products/update"
-  # filter = "variants.price:>=10.00"
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/create"
+  topics = ["orders/create"]
 
-  # Mandatory compliance topic for public apps only
-  # See: https://shopify.dev/docs/apps/build/privacy-law-compliance
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/customers/data_request"
-  # compliance_topics = ["customers/data_request"]
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/cancelled"
+  topics = ["orders/cancelled"]
 
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/customers/redact"
-  # compliance_topics = ["customers/redact"]
+  # refunds/create is the valid refund topic — orders/refunded does NOT exist;
+  # orders/updated does not reliably carry the refunds array. (audit-corrected)
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/refunds/create"
+  topics = ["refunds/create"]
 
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/shop/redact"
-  # compliance_topics = ["shop/redact"]
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app_subscriptions/update"
+  topics = ["app_subscriptions/update"]
+
+  # Mandatory GDPR compliance topics (real logic implemented Phase 6)
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/data_request"
+  compliance_topics = ["customers/data_request"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/redact"
+  compliance_topics = ["customers/redact"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/shop/redact"
+  compliance_topics = ["shop/redact"]
