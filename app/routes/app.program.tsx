@@ -51,7 +51,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       action: a,
       points: r?.points ?? (a === "purchase" ? 1 : 50),
       perDollar: r?.perDollar ?? a === "purchase",
-      enabled: r?.enabled ?? a === "purchase" || a === "signup",
+      enabled: r?.enabled ?? (a === "purchase" || a === "signup"),
     };
   });
 
