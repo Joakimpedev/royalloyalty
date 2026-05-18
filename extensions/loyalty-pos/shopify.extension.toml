@@ -2,7 +2,9 @@
 # Earn + redeem in-store and balance lookup by customer. The extension calls
 # the app's App Proxy endpoints (server-side validated). Minimal UI surface:
 # a Smart Grid tile -> a modal with balance lookup, earn, and redeem.
-api_version = "2026-01"
+# POS UI api_version tracks the @shopify/ui-extensions-react line (2024.10),
+# independent of the Admin API pin (2026-01) in shopify.app.toml.
+api_version = "2024-10"
 
 [[extensions]]
 name = "Royal Loyalty POS"
