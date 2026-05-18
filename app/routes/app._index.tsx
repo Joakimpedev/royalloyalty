@@ -15,19 +15,14 @@ import { getProgramMetrics } from "../lib/analytics.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const shop = await prisma.shop.findUnique({
+  // Upsert (not findUnique): a freshly installed store has no Shop row yet and
+  // nothing else bootstraps it on the home page, so reading-only dead-ended on
+  // "Finishing installation" forever. Mirrors the pattern in app.onboarding.tsx.
+  const shop = await prisma.shop.upsert({
     where: { shopDomain: session.shop },
+    update: {},
+    create: { shopDomain: session.shop },
   });
-
-  if (!shop) {
-    return {
-      shopMissing: true as const,
-      metrics: null,
-      checklist: [],
-      suggestions: [],
-      programActivated: false,
-    };
-  }
 
   const [metrics, suggestions, earnRuleCount, tierCount, rewardCount] =
     await Promise.all([
