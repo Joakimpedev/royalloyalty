@@ -160,7 +160,7 @@ export default function BrandingPage() {
   // page as "Step 2 of 2" and the primary CTA finishes the chain by sending the
   // merchant to /app?welcomed=1.
   const inOnboardingChain = searchParams.get("onboarding") === "1";
-  const nav = useAppNavigate();
+  const appNav = useAppNavigate();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [form, setForm] = useState<BrandingConfig>(branding);
@@ -213,7 +213,9 @@ export default function BrandingPage() {
     <s-page heading="Branding">
       <s-button
         slot="primary-action"
-        onClick={() => nav(inOnboardingChain ? "/app?welcomed=1" : "/app")}
+        onClick={() =>
+          appNav(inOnboardingChain ? "/app?welcomed=1" : "/app")
+        }
         variant={inOnboardingChain ? "primary" : undefined}
       >
         {inOnboardingChain ? "Finish setup" : "Back to Home"}
