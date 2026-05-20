@@ -12,7 +12,6 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import {
-  redirect,
   useActionData,
   useLoaderData,
   useNavigation,
@@ -104,7 +103,21 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   };
 };
 
-export const action: (args: ActionFunctionArgs) => Promise<Response | { ok: false; message: string }> = async ({ params, request }) => {
+type EarnActionResult =
+  | { ok: false; message: string }
+  | { ok: true; redirectTo: string };
+
+// ⚠ IFRAME AUTH: this action returns redirect-as-data, NOT a server-side
+// redirect Response. When react-router follows a server-side redirect from
+// an action in the embedded admin, the follow-up request can land WITHOUT
+// the session token attached, which logs the merchant out. Returning the
+// destination as data lets the component navigate client-side via
+// useAppNavigate, which goes through the App Bridge fetch interceptor and
+// keeps the session intact.
+export const action = async ({
+  params,
+  request,
+}: ActionFunctionArgs): Promise<EarnActionResult> => {
   const { session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
   const a = String(params.action ?? "");
@@ -132,23 +145,29 @@ export const action: (args: ActionFunctionArgs) => Promise<Response | { ok: fals
     });
   }
 
-  // Stay in the onboarding chain if the merchant came from there.
   const url = new URL(request.url);
-  if (url.searchParams.get("onboarding") === "1") {
-    return redirect("/app/program?onboarding=1");
-  }
-  return redirect("/app/program");
+  const inChain = url.searchParams.get("onboarding") === "1";
+  return {
+    ok: true,
+    redirectTo: inChain ? "/app/program?onboarding=1" : "/app/program",
+  };
 };
 
 export default function EarnRuleEditor() {
   const { action: actionName, rule } = useLoaderData<typeof loader>();
-  const actionData = useActionData() as
-    | { ok: false; message: string }
-    | undefined;
+  const actionData = useActionData() as EarnActionResult | undefined;
   const nav = useNavigation();
   const submit = useSubmit();
   const appNav = useAppNavigate();
   const saveBarRef = useRef<HTMLElement | null>(null);
+
+  // Action returns { ok: true, redirectTo } on save — navigate client-side so
+  // the iframe (and the session) stays intact.
+  useEffect(() => {
+    if (actionData?.ok && "redirectTo" in actionData && actionData.redirectTo) {
+      appNav(actionData.redirectTo);
+    }
+  }, [actionData, appNav]);
 
   const meta = LABELS[actionName as ActionName];
   const [points, setPoints] = useState(rule.points);

@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { redirect, useBlocker, useFetcher, useLoaderData } from "react-router";
+import { useBlocker, useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import {
@@ -22,7 +22,7 @@ import {
 import { recordActivation } from "../lib/ttv.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import { WidgetPreview } from "../components/WidgetPreview";
-import { AppLink } from "../lib/app-navigate";
+import { AppLink, useAppNavigate } from "../lib/app-navigate";
 
 // ---------------------------------------------------------------------------
 // Loader — generate (or reuse persisted) program preview
@@ -179,9 +179,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     // Post-onboarding redirect chain: Program → Branding → Home (?welcomed=1).
-    // The merchant is guided through the next two setup pages instead of being
-    // dropped on the dashboard with no narrative.
-    return redirect("/app/program?onboarding=1");
+    //
+    // ⚠ IFRAME AUTH: do NOT use `return redirect(...)`. A server-side redirect
+    // from an action in the embedded admin causes the follow-up request to
+    // sometimes land without the session token, logging the merchant out. We
+    // return the destination as data and let the component navigate
+    // client-side via useAppNavigate, which preserves the iframe session.
+    return { ok: true, activated: true, redirectTo: "/app/program?onboarding=1" };
   }
 
   return { ok: false, error: "Unknown intent" };
@@ -245,14 +249,28 @@ function ProgramPreview({
 }) {
   const [program, setProgram] = useState<ProposedProgram>(initial);
   const [dirty, setDirty] = useState(false);
+  const appNav = useAppNavigate();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const isSaving =
     fetcher.state !== "idle" && fetcher.formData?.get("intent") === "activate";
-  // Once an activate submit is in-flight the action returns a server-side
-  // redirect, so the page is about to navigate away — treat the form as no
-  // longer dirty for the blocker/beforeunload guards.
-  const activated = isSaving || fetcher.state === "loading";
+  // Action returns { ok: true, activated: true, redirectTo } — once we see
+  // that, we navigate client-side via App Bridge-aware useAppNavigate.
+  const activated =
+    isSaving ||
+    fetcher.state === "loading" ||
+    (fetcher.data &&
+      "activated" in fetcher.data &&
+      fetcher.data.activated === true);
+
+  useEffect(() => {
+    const d = fetcher.data as
+      | { ok?: boolean; activated?: boolean; redirectTo?: string }
+      | undefined;
+    if (d?.ok && d.activated && d.redirectTo) {
+      appNav(d.redirectTo);
+    }
+  }, [fetcher.data, appNav]);
 
   // Block in-app nav (breadcrumb / <a>) while there are unsaved edits.
   const blocker = useBlocker(
