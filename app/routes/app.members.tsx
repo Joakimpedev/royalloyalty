@@ -385,11 +385,11 @@ export default function MembersPage() {
                     <s-table-cell>{r.name}</s-table-cell>
                     <s-table-cell>{r.email}</s-table-cell>
                     <s-table-cell>
-                      {r.enrolled ? (
-                        <s-badge tone="success">Enrolled</s-badge>
-                      ) : (
-                        <s-badge>Not enrolled</s-badge>
-                      )}
+                      {/* Every Shopify customer is implicitly a member of the
+                          loyalty program — the local Member row is created
+                          lazily on first earn. "Excluded" (when implemented)
+                          will be the only non-Member state. */}
+                      <s-badge tone="success">Member</s-badge>
                     </s-table-cell>
                     <s-table-cell>{r.balance.toLocaleString()}</s-table-cell>
                     <s-table-cell>{r.orders}</s-table-cell>
@@ -554,11 +554,7 @@ function DetailSlideOver({
                 items={[
                   {
                     label: "Status",
-                    valueNode: detail.enrolled ? (
-                      <s-badge tone="success">Enrolled</s-badge>
-                    ) : (
-                      <s-badge>Not enrolled</s-badge>
-                    ),
+                    valueNode: <s-badge tone="success">Member</s-badge>,
                   },
                   {
                     label: "Points balance",
@@ -598,7 +594,7 @@ function DetailSlideOver({
                   <s-paragraph>
                     {detail.enrolled
                       ? "No point activity yet for this member."
-                      : "This customer hasn't earned any points yet. They'll be enrolled automatically when an earn rule fires for them."}
+                      : "This customer hasn't earned any points yet. Points will appear here as soon as an earn rule fires for them."}
                   </s-paragraph>
                 ) : (
                   <div
