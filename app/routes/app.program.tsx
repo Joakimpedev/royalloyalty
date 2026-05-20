@@ -190,6 +190,16 @@ export default function ProgramPage() {
         </s-section>
       )}
 
+      {!inOnboardingChain && (
+        <s-section heading="Program areas">
+          <s-paragraph>
+            Earn rules live on this page. Use the cards below to jump to the
+            other parts of your program.
+          </s-paragraph>
+          <ProgramCatalog />
+        </s-section>
+      )}
+
       {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
       <ui-save-bar id="program-save-bar" ref={saveBarRef}>
         <button
@@ -310,6 +320,73 @@ export default function ProgramPage() {
         </s-section>
       )}
     </s-page>
+  );
+}
+
+// Catalog grid that fans out from /app/program to the program-area routes that
+// no longer sit in the top-level nav. Plain Polaris-native card grid; no
+// illustrations (Essent-style restraint).
+function ProgramCatalog() {
+  const tiles: { href: string; title: string; description: string }[] = [
+    {
+      href: "/app/rewards",
+      title: "Rewards",
+      description:
+        "What customers can redeem points for — discounts, free shipping, products.",
+    },
+    {
+      href: "/app/referrals",
+      title: "Referrals",
+      description:
+        "Two-sided rewards when a customer brings a friend who buys.",
+    },
+    {
+      href: "/app/tiers",
+      title: "VIP tiers",
+      description:
+        "Ladder of statuses with their own earn multipliers and perks.",
+    },
+    {
+      href: "/app/storecredit",
+      title: "Store credit",
+      description:
+        "Native Shopify store credit issued from the loyalty ledger.",
+    },
+    {
+      href: "/app/suggestions",
+      title: "AI suggestions",
+      description:
+        "Recommendations Royal generates from your program data — apply or ignore.",
+    },
+  ];
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+        gap: 12,
+        marginTop: 12,
+      }}
+    >
+      {tiles.map((t) => (
+        <a
+          key={t.href}
+          href={t.href}
+          style={{
+            display: "block",
+            padding: 16,
+            border: "1px solid #e3e5e7",
+            borderRadius: 8,
+            background: "#fff",
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.title}</div>
+          <div style={{ fontSize: 13, color: "#6d7175" }}>{t.description}</div>
+        </a>
+      ))}
+    </div>
   );
 }
 
