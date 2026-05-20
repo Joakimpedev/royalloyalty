@@ -202,7 +202,10 @@ const CHECKLIST = [
     key: "pos",
     title: "Enable Point of Sale",
     desc: "Let customers earn and redeem in your physical store.",
-    href: "https://admin.shopify.com/apps",
+    // shopify: URL — App Bridge intercepts and navigates the parent admin
+    // frame while keeping our iframe (and session) alive. NEVER replace this
+    // with https://admin.shopify.com/... + target="_top" — that breaks auth.
+    href: "shopify:admin/apps",
     cta: "Open Shopify POS",
   },
   {
@@ -216,7 +219,7 @@ const CHECKLIST = [
     key: "widget",
     title: "Confirm the storefront widget",
     desc: "Enable the Royal Loyalty theme app embed so customers see it.",
-    href: "https://admin.shopify.com/themes/current/editor?context=apps",
+    href: "shopify:admin/themes/current/editor?context=apps",
     cta: "Open theme editor",
   },
 ];
@@ -681,14 +684,10 @@ function PostActivationChecklist() {
                     }
                   />
                   <s-text>{c.desc}</s-text>
-                  <s-link
-                    href={c.href}
-                    {...(c.href.startsWith("http")
-                      ? { target: "_blank" }
-                      : {})}
-                  >
-                    {c.cta}
-                  </s-link>
+                  {/* All checklist hrefs are either /app/* or shopify:admin/*.
+                      App Bridge handles both transparently — no target needed.
+                      A target="_top" on a shopify: URL would break iframe auth. */}
+                  <s-link href={c.href}>{c.cta}</s-link>
                 </s-stack>
               </s-box>
             ))}

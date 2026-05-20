@@ -112,12 +112,16 @@ type GraphqlClient = (
 /**
  * Managed Pricing redirect URL. When the Partner Dashboard has Managed Pricing
  * configured, sending the merchant here lets Shopify handle plan selection,
- * proration, trials and the subscription lifecycle. `host` is the App Bridge
- * host param; `appHandle` is the app's handle in the Partner Dashboard.
+ * proration, trials and the subscription lifecycle. `appHandle` is the app's
+ * handle in the Partner Dashboard.
+ *
+ * Returns a `shopify:admin/...` URL so App Bridge intercepts the click in the
+ * embedded admin and navigates the parent frame WITHOUT destroying our iframe
+ * session. The `shopDomain` parameter is kept for backwards compatibility but
+ * is no longer used in the URL (App Bridge already knows the store context).
  */
-export function managedPricingUrl(shopDomain: string, appHandle: string): string {
-  const store = shopDomain.replace(/\.myshopify\.com$/, "");
-  return `https://admin.shopify.com/store/${store}/charges/${appHandle}/pricing_plans`;
+export function managedPricingUrl(_shopDomain: string, appHandle: string): string {
+  return `shopify:admin/charges/${appHandle}/pricing_plans`;
 }
 
 const APP_SUBSCRIPTION_CREATE = `#graphql

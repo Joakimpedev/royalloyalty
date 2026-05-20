@@ -237,13 +237,7 @@ export default function Home() {
             <s-stack direction="block" gap="base">
               <s-text fontWeight="bold">{activeStep.label}</s-text>
               <s-paragraph>{activeStep.detail}</s-paragraph>
-              <s-button
-                href={activeStep.href}
-                variant="primary"
-                {...(activeStep.id === "embed"
-                  ? { target: "_top" }
-                  : {})}
-              >
+              <s-button href={activeStep.href} variant="primary">
                 {activeStep.cta}
               </s-button>
             </s-stack>
@@ -320,7 +314,9 @@ function StatusTile({
   const badgeTone: "success" | "neutral" | "critical" =
     active === true ? "success" : active === false ? "critical" : "neutral";
   const badgeText = active === false ? inactiveText : activeText;
-  const isExternal = ctaHref.startsWith("shopify:");
+  // shopify: URLs are intercepted by App Bridge; no target attribute is needed
+  // (or correct) — adding target="_top" would force-replace the iframe origin
+  // and destroy the embedded session. Same goes for /app/* in-app routes.
   return (
     <s-box padding="base" borderWidth="base" borderRadius="base">
       <s-stack direction="block" gap="base">
@@ -329,12 +325,7 @@ function StatusTile({
           <s-badge tone={badgeTone}>{badgeText}</s-badge>
         </s-stack>
         <s-paragraph>{body}</s-paragraph>
-        <s-button
-          href={ctaHref}
-          {...(isExternal ? { target: "_top" } : {})}
-        >
-          {ctaLabel}
-        </s-button>
+        <s-button href={ctaHref}>{ctaLabel}</s-button>
       </s-stack>
     </s-box>
   );
@@ -355,9 +346,12 @@ function WelcomeCard() {
           to go live: enable the loyalty widget in your Shopify theme editor.
         </s-paragraph>
         <s-stack direction="inline" gap="base">
+          {/* shopify: URL — App Bridge intercepts and navigates the parent
+              admin frame while keeping our iframe (and session) alive.
+              NO target attribute; adding target="_top" would force-replace
+              the iframe origin and destroy auth. */}
           <s-button
             href="shopify:admin/themes/current/editor?context=apps"
-            target="_top"
             variant="primary"
           >
             Open theme editor

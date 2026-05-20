@@ -177,14 +177,46 @@ export default function SettingsPage() {
   const busy = nav.state === "submitting";
 
   // Client-side redirect to Shopify-hosted confirmation / managed pricing.
+  //
+  // ⚠ IFRAME AUTH: We're in an embedded admin iframe; setting
+  // `window.top.location.href = url` force-replaces the iframe's parent and
+  // destroys the embedded session, leaving the merchant on a broken auth
+  // page. Instead we hand the URL to App Bridge (`window.shopify`), which
+  // navigates the parent admin frame while keeping our iframe alive.
+  //
+  // Two URL shapes flow through here:
+  // - `shopify:admin/...` (managed-pricing handoff) — App Bridge's `open()`
+  //   handles this directly, same as a plain <a href="shopify:admin/...">.
+  // - `https://...myshopify.com/admin/charges/.../confirm_recurring_application_charge`
+  //   (subscribeToPlan confirmation URL) — `shopify.redirect.dispatch({
+  //   type: 'REMOTE', url, newContext: false })` is the documented App
+  //   Bridge v4 path for remote URLs that must take over the parent frame.
   useEffect(() => {
     if (actionData && "redirectTo" in actionData && actionData.redirectTo) {
       const target = actionData.redirectTo as string;
-      if (window.top) {
-        window.top.location.href = target;
-      } else {
-        window.location.href = target;
+      const sh = (window as unknown as { shopify?: any }).shopify;
+      if (sh) {
+        if (target.startsWith("shopify:") && typeof sh.open === "function") {
+          sh.open(target);
+          return;
+        }
+        if (sh.redirect?.dispatch) {
+          sh.redirect.dispatch({
+            type: "REMOTE",
+            url: target,
+            newContext: false,
+          });
+          return;
+        }
+        if (typeof sh.open === "function") {
+          sh.open(target);
+          return;
+        }
       }
+      // No App Bridge available — we're not embedded (local dev, or App
+      // Bridge failed to init). There's no iframe to break, so a plain
+      // navigation is safe.
+      window.location.href = target;
     }
   }, [actionData]);
 
