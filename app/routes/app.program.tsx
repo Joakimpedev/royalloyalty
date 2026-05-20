@@ -1,7 +1,6 @@
 // Program — earn rules + redemption settings (form page).
 // Contextual save bar (ui-save-bar) wired with React Router useBlocker() so
 // breadcrumb / link navigation is blocked while there are unsaved edits.
-import { useEffect, useRef, useState, useCallback } from "react";
 import type {
   ActionFunctionArgs,
   HeadersFunction,
@@ -13,7 +12,6 @@ import {
   useNavigation,
   useSearchParams,
   useSubmit,
-  useBlocker,
   useRouteError,
 } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -30,6 +28,16 @@ const ACTIONS = [
   "anniversary",
 ] as const;
 type ActionName = (typeof ACTIONS)[number];
+
+const LABELS: Record<ActionName, string> = {
+  purchase: "Place an order",
+  signup: "Create an account",
+  birthday: "Celebrate a birthday",
+  newsletter: "Subscribe to newsletter",
+  social: "Follow on social",
+  review: "Leave a product review",
+  anniversary: "Account anniversary",
+};
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -64,6 +72,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
+// Bulk earn-rule saves are gone — each rule is edited at /app/program/earn/:action
+// in its own page (Phase 8). The remaining action on this page is the program
+// activation toggle.
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
@@ -77,33 +88,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { ok: true, message: "Program activated." };
   }
 
-  for (const action of ACTIONS) {
-    const points = Number.parseInt(String(form.get(`points_${action}`)), 10);
-    if (!Number.isFinite(points) || points < 0) {
-      return {
-        ok: false,
-        message: `Points for "${action}" must be a non-negative whole number.`,
-      };
-    }
-    const perDollar = form.get(`perDollar_${action}`) === "on";
-    const enabled = form.get(`enabled_${action}`) === "on";
-
-    const existing = await prisma.earnRule.findFirst({
-      where: { shopId: shop.id, action },
-    });
-    if (existing) {
-      await prisma.earnRule.update({
-        where: { id: existing.id },
-        data: { points, perDollar, enabled },
-      });
-    } else {
-      await prisma.earnRule.create({
-        data: { shopId: shop.id, action, points, perDollar, enabled },
-      });
-    }
-  }
-
-  return { ok: true, message: "Earn rules saved." };
+  return { ok: false, message: "Unknown action." };
 };
 
 export default function ProgramPage() {
@@ -116,58 +101,9 @@ export default function ProgramPage() {
   // a program it sends the merchant here with ?onboarding=1 so this page shows a
   // "Step 1 of 2" banner and a Continue CTA into /app/branding.
   const inOnboardingChain = searchParams.get("onboarding") === "1";
-  const saveBarRef = useRef<HTMLElement | null>(null);
 
-  const [rules, setRules] = useState(earnRules);
-  const dirty =
-    JSON.stringify(rules) !== JSON.stringify(earnRules);
+  const rules = earnRules;
   const saving = nav.state === "submitting";
-
-  // Block link/breadcrumb navigation while there are unsaved edits.
-  const blocker = useBlocker(
-    useCallback(
-      ({ currentLocation, nextLocation }) =>
-        dirty && currentLocation.pathname !== nextLocation.pathname,
-      [dirty],
-    ),
-  );
-
-  useEffect(() => {
-    if (blocker.state === "blocked" && !dirty) blocker.reset?.();
-  }, [blocker, dirty]);
-
-  // Show/hide the contextual save bar with dirty state.
-  useEffect(() => {
-    const el = saveBarRef.current as
-      | (HTMLElement & { show?: () => void; hide?: () => void })
-      | null;
-    if (!el) return;
-    if (dirty) el.show?.();
-    else el.hide?.();
-  }, [dirty]);
-
-  const save = useCallback(() => {
-    const fd = new FormData();
-    for (const r of rules) {
-      fd.set(`points_${r.action}`, String(r.points));
-      if (r.perDollar) fd.set(`perDollar_${r.action}`, "on");
-      if (r.enabled) fd.set(`enabled_${r.action}`, "on");
-    }
-    submit(fd, { method: "POST" });
-  }, [rules, submit]);
-
-  const discard = useCallback(() => {
-    setRules(earnRules);
-  }, [earnRules]);
-
-  const update = (
-    action: ActionName,
-    patch: Partial<{ points: number; perDollar: boolean; enabled: boolean }>,
-  ) => {
-    setRules((prev) =>
-      prev.map((r) => (r.action === action ? { ...r, ...patch } : r)),
-    );
-  };
 
   return (
     <s-page heading="Program">
@@ -200,19 +136,6 @@ export default function ProgramPage() {
         </s-section>
       )}
 
-      {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
-      <ui-save-bar id="program-save-bar" ref={saveBarRef}>
-        <button
-          variant="primary"
-          onClick={save}
-          {...(saving ? { loading: "" } : {})}
-        >
-          Save
-        </button>
-        <button onClick={discard}>Discard</button>
-        {/* @ts-expect-error - ui-save-bar custom element */}
-      </ui-save-bar>
-
       {actionData && !actionData.ok && (
         <s-section>
           <s-banner tone="critical" heading="Could not save">
@@ -228,58 +151,50 @@ export default function ProgramPage() {
         </s-section>
       )}
 
+      {/* Earn-rules list (BON-simple). Each row clicks through to the per-rule
+          editor at /app/program/earn/:action. No bulk-form editing — one rule
+          at a time so the merchant sees its summary in context before saving. */}
       <s-section heading="Earn rules">
         <s-paragraph>
-          Configure how customers earn points for each action. Purchase rules
-          can award points per dollar spent.
+          Click a rule to edit the points awarded and toggle it on or off.
         </s-paragraph>
-        <s-stack direction="block" gap="base">
-          {rules.map((r) => (
-            <s-box
+        <div
+          style={{
+            border: "1px solid #e3e5e7",
+            borderRadius: 8,
+            background: "#fff",
+            overflow: "hidden",
+          }}
+        >
+          {rules.map((r, i) => (
+            <a
               key={r.action}
-              padding="base"
-              borderWidth="base"
-              borderRadius="base"
+              href={`/app/program/earn/${r.action}${inOnboardingChain ? "?onboarding=1" : ""}`}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) auto auto",
+                gap: 16,
+                alignItems: "center",
+                padding: "12px 16px",
+                borderTop: i === 0 ? "none" : "1px solid #f1f2f3",
+                textDecoration: "none",
+                color: "inherit",
+                background: "#fff",
+              }}
             >
-              <s-stack direction="block" gap="base">
-                <s-stack direction="inline" gap="base">
-                  <s-text fontWeight="bold">
-                    {r.action.charAt(0).toUpperCase() + r.action.slice(1)}
-                  </s-text>
-                  <s-checkbox
-                    label="Enabled"
-                    {...(r.enabled ? { checked: "" } : {})}
-                    onChange={(e: { target: { checked: boolean } }) =>
-                      update(r.action, { enabled: e.target.checked })
-                    }
-                  />
-                </s-stack>
-                <s-text-field
-                  label="Points"
-                  type="number"
-                  value={String(r.points)}
-                  onChange={(e: { target: { value: string } }) =>
-                    update(r.action, {
-                      points: Math.max(
-                        0,
-                        Number.parseInt(e.target.value, 10) || 0,
-                      ),
-                    })
-                  }
-                />
-                {r.action === "purchase" && (
-                  <s-checkbox
-                    label="Award per dollar spent (otherwise flat per order)"
-                    {...(r.perDollar ? { checked: "" } : {})}
-                    onChange={(e: { target: { checked: boolean } }) =>
-                      update(r.action, { perDollar: e.target.checked })
-                    }
-                  />
-                )}
-              </s-stack>
-            </s-box>
+              <div style={{ fontWeight: 500, color: "#202223" }}>
+                {LABELS[r.action]}
+              </div>
+              <s-badge tone={r.enabled ? "success" : "neutral"}>
+                {r.enabled ? "Active" : "Inactive"}
+              </s-badge>
+              <div style={{ fontSize: 13, color: "#6d7175", minWidth: 90, textAlign: "right" }}>
+                {r.points} pts
+                {r.action === "purchase" && r.perDollar ? " / $1" : ""}
+              </div>
+            </a>
           ))}
-        </s-stack>
+        </div>
       </s-section>
 
       <s-section heading="Redemption & activation">
@@ -302,23 +217,6 @@ export default function ProgramPage() {
         )}
       </s-section>
 
-      {blocker.state === "blocked" && (
-        <s-section>
-          <s-banner tone="warning" heading="You have unsaved changes">
-            <s-stack direction="inline" gap="base">
-              <s-button
-                variant="primary"
-                onClick={() => blocker.proceed?.()}
-              >
-                Leave without saving
-              </s-button>
-              <s-button onClick={() => blocker.reset?.()}>
-                Stay on page
-              </s-button>
-            </s-stack>
-          </s-banner>
-        </s-section>
-      )}
     </s-page>
   );
 }
