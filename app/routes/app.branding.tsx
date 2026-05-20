@@ -284,8 +284,20 @@ export default function BrandingPage() {
                 primary={form.widget.primaryColor}
                 secondary={form.widget.secondaryColor}
                 onSelect={(preset) => {
-                  setW("primaryColor", preset.primary);
-                  setW("secondaryColor", preset.secondary);
+                  // Apply the palette to all three surfaces so picking a brand
+                  // color updates the Widget, the Loyalty page hero, and the
+                  // email accent at the same time. The hex fields below each
+                  // surface let merchants fine-tune any one independently.
+                  setForm((f) => ({
+                    ...f,
+                    widget: {
+                      ...f.widget,
+                      primaryColor: preset.primary,
+                      secondaryColor: preset.secondary,
+                    },
+                    page: { ...f.page, themeColor: preset.primary },
+                    emails: { ...f.emails, accentColor: preset.primary },
+                  }));
                 }}
               />
               <s-text-field
