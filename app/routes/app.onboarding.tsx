@@ -20,6 +20,8 @@ import {
   type ProposedProgram,
 } from "../lib/ai.server";
 import { recordActivation } from "../lib/ttv.server";
+import { BrandingPalette } from "../components/BrandingPalette";
+import { WidgetPreview } from "../components/WidgetPreview";
 
 // ---------------------------------------------------------------------------
 // Loader — generate (or reuse persisted) program preview
@@ -133,10 +135,42 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           enabled: true,
         })),
       });
+      // Persist the AI snapshot AND project the onboarding branding selection
+      // into the BrandingConfig shape the /app/branding page reads, so the
+      // merchant's palette pick survives the onboarding → branding hop.
+      const brandingConfig = {
+        widget: {
+          position: program.branding.launcherPosition ?? "bottom-right",
+          primaryColor: program.branding.primaryColor,
+          secondaryColor: program.branding.secondaryColor,
+          icon: "crown",
+          launcherText: program.branding.pointsName,
+          title: program.branding.programName,
+        },
+        page: {
+          heroTitle: `Earn ${program.branding.pointsName}. Get rewards.`,
+          heroSubtitle: "Join the program and earn on every order.",
+          themeColor: program.branding.primaryColor,
+          logoUrl: "",
+          showEarn: true,
+          showRewards: true,
+          showReferral: true,
+        },
+        emails: {
+          accentColor: program.branding.primaryColor,
+          logoUrl: "",
+          pointsEarnedSubject: `You earned {points} ${program.branding.pointsName}`,
+          rewardAvailableSubject: "A reward is ready for you",
+          tierChangeSubject: "Welcome to {tier}",
+        },
+      };
       await tx.shop.update({
         where: { id: shop.id },
         data: {
-          aiConfigSnapshot: program as unknown as object,
+          aiConfigSnapshot: {
+            ...(program as unknown as Record<string, unknown>),
+            branding: brandingConfig,
+          } as object,
         },
       });
       // Time-to-value: idempotent install→activate stamp.
@@ -211,11 +245,14 @@ function ProgramPreview({
 
   const isSaving =
     fetcher.state !== "idle" && fetcher.formData?.get("intent") === "activate";
-  const activated = fetcher.data?.ok && fetcher.data?.activated;
+  // Once an activate submit is in-flight the action returns a server-side
+  // redirect, so the page is about to navigate away — treat the form as no
+  // longer dirty for the blocker/beforeunload guards.
+  const activated = isSaving || fetcher.state === "loading";
 
   // Block in-app nav (breadcrumb / <a>) while there are unsaved edits.
   const blocker = useBlocker(
-    () => dirty && !activated && !isSaving,
+    () => dirty && !activated,
   );
 
   useEffect(() => {
@@ -336,26 +373,66 @@ function ProgramPreview({
               })
             }
           />
-          <s-text-field
-            label="Primary color (hex)"
-            value={program.branding.primaryColor}
-            onInput={(e: any) =>
+          <s-text fontWeight="bold">Palette</s-text>
+          <s-paragraph>
+            Pick a starting palette that fits your brand. You can fine-tune the
+            exact colors below or later from the Branding page.
+          </s-paragraph>
+          <BrandingPalette
+            primary={program.branding.primaryColor}
+            secondary={program.branding.secondaryColor}
+            onSelect={(preset) =>
               mutate((p) => {
-                p.branding.primaryColor = e.target.value;
+                p.branding.primaryColor = preset.primary;
+                p.branding.secondaryColor = preset.secondary;
                 return p;
               })
             }
           />
-          <s-text-field
-            label="Secondary color (hex)"
-            value={program.branding.secondaryColor}
-            onInput={(e: any) =>
-              mutate((p) => {
-                p.branding.secondaryColor = e.target.value;
-                return p;
-              })
-            }
-          />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gap: 24,
+              alignItems: "start",
+            }}
+          >
+            <s-stack direction="block" gap="base">
+              <s-text-field
+                label="Primary color (hex)"
+                value={program.branding.primaryColor}
+                onInput={(e: any) =>
+                  mutate((p) => {
+                    p.branding.primaryColor = e.target.value;
+                    return p;
+                  })
+                }
+              />
+              <s-text-field
+                label="Secondary color (hex)"
+                value={program.branding.secondaryColor}
+                onInput={(e: any) =>
+                  mutate((p) => {
+                    p.branding.secondaryColor = e.target.value;
+                    return p;
+                  })
+                }
+              />
+            </s-stack>
+            <div style={{ position: "sticky", top: 16 }}>
+              <s-text tone="subdued">Live preview</s-text>
+              <div style={{ marginTop: 8 }}>
+                <WidgetPreview
+                  config={{
+                    primaryColor: program.branding.primaryColor,
+                    secondaryColor: program.branding.secondaryColor,
+                    title: program.branding.programName,
+                    launcherText: program.branding.pointsName,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </s-stack>
       </s-section>
 

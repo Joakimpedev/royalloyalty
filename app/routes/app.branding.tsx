@@ -21,6 +21,8 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { BrandingPalette } from "../components/BrandingPalette";
+import { WidgetPreview } from "../components/WidgetPreview";
 
 export interface BrandingConfig {
   widget: {
@@ -260,72 +262,84 @@ export default function BrandingPage() {
 
       {/* ---- Widget ---- */}
       <s-section heading="Widget">
-        <s-stack direction="block" gap="base">
-          <s-text-field
-            label="Primary color (hex)"
-            value={form.widget.primaryColor}
-            onChange={(e: { target: { value: string } }) =>
-              setW("primaryColor", e.target.value)
-            }
-          />
-          <s-text-field
-            label="Secondary color (hex)"
-            value={form.widget.secondaryColor}
-            onChange={(e: { target: { value: string } }) =>
-              setW("secondaryColor", e.target.value)
-            }
-          />
-          <s-select
-            label="Launcher position"
-            value={form.widget.position}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { value: string } }) =>
-              setW("position", e.target.value)
-            }
+        <s-stack direction="block" gap="large">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gap: 24,
+              alignItems: "start",
+            }}
           >
-            <s-option value="bottom-right">Bottom right</s-option>
-            <s-option value="bottom-left">Bottom left</s-option>
-          </s-select>
-          <s-text-field
-            label="Launcher text"
-            value={form.widget.launcherText}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { value: string } }) =>
-              setW("launcherText", e.target.value)
-            }
-          />
-          <s-text-field
-            label="Widget title"
-            value={form.widget.title}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { value: string } }) =>
-              setW("title", e.target.value)
-            }
-          />
-          <s-box
-            padding="base"
-            borderWidth="base"
-            borderRadius="base"
-            background={undefined}
-          >
-            <s-text tone="subdued">Live preview</s-text>
-            <div
-              style={{
-                marginTop: 8,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "10px 16px",
-                borderRadius: 999,
-                background: form.widget.primaryColor,
-                color: form.widget.secondaryColor,
-                fontWeight: 600,
-              }}
-            >
-              <span aria-hidden="true">♛</span>
-              {form.widget.launcherText}
+            <s-stack direction="block" gap="base">
+              <s-text fontWeight="bold">Palette</s-text>
+              <s-paragraph>
+                Pick a starting palette, then fine-tune the hex values below.
+              </s-paragraph>
+              <BrandingPalette
+                primary={form.widget.primaryColor}
+                secondary={form.widget.secondaryColor}
+                onSelect={(preset) => {
+                  setW("primaryColor", preset.primary);
+                  setW("secondaryColor", preset.secondary);
+                }}
+              />
+              <s-text-field
+                label="Primary color (hex)"
+                value={form.widget.primaryColor}
+                onChange={(e: { target: { value: string } }) =>
+                  setW("primaryColor", e.target.value)
+                }
+              />
+              <s-text-field
+                label="Secondary color (hex)"
+                value={form.widget.secondaryColor}
+                onChange={(e: { target: { value: string } }) =>
+                  setW("secondaryColor", e.target.value)
+                }
+              />
+              <s-select
+                label="Launcher position"
+                value={form.widget.position}
+                disabled={!paid ? true : undefined}
+                onChange={(e: { target: { value: string } }) =>
+                  setW("position", e.target.value)
+                }
+              >
+                <s-option value="bottom-right">Bottom right</s-option>
+                <s-option value="bottom-left">Bottom left</s-option>
+              </s-select>
+              <s-text-field
+                label="Launcher text"
+                value={form.widget.launcherText}
+                disabled={!paid ? true : undefined}
+                onChange={(e: { target: { value: string } }) =>
+                  setW("launcherText", e.target.value)
+                }
+              />
+              <s-text-field
+                label="Widget title"
+                value={form.widget.title}
+                disabled={!paid ? true : undefined}
+                onChange={(e: { target: { value: string } }) =>
+                  setW("title", e.target.value)
+                }
+              />
+            </s-stack>
+            <div style={{ position: "sticky", top: 16 }}>
+              <s-text tone="subdued">Live preview</s-text>
+              <div style={{ marginTop: 8 }}>
+                <WidgetPreview
+                  config={{
+                    primaryColor: form.widget.primaryColor,
+                    secondaryColor: form.widget.secondaryColor,
+                    title: form.widget.title,
+                    launcherText: form.widget.launcherText,
+                  }}
+                />
+              </div>
             </div>
-          </s-box>
+          </div>
         </s-stack>
       </s-section>
 
