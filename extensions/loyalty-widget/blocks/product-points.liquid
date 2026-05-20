@@ -13,7 +13,7 @@
 
 {%- if pts > 0 -%}
   <p class="royal-card" style="display:flex;align-items:center;gap:8px;">
-    <span aria-hidden="true" style="color: {{ block.settings.accent | default: '#5C3D2E' }};">&#9819;</span>
+    <span aria-hidden="true" style="color: {{ block.settings.accent | default: '#2C2A29' }};">&#9819;</span>
     <span>
       {{ block.settings.label_prefix | default: 'Earn' | escape }}
       <span class="royal-points">{{ pts }}</span>
@@ -30,7 +30,7 @@
     { "type": "number", "id": "points_per_unit", "label": "Points per currency unit", "default": 1 },
     { "type": "text", "id": "label_prefix", "label": "Prefix", "default": "Earn" },
     { "type": "text", "id": "label_suffix", "label": "Suffix", "default": "points with this purchase" },
-    { "type": "color", "id": "accent", "label": "Accent", "default": "#5C3D2E" }
+    { "type": "color", "id": "accent", "label": "Accent", "default": "#2C2A29" }
   ]
 }
 {% endschema %}

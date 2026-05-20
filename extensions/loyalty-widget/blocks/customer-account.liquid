@@ -10,7 +10,7 @@
 
 <section
   id="royal-account-root"
-  style="--royal-primary: {{ block.settings.accent | default: '#5C3D2E' }}; --royal-secondary:#fff;"
+  style="--royal-primary: {{ block.settings.accent | default: '#2C2A29' }}; --royal-secondary:#fff;"
   data-royal-config='{
     "proxy": {{ block.settings.proxy_base | default: "/apps/royal" | json }},
     "loggedIn": {% if customer %}true{% else %}false{% endif %}
@@ -113,7 +113,7 @@
   "target": "section",
   "settings": [
     { "type": "text", "id": "heading", "label": "Heading", "default": "Your loyalty" },
-    { "type": "color", "id": "accent", "label": "Accent", "default": "#5C3D2E" },
+    { "type": "color", "id": "accent", "label": "Accent", "default": "#2C2A29" },
     { "type": "text", "id": "proxy_base", "label": "App proxy base path", "default": "/apps/royal" }
   ]
 }

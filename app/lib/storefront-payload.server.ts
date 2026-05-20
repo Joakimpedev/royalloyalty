@@ -71,7 +71,7 @@ export interface StorefrontPayload {
 // Hardcoded defaults that match the Liquid block defaults — so a brand-new
 // shop with no aiConfigSnapshot still renders something sensible.
 const DEFAULT_BRANDING: StorefrontBranding = {
-  primaryColor: "#5C3D2E",
+  primaryColor: "#2C2A29",
   secondaryColor: "#FFFFFF",
   programName: "Rewards",
   pointsName: "Points",
@@ -79,7 +79,7 @@ const DEFAULT_BRANDING: StorefrontBranding = {
   launcherPosition: "bottom-right",
   heroTitle: "Earn points. Get rewards.",
   heroSubtitle: "Join the program and earn on every order.",
-  emailAccentColor: "#5C3D2E",
+  emailAccentColor: "#2C2A29",
   showEarn: true,
   showRewards: true,
   showReferral: true,

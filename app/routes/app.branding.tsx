@@ -182,8 +182,8 @@ export interface BrandingConfig {
 const DEFAULTS: BrandingConfig = {
   widget: {
     position: "bottom-right",
-    primaryColor: "#5C3D2E",
-    secondaryColor: "#E8D8C3",
+    primaryColor: "#2C2A29",
+    secondaryColor: "#F0EBE3",
     icon: "crown",
     launcherText: "Rewards",
     title: "Your rewards",
@@ -191,14 +191,14 @@ const DEFAULTS: BrandingConfig = {
   page: {
     heroTitle: "Earn points. Get rewards.",
     heroSubtitle: "Join the program and earn on every order.",
-    themeColor: "#5C3D2E",
+    themeColor: "#2C2A29",
     logoUrl: "",
     showEarn: true,
     showRewards: true,
     showReferral: true,
   },
   emails: {
-    accentColor: "#5C3D2E",
+    accentColor: "#2C2A29",
     logoUrl: "",
     pointsEarnedSubject: "You earned {points} points",
     rewardAvailableSubject: "A reward is ready for you",

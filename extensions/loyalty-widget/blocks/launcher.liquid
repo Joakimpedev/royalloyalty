@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
 
 {%- assign pos = block.settings.position | default: 'bottom-right' -%}
-{%- assign primary = block.settings.primary_color | default: '#5C3D2E' -%}
+{%- assign primary = block.settings.primary_color | default: '#2C2A29' -%}
 {%- assign secondary = block.settings.secondary_color | default: '#FFFFFF' -%}
 
 <div
@@ -184,7 +184,7 @@
       ],
       "default": "bottom-right"
     },
-    { "type": "color", "id": "primary_color", "label": "Primary color", "default": "#5C3D2E" },
+    { "type": "color", "id": "primary_color", "label": "Primary color", "default": "#2C2A29" },
     { "type": "color", "id": "secondary_color", "label": "Text color", "default": "#FFFFFF" },
     { "type": "text", "id": "proxy_base", "label": "App proxy base path", "default": "/apps/royal" }
   ]

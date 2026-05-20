@@ -15,7 +15,10 @@ export type PalettePreset = {
 };
 
 export const PALETTE_PRESETS: PalettePreset[] = [
-  { id: "default", label: "Default", primary: "#5C3D2E", secondary: "#E8D8C3" },
+  // Apparel (near-black on off-white) is the implicit default — neutral
+  // enough to work for almost any store. The previous brown "Default" was
+  // dropped because it visually overlapped with "Pets" and looked dated
+  // against most storefronts.
   { id: "apparel", label: "Apparel", primary: "#2C2A29", secondary: "#F0EBE3" },
   { id: "beauty", label: "Beauty & wellness", primary: "#6B4F60", secondary: "#F4E8E8" },
   { id: "food", label: "Food & drink", primary: "#A03A2A", secondary: "#F5E1D2" },
