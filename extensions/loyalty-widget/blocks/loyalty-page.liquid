@@ -27,7 +27,7 @@
 
   {%- if customer -%}
     <p style="margin:20px 0 4px;">Your balance: <span id="royal-page-balance" class="royal-points">…</span></p>
-    <p id="royal-page-tier" class="royal-muted"></p>
+    {%- comment -%} Tier line hidden — backend still ships tier in payload but feature is not yet user-facing. {%- endcomment -%}
   {%- else -%}
     <p style="margin:20px 0;">
       <a class="royal-btn" href="/account/login" style="display:inline-block;text-decoration:none;">Sign in to view your points</a>

@@ -257,12 +257,8 @@ function ProgramCatalog() {
       description:
         "Two-sided rewards when a customer brings a friend who buys.",
     },
-    {
-      href: "/app/tiers",
-      title: "VIP tiers",
-      description:
-        "Ladder of statuses with their own earn multipliers and perks.",
-    },
+    // VIP tiers tile hidden — feature exists in backend but is not yet
+    // user-facing. Re-enable when tier UX is complete.
     {
       href: "/app/storecredit",
       title: "Store credit",

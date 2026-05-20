@@ -57,15 +57,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       done: rewardCount > 0,
       href: "/app/rewards",
     },
-    {
-      id: "tiers",
-      label: "Create VIP tiers",
-      detail:
-        "Reward your best customers with a tier ladder. Each tier can have its own earn multiplier and perks.",
-      cta: "Open tiers",
-      done: tierCount > 0,
-      href: "/app/tiers",
-    },
+    // Tiers step intentionally hidden — feature exists in the backend but is
+    // not yet user-facing. Re-enable when tier UX is complete.
     {
       id: "activate",
       label: "Activate the program",

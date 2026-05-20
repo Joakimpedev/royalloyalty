@@ -44,7 +44,7 @@
 
     {%- if customer -%}
       <p id="royal-balance" class="royal-points">Loading…</p>
-      <p id="royal-tier" class="royal-muted"></p>
+      {%- comment -%} Tier line hidden — backend still ships tier in payload but feature is not yet user-facing. {%- endcomment -%}
       <h3 style="margin:12px 0 4px;">Rewards</h3>
       <div id="royal-rewards"><p class="royal-muted">Loading rewards…</p></div>
     {%- else -%}

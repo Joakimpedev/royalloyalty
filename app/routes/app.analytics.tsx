@@ -54,8 +54,7 @@ export default function AnalyticsPage() {
             <s-paragraph>
               Once members start earning and redeeming points, you will see
               members, points issued and redeemed, redemption rate, influenced
-              revenue, referral performance, tier distribution and a ROI
-              summary on this page.
+              revenue, referral performance and a ROI summary on this page.
             </s-paragraph>
             <s-button
               variant="primary"
@@ -147,28 +146,9 @@ export default function AnalyticsPage() {
         </s-stack>
       </s-section>
 
-      <s-section heading="Tier distribution">
-        {m.tierDistribution.length === 0 ? (
-          <s-paragraph>
-            No tiers configured. Create VIP tiers to segment members by loyalty.
-          </s-paragraph>
-        ) : (
-          <s-table>
-            <s-table-header-row>
-              <s-table-header>Tier</s-table-header>
-              <s-table-header>Members</s-table-header>
-            </s-table-header-row>
-            <s-table-body>
-              {m.tierDistribution.map((t) => (
-                <s-table-row key={t.tierId ?? "none"}>
-                  <s-table-cell>{t.tierName}</s-table-cell>
-                  <s-table-cell>{t.members.toLocaleString()}</s-table-cell>
-                </s-table-row>
-              ))}
-            </s-table-body>
-          </s-table>
-        )}
-      </s-section>
+      {/* Tier distribution section hidden — tier feature exists in the
+          backend but is not yet user-facing. Re-enable when tier UX is
+          complete. */}
     </s-page>
   );
 }

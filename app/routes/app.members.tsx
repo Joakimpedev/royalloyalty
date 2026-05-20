@@ -37,13 +37,15 @@ const CUSTOMERS_QUERY = `#graphql
   }
 `;
 
+// NOTE: `phone` is Protected Customer Data (Level 2) and requires Shopify
+// approval the app does not have — requesting it 500s the loader. Keep this
+// query restricted to Level-1 fields until/unless approval is granted.
 const CUSTOMER_DETAIL_QUERY = `#graphql
   query RoyalLoyaltyCustomerDetail($id: ID!) {
     customer(id: $id) {
       id
       displayName
       email
-      phone
       createdAt
       numberOfOrders
       amountSpent { amount currencyCode }
@@ -105,7 +107,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         id: memberId,
         name: redacted ? "[redacted]" : customer.displayName ?? "—",
         email: redacted ? "[redacted]" : customer.email ?? "—",
-        phone: redacted ? "[redacted]" : customer.phone ?? null,
         createdAt: customer.createdAt as string,
         numberOfOrders: customer.numberOfOrders ?? 0,
         totalSpent: customer.amountSpent?.amount ?? "0",
@@ -229,11 +230,6 @@ export default function MembersPage() {
             <s-text>
               <s-text fontWeight="bold">Email:</s-text> {detail.email}
             </s-text>
-            {detail.phone && (
-              <s-text>
-                <s-text fontWeight="bold">Phone:</s-text> {detail.phone}
-              </s-text>
-            )}
             <s-text>
               <s-text fontWeight="bold">Customer since:</s-text>{" "}
               {new Date(detail.createdAt).toLocaleDateString()}
@@ -252,10 +248,6 @@ export default function MembersPage() {
             <s-text>
               <s-text fontWeight="bold">Loyalty status:</s-text>{" "}
               {detail.enrolled ? "Enrolled" : "Not yet enrolled"}
-            </s-text>
-            <s-text>
-              <s-text fontWeight="bold">Tier:</s-text>{" "}
-              {detail.tier ?? "No tier"}
             </s-text>
             <s-text>
               <s-text fontWeight="bold">Points balance:</s-text>{" "}
@@ -345,7 +337,6 @@ export default function MembersPage() {
                 <s-table-header>Name</s-table-header>
                 <s-table-header>Email</s-table-header>
                 <s-table-header>Status</s-table-header>
-                <s-table-header>Tier</s-table-header>
                 <s-table-header>Points</s-table-header>
                 <s-table-header>Orders</s-table-header>
                 <s-table-header>Customer since</s-table-header>
@@ -363,7 +354,6 @@ export default function MembersPage() {
                         <s-badge>Not enrolled</s-badge>
                       )}
                     </s-table-cell>
-                    <s-table-cell>{r.tier ?? "—"}</s-table-cell>
                     <s-table-cell>{r.balance.toLocaleString()}</s-table-cell>
                     <s-table-cell>{r.orders}</s-table-cell>
                     <s-table-cell>

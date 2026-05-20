@@ -156,7 +156,8 @@ const ModalComponent = () => {
             <>
               <Section title="Balance">
                 <Text>{data.balance ?? 0} points</Text>
-                {data.tier ? <Text>Tier: {data.tier}</Text> : null}
+                {/* Tier line hidden — backend still tracks tier but feature
+                    is not yet user-facing. */}
               </Section>
 
               <Section title="Earn">
