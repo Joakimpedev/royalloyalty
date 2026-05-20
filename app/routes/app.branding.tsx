@@ -25,6 +25,39 @@ import { BrandingPalette } from "../components/BrandingPalette";
 import { WidgetPreview } from "../components/WidgetPreview";
 import { useAppNavigate } from "../lib/app-navigate";
 
+// Small pill rendered above each paid-only field on the FREE plan. The hover
+// tooltip uses the native `title` attribute (works across browsers; no
+// dependency on a tooltip library) and is framed around *what unlocks* rather
+// than what's restricted — reads as a preview of the upgrade, not a wall.
+function LockedHint({ unlocks }: { unlocks: string }) {
+  return (
+    <div
+      title={`${unlocks} — available on a paid plan`}
+      role="note"
+      aria-label={`${unlocks} — available on a paid plan`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontSize: 11,
+        fontWeight: 600,
+        color: "#8a6116",
+        background: "#fdf4dc",
+        border: "1px solid #f1d990",
+        borderRadius: 4,
+        padding: "1px 6px",
+        marginBottom: 4,
+        cursor: "help",
+        userSelect: "none",
+        width: "fit-content",
+      }}
+    >
+      <span aria-hidden>🔒</span>
+      <span>Paid plan</span>
+    </div>
+  );
+}
+
 export interface BrandingConfig {
   widget: {
     position: "bottom-right" | "bottom-left";
@@ -314,6 +347,9 @@ export default function BrandingPage() {
                   setW("secondaryColor", e.target.value)
                 }
               />
+              {!paid && (
+                <LockedHint unlocks="Pick where the launcher floats on your storefront" />
+              )}
               <s-select
                 label="Launcher position"
                 value={form.widget.position}
@@ -325,6 +361,9 @@ export default function BrandingPage() {
                 <s-option value="bottom-right">Bottom right</s-option>
                 <s-option value="bottom-left">Bottom left</s-option>
               </s-select>
+              {!paid && (
+                <LockedHint unlocks="Match the launcher button text to your brand voice" />
+              )}
               <s-text-field
                 label="Launcher text"
                 value={form.widget.launcherText}
@@ -333,6 +372,9 @@ export default function BrandingPage() {
                   setW("launcherText", e.target.value)
                 }
               />
+              {!paid && (
+                <LockedHint unlocks="Rename the widget panel heading customers see" />
+              )}
               <s-text-field
                 label="Widget title"
                 value={form.widget.title}
@@ -376,6 +418,9 @@ export default function BrandingPage() {
               setP("logoUrl", e.target.value)
             }
           />
+          {!paid && (
+            <LockedHint unlocks="Write your own loyalty page headline" />
+          )}
           <s-text-field
             label="Hero title"
             value={form.page.heroTitle}
@@ -384,6 +429,9 @@ export default function BrandingPage() {
               setP("heroTitle", e.target.value)
             }
           />
+          {!paid && (
+            <LockedHint unlocks="Write your own loyalty page subtitle" />
+          )}
           <s-text-field
             label="Hero subtitle"
             value={form.page.heroSubtitle}
@@ -392,6 +440,9 @@ export default function BrandingPage() {
               setP("heroSubtitle", e.target.value)
             }
           />
+          {!paid && (
+            <LockedHint unlocks="Choose which sections appear on the loyalty page" />
+          )}
           <s-checkbox
             checked={form.page.showEarn ? true : undefined}
             disabled={!paid ? true : undefined}
@@ -456,6 +507,9 @@ export default function BrandingPage() {
               setE("logoUrl", e.target.value)
             }
           />
+          {!paid && (
+            <LockedHint unlocks="Rewrite the 'Points earned' email subject line" />
+          )}
           <s-text-field
             label="&quot;Points earned&quot; subject"
             value={form.emails.pointsEarnedSubject}
@@ -464,6 +518,9 @@ export default function BrandingPage() {
               setE("pointsEarnedSubject", e.target.value)
             }
           />
+          {!paid && (
+            <LockedHint unlocks="Rewrite the 'Reward available' email subject line" />
+          )}
           <s-text-field
             label="&quot;Reward available&quot; subject"
             value={form.emails.rewardAvailableSubject}
@@ -472,6 +529,9 @@ export default function BrandingPage() {
               setE("rewardAvailableSubject", e.target.value)
             }
           />
+          {!paid && (
+            <LockedHint unlocks="Rewrite the tier-change email subject line" />
+          )}
           <s-text-field
             label="&quot;Tier change&quot; subject"
             value={form.emails.tierChangeSubject}
