@@ -22,7 +22,25 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { BrandingPalette } from "../components/BrandingPalette";
+import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
+
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: 13, color: "#202223" }}>{label}</span>
+      <ColorPicker value={value} onChange={onChange} label={label} />
+    </div>
+  );
+}
 import { useAppNavigate } from "../lib/app-navigate";
 
 // A 12px muted lock glyph with a custom Polaris-neutral tooltip. The tooltip
@@ -409,19 +427,15 @@ export default function BrandingPage() {
                   }));
                 }}
               />
-              <s-text-field
-                label="Primary color (hex)"
+              <ColorField
+                label="Primary color"
                 value={form.widget.primaryColor}
-                onChange={(e: { target: { value: string } }) =>
-                  setW("primaryColor", e.target.value)
-                }
+                onChange={(v) => setW("primaryColor", v)}
               />
-              <s-text-field
-                label="Secondary color (hex)"
+              <ColorField
+                label="Secondary color"
                 value={form.widget.secondaryColor}
-                onChange={(e: { target: { value: string } }) =>
-                  setW("secondaryColor", e.target.value)
-                }
+                onChange={(v) => setW("secondaryColor", v)}
               />
               <Gated
                 locked={!paid}
@@ -486,12 +500,10 @@ export default function BrandingPage() {
       {/* ---- Loyalty page ---- */}
       <s-section heading="Loyalty page">
         <s-stack direction="block" gap="base">
-          <s-text-field
-            label="Theme color (hex)"
+          <ColorField
+            label="Theme color"
             value={form.page.themeColor}
-            onChange={(e: { target: { value: string } }) =>
-              setP("themeColor", e.target.value)
-            }
+            onChange={(v) => setP("themeColor", v)}
           />
           <s-text-field
             label="Logo URL"
@@ -583,12 +595,10 @@ export default function BrandingPage() {
       {/* ---- Emails ---- */}
       <s-section heading="Emails">
         <s-stack direction="block" gap="base">
-          <s-text-field
-            label="Accent color (hex)"
+          <ColorField
+            label="Accent color"
             value={form.emails.accentColor}
-            onChange={(e: { target: { value: string } }) =>
-              setE("accentColor", e.target.value)
-            }
+            onChange={(v) => setE("accentColor", v)}
           />
           <s-text-field
             label="Email logo URL"
