@@ -306,9 +306,10 @@ export default function MembersPage() {
         <div
           style={{
             display: "flex",
-            gap: 4,
-            padding: "4px",
+            gap: 2,
+            padding: "3px",
             background: "#f6f6f7",
+            border: "1px solid #e1e3e5",
             borderRadius: 8,
             width: "fit-content",
             marginBottom: 16,
@@ -323,16 +324,18 @@ export default function MembersPage() {
                 onClick={() => switchSegment(s)}
                 style={{
                   border: "none",
-                  background: active ? "#fff" : "transparent",
+                  background: active ? "#ffffff" : "transparent",
                   color: active ? "#202223" : "#6d7175",
-                  fontWeight: active ? 600 : 500,
-                  padding: "6px 14px",
+                  fontWeight: active ? 600 : 400,
+                  padding: "5px 14px",
                   borderRadius: 6,
                   fontSize: 13,
+                  lineHeight: "20px",
                   cursor: "pointer",
                   boxShadow: active
-                    ? "0 1px 2px rgba(0,0,0,0.08)"
+                    ? "0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06)"
                     : "none",
+                  transition: "background 80ms ease, box-shadow 80ms ease",
                 }}
               >
                 {s === "all" ? "All" : s === "members" ? "Members" : "Excluded"}

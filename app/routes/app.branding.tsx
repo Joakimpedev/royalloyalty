@@ -43,17 +43,12 @@ function ColorField({
 }
 import { useAppNavigate } from "../lib/app-navigate";
 
-// A 12px muted lock glyph with a custom Polaris-neutral tooltip. The tooltip
-// fades in immediately on hover/focus (no browser tooltip delay) and sits
-// above the icon with a small caret. Frames the upgrade as a preview of what
-// unlocks rather than what's restricted.
-function LockedHint({ unlocks }: { unlocks: string }) {
+function LockedHint() {
   const [show, setShow] = useState(false);
-  const message = `${unlocks} — available on a paid plan`;
   return (
     <span
       role="note"
-      aria-label={message}
+      aria-label="Available for paid plans"
       tabIndex={0}
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}
@@ -87,12 +82,12 @@ function LockedHint({ unlocks }: { unlocks: string }) {
           transform: `translateX(-50%) translateY(${show ? 0 : 4}px)`,
           background: "#1a1c1d",
           color: "#fff",
-          padding: "8px 10px",
+          padding: "6px 10px",
           borderRadius: 6,
           fontSize: 12,
           lineHeight: 1.4,
           fontWeight: 400,
-          width: 220,
+          width: 160,
           textAlign: "center",
           opacity: show ? 1 : 0,
           pointerEvents: "none",
@@ -102,7 +97,7 @@ function LockedHint({ unlocks }: { unlocks: string }) {
           whiteSpace: "normal",
         }}
       >
-        {message}
+        Available for paid plans
         <span
           aria-hidden
           style={{
@@ -122,18 +117,41 @@ function LockedHint({ unlocks }: { unlocks: string }) {
   );
 }
 
-// Wraps a field so a small lock icon floats at the top-right corner of the
-// field block — visually next to the field's title row.
+// Wraps a paid-only field. When `label` is provided the lock icon sits right
+// next to the label text; for unlabeled groups (e.g. checkboxes) it falls
+// back to an absolute-positioned icon at the top-right.
 function Gated({
   locked,
-  unlocks,
+  label,
   children,
 }: {
   locked: boolean;
-  unlocks: string;
+  label?: string;
   children: React.ReactNode;
 }) {
   if (!locked) return <>{children}</>;
+  if (label) {
+    return (
+      <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            marginBottom: 4,
+          }}
+        >
+          <span
+            style={{ fontSize: 13, fontWeight: 500, color: "#202223" }}
+          >
+            {label}
+          </span>
+          <LockedHint />
+        </div>
+        {children}
+      </div>
+    );
+  }
   return (
     <div style={{ position: "relative" }}>
       <span
@@ -145,7 +163,7 @@ function Gated({
           display: "inline-flex",
         }}
       >
-        <LockedHint unlocks={unlocks} />
+        <LockedHint />
       </span>
       {children}
     </div>
@@ -439,10 +457,9 @@ export default function BrandingPage() {
               />
               <Gated
                 locked={!paid}
-                unlocks="Pick where the launcher floats on your storefront"
+                label="Launcher position"
               >
                 <s-select
-                  label="Launcher position"
                   value={form.widget.position}
                   disabled={!paid ? true : undefined}
                   onChange={(e: { target: { value: string } }) =>
@@ -455,10 +472,9 @@ export default function BrandingPage() {
               </Gated>
               <Gated
                 locked={!paid}
-                unlocks="Match the launcher button text to your brand voice"
+                label="Launcher text"
               >
                 <s-text-field
-                  label="Launcher text"
                   value={form.widget.launcherText}
                   disabled={!paid ? true : undefined}
                   onChange={(e: { target: { value: string } }) =>
@@ -468,10 +484,9 @@ export default function BrandingPage() {
               </Gated>
               <Gated
                 locked={!paid}
-                unlocks="Rename the widget panel heading customers see"
+                label="Widget title"
               >
                 <s-text-field
-                  label="Widget title"
                   value={form.widget.title}
                   disabled={!paid ? true : undefined}
                   onChange={(e: { target: { value: string } }) =>
@@ -514,10 +529,9 @@ export default function BrandingPage() {
           />
           <Gated
             locked={!paid}
-            unlocks="Write your own loyalty page headline"
+            label="Hero title"
           >
             <s-text-field
-              label="Hero title"
               value={form.page.heroTitle}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) =>
@@ -527,10 +541,9 @@ export default function BrandingPage() {
           </Gated>
           <Gated
             locked={!paid}
-            unlocks="Write your own loyalty page subtitle"
+            label="Hero subtitle"
           >
             <s-text-field
-              label="Hero subtitle"
               value={form.page.heroSubtitle}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) =>
@@ -540,7 +553,6 @@ export default function BrandingPage() {
           </Gated>
           <Gated
             locked={!paid}
-            unlocks="Choose which sections appear on the loyalty page"
           >
             <s-stack direction="block" gap="small-200">
               <s-checkbox
@@ -609,10 +621,9 @@ export default function BrandingPage() {
           />
           <Gated
             locked={!paid}
-            unlocks="Rewrite the 'Points earned' email subject line"
+            label={'"Points earned" subject'}
           >
             <s-text-field
-              label="&quot;Points earned&quot; subject"
               value={form.emails.pointsEarnedSubject}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) =>
@@ -622,10 +633,9 @@ export default function BrandingPage() {
           </Gated>
           <Gated
             locked={!paid}
-            unlocks="Rewrite the 'Reward available' email subject line"
+            label={'"Reward available" subject'}
           >
             <s-text-field
-              label="&quot;Reward available&quot; subject"
               value={form.emails.rewardAvailableSubject}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) =>
@@ -635,10 +645,9 @@ export default function BrandingPage() {
           </Gated>
           <Gated
             locked={!paid}
-            unlocks="Rewrite the tier-change email subject line"
+            label={'"Tier change" subject'}
           >
             <s-text-field
-              label="&quot;Tier change&quot; subject"
               value={form.emails.tierChangeSubject}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) =>
