@@ -19,7 +19,6 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
-import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 const ACTIONS = [
   "purchase",
@@ -112,9 +111,6 @@ export default function ProgramPage() {
 
   return (
     <s-page heading="Program">
-      {!inOnboardingChain && (
-        <BreadcrumbBackLink href="/app" label="Home" />
-      )}
       {inOnboardingChain && (
         <s-button
           slot="primary-action"

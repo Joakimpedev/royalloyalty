@@ -19,7 +19,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
-import { BreadcrumbBackLink } from "../lib/polaris-bindings";
+import { PageTitle } from "../lib/polaris-bindings";
 
 const DOCS_URL = "https://royalloyalty.help";
 
@@ -104,8 +104,12 @@ export default function SupportPage() {
   const submitting = nav.state === "submitting";
 
   return (
-    <s-page heading="Support">
-      <BreadcrumbBackLink href="/app/settings" label="Settings" />
+    <s-page>
+      <PageTitle
+        title="Support"
+        subtitle="Browse docs, send us a message, or review your recent requests"
+        backHref="/app/settings"
+      />
 
       <s-section heading="Help &amp; documentation">
         <s-stack direction="block" gap="base">

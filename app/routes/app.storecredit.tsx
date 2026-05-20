@@ -19,7 +19,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
-import { ChoiceList, BreadcrumbBackLink } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle } from "../lib/polaris-bindings";
 import {
   getCashbackSettings,
   saveCashbackSettings,
@@ -142,8 +142,12 @@ export default function StoreCreditPage() {
   }, [form, submit]);
 
   return (
-    <s-page heading="Store Credit">
-      <BreadcrumbBackLink href="/app/program" label="Program" />
+    <s-page>
+      <PageTitle
+        title="Store Credit"
+        subtitle="Native Shopify store credit issued from the loyalty ledger"
+        backHref="/app/program"
+      />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="storecredit-save-bar" ref={saveBarRef}>

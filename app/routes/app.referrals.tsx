@@ -8,7 +8,7 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { useAppNavigate } from "../lib/app-navigate";
-import { ChoiceList, BreadcrumbBackLink } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle } from "../lib/polaris-bindings";
 import {
   useLoaderData,
   useActionData,
@@ -183,8 +183,12 @@ export default function ReferralsPage() {
   }, [form, submit]);
 
   return (
-    <s-page heading="Referrals">
-      <BreadcrumbBackLink href="/app/program" label="Program" />
+    <s-page>
+      <PageTitle
+        title="Referrals"
+        subtitle="Two-sided rewards when a customer brings a friend who buys"
+        backHref="/app/program"
+      />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="referrals-save-bar" ref={saveBarRef}>

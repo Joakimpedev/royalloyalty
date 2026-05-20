@@ -35,7 +35,6 @@ import {
 } from "../lib/billing.server";
 import { getQuotaState } from "../lib/quota.server";
 import { AppLink, useAppNavigate } from "../lib/app-navigate";
-import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -259,7 +258,6 @@ export default function SettingsPage() {
 
   return (
     <s-page heading="Settings">
-      <BreadcrumbBackLink href="/app" label="Home" />
 
       {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
       <ui-save-bar id="settings-save-bar" ref={saveBarRef}>

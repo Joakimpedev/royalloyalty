@@ -13,7 +13,7 @@ import { useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { AppLink } from "../lib/app-navigate";
-import { BreadcrumbBackLink } from "../lib/polaris-bindings";
+import { PageTitle } from "../lib/polaris-bindings";
 import {
   buildPreview,
   commitImport,
@@ -107,8 +107,12 @@ export default function ImportPage() {
     );
 
   return (
-    <s-page heading="Import members & balances">
-      <BreadcrumbBackLink href="/app/settings" label="Settings" />
+    <s-page>
+      <PageTitle
+        title="Import members & balances"
+        subtitle="Bring existing customers and their point balances over from another loyalty app"
+        backHref="/app/settings"
+      />
       {data?.ok === false && (
         <s-banner tone="critical">
           <s-paragraph>{data.error}</s-paragraph>

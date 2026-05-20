@@ -19,7 +19,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
-import { BreadcrumbBackLink } from "../lib/polaris-bindings";
+import { PageTitle } from "../lib/polaris-bindings";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -180,8 +180,12 @@ export default function TiersPage() {
   }, [form, submit]);
 
   return (
-    <s-page heading="VIP Tiers">
-      <BreadcrumbBackLink href="/app/program" label="Program" />
+    <s-page>
+      <PageTitle
+        title="VIP Tiers"
+        subtitle="Reward your best customers with status tiers and earn multipliers"
+        backHref="/app/program"
+      />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="tiers-save-bar" ref={saveBarRef}>

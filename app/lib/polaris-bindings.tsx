@@ -63,39 +63,77 @@ export function ChoiceList({
 }
 
 /**
- * Polaris page-chrome breadcrumb back link.
+ * Body-level page title: a left-arrow icon (Polaris `arrow-left`) + bold
+ * heading on one row, optional subtitle underneath. This is what Essent
+ * uses on its per-rule pages and what the user has asked for — a TITLE in
+ * the iframe body, not in the Shopify chrome bar at the top.
  *
- * Slot naming: Polaris React-prop is `breadcrumbActions` (camelCase) but the
- * actual DOM slot attribute is **kebab-case** — same convention as
- * `primary-action`, which is the working reference in this codebase. Passing
- * `slot="breadcrumbActions"` silently fails (the link falls out of the
- * chrome slot and renders as plain inline text in the page body).
+ * Why a body title and not <s-page heading=...>:
+ *   <s-page heading> renders the title in Shopify's outer admin chrome bar
+ *   (small text next to the app icon). It's fine for accessibility but it
+ *   is NOT the prominent page-title look the Essent reference shows.
+ *   Polaris-Web doesn't ship a "page header" component, so we compose one
+ *   from primitives that ARE in the library: s-icon + s-heading + s-text.
  *
- * The click is also intercepted with preventDefault + useAppNavigate so the
- * iframe (and the embedded session) stays alive regardless of whether
- * Shopify's page chrome would have handled it natively — every other body
- * `<s-link>` in this codebase full-reloads the iframe and breaks auth (see
- * app/lib/NAVIGATION-AUDIT.md).
+ * Why a plain <button> for the back trigger:
+ *   We want a minimal icon-only click target (no Polaris button frame
+ *   around it). s-clickable would also work but adds its own padding /
+ *   default appearance. A native <button styled transparent> renders the
+ *   bare s-icon cleanly. The click goes through useAppNavigate so the
+ *   iframe (and the embedded session) stays alive.
  */
-export function BreadcrumbBackLink({
-  href,
-  label,
+export function PageTitle({
+  title,
+  subtitle,
+  backHref,
 }: {
-  href: string;
-  label: string;
+  title: string;
+  subtitle?: string;
+  backHref?: string;
 }) {
   const nav = useAppNavigate();
   return (
-    // @ts-expect-error - s-link custom element JSX types
-    <s-link
-      slot="breadcrumb-actions"
-      href={href}
-      onClick={(e: Event) => {
-        e.preventDefault?.();
-        nav(href);
-      }}
-    >
-      {label}
-    </s-link>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {backHref && (
+          <button
+            type="button"
+            onClick={() => nav(backHref)}
+            aria-label="Back"
+            style={{
+              background: "transparent",
+              border: 0,
+              padding: 4,
+              margin: 0,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#202223",
+              font: "inherit",
+              lineHeight: 0,
+            }}
+          >
+            {/* @ts-expect-error - s-icon custom element JSX types */}
+            <s-icon type="arrow-left" />
+          </button>
+        )}
+        {/* @ts-expect-error - s-heading custom element JSX types */}
+        <s-heading>{title}</s-heading>
+      </div>
+      {subtitle && (
+        <div
+          style={{
+            marginTop: 4,
+            marginLeft: backHref ? 32 : 0,
+            color: "#6d7175",
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}
+        >
+          {subtitle}
+        </div>
+      )}
+    </div>
   );
 }

@@ -49,7 +49,7 @@ import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { formatMoney } from "../lib/use-money";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
-import { ChoiceList, BreadcrumbBackLink } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle } from "../lib/polaris-bindings";
 
 const ACTIONS = [
   "purchase",
@@ -343,11 +343,16 @@ export default function EarnRuleEditor() {
   }
 
   return (
-    <s-page heading={meta.title}>
-      {/* `breadcrumbActions` slot puts the back arrow inline with the page
-          heading on the LEFT. <BreadcrumbBackLink> intercepts the click
-          and routes via App Bridge so the iframe (and session) stays alive. */}
-      <BreadcrumbBackLink href="/app/program" label="Program" />
+    <s-page>
+      {/* Body-level page title: back arrow + bold heading + subtitle inline
+          at the top of the iframe content (Essent reference pattern). The
+          chrome bar above is left without a heading on sub-pages so the
+          merchant sees a single, prominent in-body title. */}
+      <PageTitle
+        title={meta.title}
+        subtitle={meta.description}
+        backHref="/app/program"
+      />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="earn-rule-save-bar" ref={saveBarRef}>
@@ -369,11 +374,6 @@ export default function EarnRuleEditor() {
           </s-banner>
         </s-section>
       )}
-
-      {/* Page subtitle as a leading paragraph above the cards. */}
-      <s-section>
-        <s-paragraph>{meta.description}</s-paragraph>
-      </s-section>
 
       {/* ───── Main column ───── */}
 
