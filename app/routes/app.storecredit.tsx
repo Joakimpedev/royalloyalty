@@ -183,10 +183,11 @@ export default function StoreCreditPage() {
           </s-paragraph>
           <s-choice-list
             label="Status"
-            value={form.enabled ? "on" : "off"}
-            onChange={(e: { target: { value: string } }) =>
-              setForm((f) => ({ ...f, enabled: e.target.value === "on" }))
-            }
+            values={[form.enabled ? "on" : "off"]}
+            onChange={(e: any) => {
+              const vs = (e.target?.values as string[] | undefined) ?? [];
+              setForm((f) => ({ ...f, enabled: vs[0] === "on" }));
+            }}
           >
             <s-choice value="on">Enabled</s-choice>
             <s-choice value="off">Disabled</s-choice>

@@ -219,10 +219,11 @@ export default function ReferralsPage() {
         <s-stack direction="block" gap="base">
           <s-choice-list
             label="Status"
-            value={form.enabled ? "on" : "off"}
-            onChange={(e: { target: { value: string } }) =>
-              setForm((f) => ({ ...f, enabled: e.target.value === "on" }))
-            }
+            values={[form.enabled ? "on" : "off"]}
+            onChange={(e: any) => {
+              const vs = (e.target?.values as string[] | undefined) ?? [];
+              setForm((f) => ({ ...f, enabled: vs[0] === "on" }));
+            }}
           >
             <s-choice value="on">Enabled</s-choice>
             <s-choice value="off">Disabled</s-choice>
@@ -267,26 +268,22 @@ export default function ReferralsPage() {
           </s-paragraph>
           <s-choice-list
             label="Same-IP referrals"
-            value={form.sameIpBlocks ? "block" : "flag"}
-            onChange={(e: { target: { value: string } }) =>
-              setForm((f) => ({
-                ...f,
-                sameIpBlocks: e.target.value === "block",
-              }))
-            }
+            values={[form.sameIpBlocks ? "block" : "flag"]}
+            onChange={(e: any) => {
+              const vs = (e.target?.values as string[] | undefined) ?? [];
+              setForm((f) => ({ ...f, sameIpBlocks: vs[0] === "block" }));
+            }}
           >
             <s-choice value="block">Block automatically</s-choice>
             <s-choice value="flag">Flag for review</s-choice>
           </s-choice-list>
           <s-choice-list
             label="Payout approval"
-            value={form.reviewBeforePayout ? "manual" : "auto"}
-            onChange={(e: { target: { value: string } }) =>
-              setForm((f) => ({
-                ...f,
-                reviewBeforePayout: e.target.value === "manual",
-              }))
-            }
+            values={[form.reviewBeforePayout ? "manual" : "auto"]}
+            onChange={(e: any) => {
+              const vs = (e.target?.values as string[] | undefined) ?? [];
+              setForm((f) => ({ ...f, reviewBeforePayout: vs[0] === "manual" }));
+            }}
           >
             <s-choice value="auto">
               Pay out automatically after the holdback window

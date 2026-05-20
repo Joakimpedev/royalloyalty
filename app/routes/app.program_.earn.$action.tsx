@@ -371,9 +371,7 @@ export default function EarnRuleEditor() {
         <s-text-field
           label="Title"
           value={title}
-          onChange={(e: { target: { value: string } }) =>
-            setTitle(e.target.value)
-          }
+          onChange={(e: any) => setTitle(String(e.target.value ?? ""))}
         />
       </s-section>
 
@@ -382,10 +380,11 @@ export default function EarnRuleEditor() {
           {isPurchase && (
             <s-choice-list
               label="Method"
-              value={perDollar ? "increments" : "fixed"}
-              onChange={(e: { target: { value: string } }) =>
-                setPerDollar(e.target.value === "increments")
-              }
+              values={[perDollar ? "increments" : "fixed"]}
+              onChange={(e: any) => {
+                const vs = (e.target?.values as string[] | undefined) ?? [];
+                setPerDollar(vs[0] === "increments");
+              }}
             >
               <s-choice value="increments">
                 Increments of points (recommended)
@@ -395,22 +394,21 @@ export default function EarnRuleEditor() {
           )}
 
           <s-stack direction="inline" gap="base">
-            <s-text-field
-              label={
-                isPurchase && perDollar
-                  ? "Customer gets (points)"
-                  : "Points the customer earns"
-              }
-              type="number"
+            <s-number-field
+              label="Customer gets"
+              suffix="points"
+              min={0}
               value={String(points)}
-              onChange={(e: { target: { value: string } }) =>
-                setPoints(Math.max(0, Number.parseInt(e.target.value, 10) || 0))
+              onChange={(e: any) =>
+                setPoints(
+                  Math.max(0, Number.parseInt(String(e.target.value), 10) || 0),
+                )
               }
             />
             {isPurchase && perDollar && (
-              <s-text-field
-                label={`For every amount spent (${currencyCode})`}
-                type="number"
+              <s-number-field
+                label="For every amount spent"
+                suffix={currencyCode}
                 value="1"
                 readOnly
               />
@@ -422,8 +420,8 @@ export default function EarnRuleEditor() {
             value={
               completionLimit === null ? "Unlimited" : String(completionLimit)
             }
-            onChange={(e: { target: { value: string } }) => {
-              const v = e.target.value.trim();
+            onChange={(e: any) => {
+              const v = String(e.target.value ?? "").trim();
               if (v === "" || v.toLowerCase() === "unlimited") {
                 setCompletionLimit(null);
                 return;
@@ -440,10 +438,11 @@ export default function EarnRuleEditor() {
       <s-section slot="aside" heading="Status">
         <s-choice-list
           label="Status"
-          value={enabled ? "enabled" : "disabled"}
-          onChange={(e: { target: { value: string } }) =>
-            setEnabled(e.target.value === "enabled")
-          }
+          values={[enabled ? "enabled" : "disabled"]}
+          onChange={(e: any) => {
+            const vs = (e.target?.values as string[] | undefined) ?? [];
+            setEnabled(vs[0] === "enabled");
+          }}
         >
           <s-choice value="enabled">Enabled</s-choice>
           <s-choice value="disabled">Disabled</s-choice>
@@ -451,11 +450,11 @@ export default function EarnRuleEditor() {
       </s-section>
 
       <s-section slot="aside" heading="Summary">
-        <s-stack direction="block" gap="small-100">
+        <s-unordered-list>
           {summaryBullets.map((b, i) => (
-            <s-paragraph key={i}>• {b}</s-paragraph>
+            <s-list-item key={i}>{b}</s-list-item>
           ))}
-        </s-stack>
+        </s-unordered-list>
       </s-section>
 
       {blocker.state === "blocked" && (
