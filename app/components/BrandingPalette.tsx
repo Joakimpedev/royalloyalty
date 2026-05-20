@@ -26,7 +26,7 @@ export const PALETTE_PRESETS: PalettePreset[] = [
   { id: "toys", label: "Toys & hobby", primary: "#2E5B9A", secondary: "#DCE6F0" },
   { id: "health", label: "Health", primary: "#2C7873", secondary: "#D9E8E5" },
   { id: "pets", label: "Pets", primary: "#7A5A3A", secondary: "#F0E5D2" },
-  { id: "sports", label: "Sports", primary: "#8B232E", secondary: "#ECD9DA" },
+  { id: "sports", label: "Sports", primary: "#E87722", secondary: "#1A1A1A" },
   { id: "arts", label: "Art & entertainment", primary: "#4E2C66", secondary: "#E8DCEC" },
 ];
 
