@@ -41,26 +41,47 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     {
       id: "earn",
       label: "Set up earn rules",
+      detail:
+        "Decide how many points customers get for placing an order, signing up and other actions. You can tune the numbers any time.",
+      cta: "Open earn rules",
       done: earnRuleCount > 0,
       href: "/app/program",
     },
     {
       id: "rewards",
       label: "Add rewards to the catalog",
+      detail:
+        "Pick what customers can redeem points for — discount codes, free shipping or free products.",
+      cta: "Open rewards",
       done: rewardCount > 0,
       href: "/app/rewards",
     },
     {
       id: "tiers",
       label: "Create VIP tiers",
+      detail:
+        "Reward your best customers with a tier ladder. Each tier can have its own earn multiplier and perks.",
+      cta: "Open tiers",
       done: tierCount > 0,
       href: "/app/tiers",
     },
     {
       id: "activate",
       label: "Activate the program",
+      detail:
+        "Flip the program on so new orders start awarding points to your customers.",
+      cta: "Activate program",
       done: Boolean(shop.programActivatedAt),
       href: "/app/program",
+    },
+    {
+      id: "embed",
+      label: "Enable the storefront widget",
+      detail:
+        "In Shopify admin go to Sales channels > Online store > Themes, then Edit theme > App embeds, and turn on the Royal Loyalty widget so shoppers can see it.",
+      cta: "Open theme editor",
+      done: false,
+      href: "shopify:admin/themes/current/editor?context=apps",
     },
   ];
 
@@ -68,6 +89,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shopMissing: false as const,
     metrics,
     checklist,
+    checklistCounts: {
+      earn: earnRuleCount,
+      tiers: tierCount,
+      rewards: rewardCount,
+    },
     suggestions: suggestions.map((s) => ({
       id: s.id,
       title: s.title,
@@ -95,6 +121,7 @@ export default function Home() {
 
   const m = data.metrics!;
   const remaining = data.checklist.filter((c) => !c.done);
+  const activeStep = remaining[0];
 
   return (
     <s-page heading="Royal Loyalty">
@@ -103,6 +130,55 @@ export default function Home() {
       </s-button>
 
       <WelcomeCard />
+
+      {/* Program-status audit card (BON pattern): three concrete signals so the
+          merchant can tell at a glance whether the program is actually visible
+          to shoppers, with a one-click remediation button on each. */}
+      <s-section heading="Program status">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 12,
+          }}
+        >
+          <StatusTile
+            label="Program activation"
+            active={data.programActivated}
+            activeText="Active"
+            inactiveText="Inactive"
+            body={
+              data.programActivated
+                ? "Orders are awarding points to customers."
+                : "Activate the program so new orders start awarding points."
+            }
+            ctaHref="/app/program"
+            ctaLabel={data.programActivated ? "Open program" : "Activate program"}
+          />
+          <StatusTile
+            label="Storefront widget"
+            active={null}
+            activeText="Check in theme"
+            inactiveText="Check in theme"
+            body="Open the Shopify theme editor and confirm the Royal Loyalty app embed is turned on."
+            ctaHref="shopify:admin/themes/current/editor?context=apps"
+            ctaLabel="Open theme editor"
+          />
+          <StatusTile
+            label="Earn rules"
+            active={null}
+            activeText={`${data.checklistCounts.earn} configured`}
+            inactiveText={`${data.checklistCounts.earn} configured`}
+            body={
+              data.checklistCounts.earn > 0
+                ? "Earn rules are configured. Tune values or add more on the Program page."
+                : "No earn rules yet. Customers won't accumulate points until at least one is enabled."
+            }
+            ctaHref="/app/program"
+            ctaLabel="Open earn rules"
+          />
+        </div>
+      </s-section>
 
       <s-section heading="Program health">
         {m.hasActivity ? (
@@ -142,14 +218,41 @@ export default function Home() {
         )}
       </s-section>
 
-      <s-section slot="aside" heading="Onboarding checklist">
-        {remaining.length === 0 ? (
-          <s-paragraph>
-            Setup complete — your loyalty program is fully configured.
-          </s-paragraph>
-        ) : (
-          <s-stack direction="block" gap="base">
-            {data.checklist.map((c) => (
+      {/* Setup guide (BON pattern): one expanded active step with verbose copy
+          and a deeplink button, every other step collapses to a thin row.
+          Reduces visual noise; gives the merchant exactly one obvious next
+          action. */}
+      <s-section heading="Setup guide">
+        <s-paragraph>
+          {remaining.length === 0
+            ? "Setup complete — your loyalty program is fully configured."
+            : `${data.checklist.length - remaining.length} of ${data.checklist.length} steps complete`}
+        </s-paragraph>
+        {activeStep && (
+          <s-box
+            padding="base"
+            borderWidth="base"
+            borderRadius="base"
+          >
+            <s-stack direction="block" gap="base">
+              <s-text fontWeight="bold">{activeStep.label}</s-text>
+              <s-paragraph>{activeStep.detail}</s-paragraph>
+              <s-button
+                href={activeStep.href}
+                variant="primary"
+                {...(activeStep.id === "embed"
+                  ? { target: "_top" }
+                  : {})}
+              >
+                {activeStep.cta}
+              </s-button>
+            </s-stack>
+          </s-box>
+        )}
+        <s-stack direction="block" gap="none">
+          {data.checklist
+            .filter((c) => c.id !== activeStep?.id)
+            .map((c) => (
               <s-stack key={c.id} direction="inline" gap="base">
                 <s-badge tone={c.done ? "success" : "neutral"}>
                   {c.done ? "Done" : "To do"}
@@ -161,8 +264,7 @@ export default function Home() {
                 )}
               </s-stack>
             ))}
-          </s-stack>
-        )}
+        </s-stack>
       </s-section>
 
       <s-section slot="aside" heading="AI suggestions">
@@ -191,6 +293,50 @@ export default function Home() {
         )}
       </s-section>
     </s-page>
+  );
+}
+
+// Three-tile audit card on the home page. `active=true` shows a green badge,
+// `false` shows a neutral "Inactive" badge, `null` shows an informational
+// neutral badge with the activeText label (used when we can't introspect the
+// status server-side without a Shopify Admin GraphQL call).
+function StatusTile({
+  label,
+  active,
+  activeText,
+  inactiveText,
+  body,
+  ctaHref,
+  ctaLabel,
+}: {
+  label: string;
+  active: boolean | null;
+  activeText: string;
+  inactiveText: string;
+  body: string;
+  ctaHref: string;
+  ctaLabel: string;
+}) {
+  const badgeTone: "success" | "neutral" | "critical" =
+    active === true ? "success" : active === false ? "critical" : "neutral";
+  const badgeText = active === false ? inactiveText : activeText;
+  const isExternal = ctaHref.startsWith("shopify:");
+  return (
+    <s-box padding="base" borderWidth="base" borderRadius="base">
+      <s-stack direction="block" gap="base">
+        <s-stack direction="inline" gap="base">
+          <s-text fontWeight="bold">{label}</s-text>
+          <s-badge tone={badgeTone}>{badgeText}</s-badge>
+        </s-stack>
+        <s-paragraph>{body}</s-paragraph>
+        <s-button
+          href={ctaHref}
+          {...(isExternal ? { target: "_top" } : {})}
+        >
+          {ctaLabel}
+        </s-button>
+      </s-stack>
+    </s-box>
   );
 }
 
