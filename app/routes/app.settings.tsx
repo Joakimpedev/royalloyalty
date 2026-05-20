@@ -34,6 +34,7 @@ import {
   billingTestMode,
 } from "../lib/billing.server";
 import { getQuotaState } from "../lib/quota.server";
+import { AppLink, useAppNavigate } from "../lib/app-navigate";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -168,6 +169,7 @@ export default function SettingsPage() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const submit = useSubmit();
+  const appNav = useAppNavigate();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [contactEmail, setContactEmail] = useState(
@@ -256,7 +258,7 @@ export default function SettingsPage() {
 
   return (
     <s-page heading="Settings">
-      <s-button slot="primary-action" href="/app">
+      <s-button slot="primary-action" onClick={() => appNav("/app")}>
         Back to Home
       </s-button>
 
@@ -747,7 +749,7 @@ function BillingFAQ() {
   return (
     <s-section heading="Frequently asked questions">
       <s-paragraph>
-        Don't see your answer? <s-link href="/app/support">Contact support</s-link> and
+        Don't see your answer? <AppLink href="/app/support">Contact support</AppLink> and
         we'll get back to you within one business day.
       </s-paragraph>
       <s-stack direction="block" gap="large">

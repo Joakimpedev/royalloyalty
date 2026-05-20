@@ -7,6 +7,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
+import { useAppNavigate } from "../lib/app-navigate";
 import {
   useLoaderData,
   useActionData,
@@ -134,6 +135,7 @@ export default function ReferralsPage() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const submit = useSubmit();
+  const appNav = useAppNavigate();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [form, setForm] = useState(settings);
@@ -181,7 +183,7 @@ export default function ReferralsPage() {
 
   return (
     <s-page heading="Referrals">
-      <s-button slot="primary-action" href="/app">
+      <s-button slot="primary-action" onClick={() => appNav("/app")}>
         Back to Home
       </s-button>
 
@@ -373,7 +375,10 @@ export default function ReferralsPage() {
               qualifying order, the referral shows up here with its fraud and
               payout status.
             </s-paragraph>
-            <s-button variant="primary" href="/app/branding">
+            <s-button
+              variant="primary"
+              onClick={() => appNav("/app/branding")}
+            >
               Customize the referral widget
             </s-button>
           </s-stack>

@@ -17,6 +17,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { useAppNavigate } from "../lib/app-navigate";
 
 const ACTIONS = [
   "purchase",
@@ -104,12 +105,17 @@ export default function ProgramPage() {
 
   const rules = earnRules;
   const saving = nav.state === "submitting";
+  const appNav = useAppNavigate();
 
   return (
     <s-page heading="Program">
       <s-button
         slot="primary-action"
-        href={inOnboardingChain ? "/app/branding?onboarding=1" : "/app"}
+        onClick={() =>
+          appNav(
+            inOnboardingChain ? "/app/branding?onboarding=1" : "/app",
+          )
+        }
         variant={inOnboardingChain ? "primary" : undefined}
       >
         {inOnboardingChain ? "Continue to Branding" : "Back to Home"}
@@ -167,9 +173,14 @@ export default function ProgramPage() {
           }}
         >
           {rules.map((r, i) => (
-            <a
+            <button
               key={r.action}
-              href={`/app/program/earn/${r.action}${inOnboardingChain ? "?onboarding=1" : ""}`}
+              type="button"
+              onClick={() =>
+                appNav(
+                  `/app/program/earn/${r.action}${inOnboardingChain ? "?onboarding=1" : ""}`,
+                )
+              }
               style={{
                 display: "grid",
                 gridTemplateColumns: "minmax(0, 1fr) auto auto",
@@ -177,9 +188,14 @@ export default function ProgramPage() {
                 alignItems: "center",
                 padding: "12px 16px",
                 borderTop: i === 0 ? "none" : "1px solid #f1f2f3",
-                textDecoration: "none",
-                color: "inherit",
+                border: 0,
+                borderRadius: 0,
+                width: "100%",
+                textAlign: "left",
                 background: "#fff",
+                color: "inherit",
+                font: "inherit",
+                cursor: "pointer",
               }}
             >
               <div style={{ fontWeight: 500, color: "#202223" }}>
@@ -192,7 +208,7 @@ export default function ProgramPage() {
                 {r.points} pts
                 {r.action === "purchase" && r.perDollar ? " / $1" : ""}
               </div>
-            </a>
+            </button>
           ))}
         </div>
       </s-section>
@@ -225,6 +241,7 @@ export default function ProgramPage() {
 // no longer sit in the top-level nav. Plain Polaris-native card grid; no
 // illustrations (Essent-style restraint).
 function ProgramCatalog() {
+  const appNav = useAppNavigate();
   const tiles: { href: string; title: string; description: string }[] = [
     {
       href: "/app/rewards",
@@ -267,22 +284,26 @@ function ProgramCatalog() {
       }}
     >
       {tiles.map((t) => (
-        <a
+        <button
           key={t.href}
-          href={t.href}
+          type="button"
+          onClick={() => appNav(t.href)}
           style={{
             display: "block",
             padding: 16,
             border: "1px solid #e3e5e7",
             borderRadius: 8,
             background: "#fff",
-            textDecoration: "none",
             color: "inherit",
+            font: "inherit",
+            textAlign: "left",
+            cursor: "pointer",
+            width: "100%",
           }}
         >
           <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.title}</div>
           <div style={{ fontSize: 13, color: "#6d7175" }}>{t.description}</div>
-        </a>
+        </button>
       ))}
     </div>
   );

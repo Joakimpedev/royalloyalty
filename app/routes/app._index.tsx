@@ -7,6 +7,7 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { useLoaderData, useRouteError, useSearchParams } from "react-router";
+import { AppLink, useAppNavigate } from "../lib/app-navigate";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -122,10 +123,14 @@ export default function Home() {
   const m = data.metrics!;
   const remaining = data.checklist.filter((c) => !c.done);
   const activeStep = remaining[0];
+  const nav = useAppNavigate();
 
   return (
     <s-page heading="Royal Loyalty">
-      <s-button slot="primary-action" href="/app/analytics">
+      <s-button
+        slot="primary-action"
+        onClick={() => nav("/app/analytics")}
+      >
         View analytics
       </s-button>
 
@@ -211,7 +216,10 @@ export default function Home() {
               Once customers start earning and redeeming, their points,
               redemption rate and revenue impact appear here.
             </s-paragraph>
-            <s-button href="/app/program" variant="primary">
+            <s-button
+              onClick={() => nav("/app/program")}
+              variant="primary"
+            >
               Set up earn rules
             </s-button>
           </s-stack>
@@ -237,7 +245,10 @@ export default function Home() {
             <s-stack direction="block" gap="base">
               <s-text fontWeight="bold">{activeStep.label}</s-text>
               <s-paragraph>{activeStep.detail}</s-paragraph>
-              <s-button href={activeStep.href} variant="primary">
+              <s-button
+                onClick={() => nav(activeStep.href)}
+                variant="primary"
+              >
                 {activeStep.cta}
               </s-button>
             </s-stack>
@@ -254,7 +265,7 @@ export default function Home() {
                 {c.done ? (
                   <s-text>{c.label}</s-text>
                 ) : (
-                  <s-link href={c.href}>{c.label}</s-link>
+                  <AppLink href={c.href}>{c.label}</AppLink>
                 )}
               </s-stack>
             ))}
@@ -314,9 +325,7 @@ function StatusTile({
   const badgeTone: "success" | "neutral" | "critical" =
     active === true ? "success" : active === false ? "critical" : "neutral";
   const badgeText = active === false ? inactiveText : activeText;
-  // shopify: URLs are intercepted by App Bridge; no target attribute is needed
-  // (or correct) — adding target="_top" would force-replace the iframe origin
-  // and destroy the embedded session. Same goes for /app/* in-app routes.
+  const nav = useAppNavigate();
   return (
     <s-box padding="base" borderWidth="base" borderRadius="base">
       <s-stack direction="block" gap="base">
@@ -325,7 +334,7 @@ function StatusTile({
           <s-badge tone={badgeTone}>{badgeText}</s-badge>
         </s-stack>
         <s-paragraph>{body}</s-paragraph>
-        <s-button href={ctaHref}>{ctaLabel}</s-button>
+        <s-button onClick={() => nav(ctaHref)}>{ctaLabel}</s-button>
       </s-stack>
     </s-box>
   );
@@ -337,6 +346,7 @@ function StatusTile({
 // than dropping the merchant straight into the theme editor.
 function WelcomeCard() {
   const [searchParams] = useSearchParams();
+  const nav = useAppNavigate();
   if (searchParams.get("welcomed") !== "1") return null;
   return (
     <s-section>
@@ -346,17 +356,15 @@ function WelcomeCard() {
           to go live: enable the loyalty widget in your Shopify theme editor.
         </s-paragraph>
         <s-stack direction="inline" gap="base">
-          {/* shopify: URL — App Bridge intercepts and navigates the parent
-              admin frame while keeping our iframe (and session) alive.
-              NO target attribute; adding target="_top" would force-replace
-              the iframe origin and destroy auth. */}
           <s-button
-            href="shopify:admin/themes/current/editor?context=apps"
+            onClick={() =>
+              nav("shopify:admin/themes/current/editor?context=apps")
+            }
             variant="primary"
           >
             Open theme editor
           </s-button>
-          <s-button href="/app">Dismiss</s-button>
+          <s-button onClick={() => nav("/app")}>Dismiss</s-button>
         </s-stack>
       </s-banner>
     </s-section>

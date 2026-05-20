@@ -9,6 +9,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getProgramMetrics } from "../lib/analytics.server";
+import { useAppNavigate } from "../lib/app-navigate";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -34,11 +35,15 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export default function AnalyticsPage() {
   const { metrics: m } = useLoaderData<typeof loader>();
+  const nav = useAppNavigate();
 
   if (!m.hasActivity) {
     return (
       <s-page heading="Analytics">
-        <s-button slot="primary-action" href="/app/program">
+        <s-button
+          slot="primary-action"
+          onClick={() => nav("/app/program")}
+        >
           Set up earn rules
         </s-button>
         <s-section heading="No data to report yet">
@@ -50,7 +55,10 @@ export default function AnalyticsPage() {
               revenue, referral performance, tier distribution and a ROI
               summary on this page.
             </s-paragraph>
-            <s-button variant="primary" href="/app/program">
+            <s-button
+              variant="primary"
+              onClick={() => nav("/app/program")}
+            >
               Configure your program
             </s-button>
           </s-stack>
@@ -61,7 +69,7 @@ export default function AnalyticsPage() {
 
   return (
     <s-page heading="Analytics">
-      <s-button slot="primary-action" href="/app">
+      <s-button slot="primary-action" onClick={() => nav("/app")}>
         Back to Home
       </s-button>
 

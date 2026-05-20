@@ -12,6 +12,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { AppLink } from "../lib/app-navigate";
 import {
   buildPreview,
   commitImport,
@@ -247,7 +248,7 @@ export default function ImportPage() {
               skipped. No historical orders were re-awarded.
             </s-paragraph>
           </s-banner>
-          <s-link href="/app/onboarding">Continue setup</s-link>
+          <AppLink href="/app/onboarding">Continue setup</AppLink>
         </s-section>
       )}
     </s-page>

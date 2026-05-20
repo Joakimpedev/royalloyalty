@@ -17,6 +17,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { useAppNavigate } from "../lib/app-navigate";
 
 const REWARD_TYPES = [
   "amount_off",
@@ -135,6 +136,7 @@ export default function RewardsPage() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const submit = useSubmit();
+  const appNav = useAppNavigate();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
@@ -195,7 +197,7 @@ export default function RewardsPage() {
 
   return (
     <s-page heading="Rewards">
-      <s-button slot="primary-action" href="/app">
+      <s-button slot="primary-action" onClick={() => appNav("/app")}>
         Back to Home
       </s-button>
 

@@ -18,6 +18,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { useAppNavigate } from "../lib/app-navigate";
 
 const DOCS_URL = "https://royalloyalty.help";
 
@@ -98,11 +99,12 @@ export default function SupportPage() {
   const { docsUrl, contactEmail, recent } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
+  const appNav = useAppNavigate();
   const submitting = nav.state === "submitting";
 
   return (
     <s-page heading="Support">
-      <s-button slot="primary-action" href="/app">
+      <s-button slot="primary-action" onClick={() => appNav("/app")}>
         Back to Home
       </s-button>
 
@@ -112,7 +114,9 @@ export default function SupportPage() {
             Browse setup guides, troubleshooting and feature docs, or send us a
             message below — we provide in-app support and help docs.
           </s-paragraph>
-          <s-button href={docsUrl} target="_blank">
+          {/* External docs URL — useAppNavigate opens it in a new tab so the
+              embedded iframe is untouched. NEVER use target="_top" here. */}
+          <s-button onClick={() => appNav(docsUrl)}>
             Open documentation
           </s-button>
         </s-stack>

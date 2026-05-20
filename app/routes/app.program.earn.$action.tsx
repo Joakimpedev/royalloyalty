@@ -23,6 +23,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { useAppNavigate } from "../lib/app-navigate";
 
 const ACTIONS = [
   "purchase",
@@ -146,6 +147,7 @@ export default function EarnRuleEditor() {
     | undefined;
   const nav = useNavigation();
   const submit = useSubmit();
+  const appNav = useAppNavigate();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const meta = LABELS[actionName as ActionName];
@@ -204,7 +206,10 @@ export default function EarnRuleEditor() {
 
   return (
     <s-page heading={meta.title}>
-      <s-button slot="primary-action" href="/app/program">
+      <s-button
+        slot="primary-action"
+        onClick={() => appNav("/app/program")}
+      >
         Back to Program
       </s-button>
 

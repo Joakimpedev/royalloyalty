@@ -9,6 +9,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { AppLink } from "../lib/app-navigate";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -92,7 +93,7 @@ export default function Suggestions() {
             analyses it and proposes concrete tweaks here — nothing is ever
             applied automatically.
           </s-paragraph>
-          <s-link href="/app/analytics">View program analytics</s-link>
+          <AppLink href="/app/analytics">View program analytics</AppLink>
         </s-section>
       </s-page>
     );

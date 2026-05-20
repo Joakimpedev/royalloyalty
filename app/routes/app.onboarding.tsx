@@ -22,6 +22,7 @@ import {
 import { recordActivation } from "../lib/ttv.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import { WidgetPreview } from "../components/WidgetPreview";
+import { AppLink } from "../lib/app-navigate";
 
 // ---------------------------------------------------------------------------
 // Loader — generate (or reuse persisted) program preview
@@ -613,7 +614,7 @@ function ProgramPreview({
           Switching from another loyalty app? Import your members and point
           balances first.
         </s-paragraph>
-        <s-link href="/app/import">Import from a CSV</s-link>
+        <AppLink href="/app/import">Import from a CSV</AppLink>
       </s-section>
     </s-page>
   );
@@ -684,10 +685,10 @@ function PostActivationChecklist() {
                     }
                   />
                   <s-text>{c.desc}</s-text>
-                  {/* All checklist hrefs are either /app/* or shopify:admin/*.
-                      App Bridge handles both transparently — no target needed.
-                      A target="_top" on a shopify: URL would break iframe auth. */}
-                  <s-link href={c.href}>{c.cta}</s-link>
+                  {/* Routed via AppLink (useAppNavigate) so the iframe stays
+                      alive — bare <s-link href=> in body content does a
+                      full-page reload and destroys the embedded session. */}
+                  <AppLink href={c.href}>{c.cta}</AppLink>
                 </s-stack>
               </s-box>
             ))}

@@ -12,6 +12,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getBalance } from "../lib/points.server";
 import { canAwardLoyalty } from "../lib/quota.server";
+import { useAppNavigate } from "../lib/app-navigate";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -95,6 +96,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function MembersPage() {
   const { members, detail, quotaOk } = useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
+  const nav = useAppNavigate();
 
   if (detail) {
     return (
@@ -172,7 +174,7 @@ export default function MembersPage() {
 
   return (
     <s-page heading="Members">
-      <s-button slot="primary-action" href="/app">
+      <s-button slot="primary-action" onClick={() => nav("/app")}>
         Back to Home
       </s-button>
 
@@ -184,7 +186,10 @@ export default function MembersPage() {
               Customers join automatically when they place their first order or
               sign up. Configure earn rules so their first action awards points.
             </s-paragraph>
-            <s-button variant="primary" href="/app/program">
+            <s-button
+              variant="primary"
+              onClick={() => nav("/app/program")}
+            >
               Configure earn rules
             </s-button>
           </s-stack>
