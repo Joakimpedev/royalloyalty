@@ -25,24 +25,30 @@ import { BrandingPalette } from "../components/BrandingPalette";
 import { WidgetPreview } from "../components/WidgetPreview";
 import { useAppNavigate } from "../lib/app-navigate";
 
-// A 12px muted lock glyph rendered next to each paid-only field on the FREE
-// plan. No background, no label — just an icon the merchant can hover. The
-// native `title` tooltip carries the actual message and frames it around
-// *what unlocks* rather than what's restricted.
+// A 12px muted lock glyph with a custom Polaris-neutral tooltip. The tooltip
+// fades in immediately on hover/focus (no browser tooltip delay) and sits
+// above the icon with a small caret. Frames the upgrade as a preview of what
+// unlocks rather than what's restricted.
 function LockedHint({ unlocks }: { unlocks: string }) {
+  const [show, setShow] = useState(false);
   const message = `${unlocks} — available on a paid plan`;
   return (
     <span
-      title={message}
       role="note"
       aria-label={message}
+      tabIndex={0}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onFocus={() => setShow(true)}
+      onBlur={() => setShow(false)}
       style={{
+        position: "relative",
         display: "inline-flex",
         alignItems: "center",
         color: "#8c9196",
         cursor: "help",
-        marginBottom: 2,
         lineHeight: 0,
+        outline: "none",
       }}
     >
       <svg
@@ -54,7 +60,77 @@ function LockedHint({ unlocks }: { unlocks: string }) {
       >
         <path d="M10 1a4 4 0 0 1 4 4v2h1.5A1.5 1.5 0 0 1 17 8.5v8A1.5 1.5 0 0 1 15.5 18h-11A1.5 1.5 0 0 1 3 16.5v-8A1.5 1.5 0 0 1 4.5 7H6V5a4 4 0 0 1 4-4Zm0 2a2 2 0 0 0-2 2v2h4V5a2 2 0 0 0-2-2Z" />
       </svg>
+      <span
+        role="tooltip"
+        style={{
+          position: "absolute",
+          bottom: "calc(100% + 8px)",
+          left: "50%",
+          transform: `translateX(-50%) translateY(${show ? 0 : 4}px)`,
+          background: "#1a1c1d",
+          color: "#fff",
+          padding: "8px 10px",
+          borderRadius: 6,
+          fontSize: 12,
+          lineHeight: 1.4,
+          fontWeight: 400,
+          width: 220,
+          textAlign: "center",
+          opacity: show ? 1 : 0,
+          pointerEvents: "none",
+          transition: "opacity 120ms ease, transform 120ms ease",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+          zIndex: 100,
+          whiteSpace: "normal",
+        }}
+      >
+        {message}
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 0,
+            height: 0,
+            borderLeft: "5px solid transparent",
+            borderRight: "5px solid transparent",
+            borderTop: "5px solid #1a1c1d",
+          }}
+        />
+      </span>
     </span>
+  );
+}
+
+// Wraps a field so a small lock icon floats at the top-right corner of the
+// field block — visually next to the field's title row.
+function Gated({
+  locked,
+  unlocks,
+  children,
+}: {
+  locked: boolean;
+  unlocks: string;
+  children: React.ReactNode;
+}) {
+  if (!locked) return <>{children}</>;
+  return (
+    <div style={{ position: "relative" }}>
+      <span
+        style={{
+          position: "absolute",
+          top: 2,
+          right: 2,
+          zIndex: 2,
+          display: "inline-flex",
+        }}
+      >
+        <LockedHint unlocks={unlocks} />
+      </span>
+      {children}
+    </div>
   );
 }
 
@@ -347,42 +423,48 @@ export default function BrandingPage() {
                   setW("secondaryColor", e.target.value)
                 }
               />
-              {!paid && (
-                <LockedHint unlocks="Pick where the launcher floats on your storefront" />
-              )}
-              <s-select
-                label="Launcher position"
-                value={form.widget.position}
-                disabled={!paid ? true : undefined}
-                onChange={(e: { target: { value: string } }) =>
-                  setW("position", e.target.value)
-                }
+              <Gated
+                locked={!paid}
+                unlocks="Pick where the launcher floats on your storefront"
               >
-                <s-option value="bottom-right">Bottom right</s-option>
-                <s-option value="bottom-left">Bottom left</s-option>
-              </s-select>
-              {!paid && (
-                <LockedHint unlocks="Match the launcher button text to your brand voice" />
-              )}
-              <s-text-field
-                label="Launcher text"
-                value={form.widget.launcherText}
-                disabled={!paid ? true : undefined}
-                onChange={(e: { target: { value: string } }) =>
-                  setW("launcherText", e.target.value)
-                }
-              />
-              {!paid && (
-                <LockedHint unlocks="Rename the widget panel heading customers see" />
-              )}
-              <s-text-field
-                label="Widget title"
-                value={form.widget.title}
-                disabled={!paid ? true : undefined}
-                onChange={(e: { target: { value: string } }) =>
-                  setW("title", e.target.value)
-                }
-              />
+                <s-select
+                  label="Launcher position"
+                  value={form.widget.position}
+                  disabled={!paid ? true : undefined}
+                  onChange={(e: { target: { value: string } }) =>
+                    setW("position", e.target.value)
+                  }
+                >
+                  <s-option value="bottom-right">Bottom right</s-option>
+                  <s-option value="bottom-left">Bottom left</s-option>
+                </s-select>
+              </Gated>
+              <Gated
+                locked={!paid}
+                unlocks="Match the launcher button text to your brand voice"
+              >
+                <s-text-field
+                  label="Launcher text"
+                  value={form.widget.launcherText}
+                  disabled={!paid ? true : undefined}
+                  onChange={(e: { target: { value: string } }) =>
+                    setW("launcherText", e.target.value)
+                  }
+                />
+              </Gated>
+              <Gated
+                locked={!paid}
+                unlocks="Rename the widget panel heading customers see"
+              >
+                <s-text-field
+                  label="Widget title"
+                  value={form.widget.title}
+                  disabled={!paid ? true : undefined}
+                  onChange={(e: { target: { value: string } }) =>
+                    setW("title", e.target.value)
+                  }
+                />
+              </Gated>
             </s-stack>
             <div style={{ position: "sticky", top: 16 }}>
               <s-text tone="subdued">Live preview</s-text>
@@ -418,58 +500,66 @@ export default function BrandingPage() {
               setP("logoUrl", e.target.value)
             }
           />
-          {!paid && (
-            <LockedHint unlocks="Write your own loyalty page headline" />
-          )}
-          <s-text-field
-            label="Hero title"
-            value={form.page.heroTitle}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { value: string } }) =>
-              setP("heroTitle", e.target.value)
-            }
-          />
-          {!paid && (
-            <LockedHint unlocks="Write your own loyalty page subtitle" />
-          )}
-          <s-text-field
-            label="Hero subtitle"
-            value={form.page.heroSubtitle}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { value: string } }) =>
-              setP("heroSubtitle", e.target.value)
-            }
-          />
-          {!paid && (
-            <LockedHint unlocks="Choose which sections appear on the loyalty page" />
-          )}
-          <s-checkbox
-            checked={form.page.showEarn ? true : undefined}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { checked: boolean } }) =>
-              setP("showEarn", e.target.checked)
-            }
+          <Gated
+            locked={!paid}
+            unlocks="Write your own loyalty page headline"
           >
-            Show &quot;ways to earn&quot; section
-          </s-checkbox>
-          <s-checkbox
-            checked={form.page.showRewards ? true : undefined}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { checked: boolean } }) =>
-              setP("showRewards", e.target.checked)
-            }
+            <s-text-field
+              label="Hero title"
+              value={form.page.heroTitle}
+              disabled={!paid ? true : undefined}
+              onChange={(e: { target: { value: string } }) =>
+                setP("heroTitle", e.target.value)
+              }
+            />
+          </Gated>
+          <Gated
+            locked={!paid}
+            unlocks="Write your own loyalty page subtitle"
           >
-            Show rewards section
-          </s-checkbox>
-          <s-checkbox
-            checked={form.page.showReferral ? true : undefined}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { checked: boolean } }) =>
-              setP("showReferral", e.target.checked)
-            }
+            <s-text-field
+              label="Hero subtitle"
+              value={form.page.heroSubtitle}
+              disabled={!paid ? true : undefined}
+              onChange={(e: { target: { value: string } }) =>
+                setP("heroSubtitle", e.target.value)
+              }
+            />
+          </Gated>
+          <Gated
+            locked={!paid}
+            unlocks="Choose which sections appear on the loyalty page"
           >
-            Show referral section
-          </s-checkbox>
+            <s-stack direction="block" gap="small-200">
+              <s-checkbox
+                checked={form.page.showEarn ? true : undefined}
+                disabled={!paid ? true : undefined}
+                onChange={(e: { target: { checked: boolean } }) =>
+                  setP("showEarn", e.target.checked)
+                }
+              >
+                Show &quot;ways to earn&quot; section
+              </s-checkbox>
+              <s-checkbox
+                checked={form.page.showRewards ? true : undefined}
+                disabled={!paid ? true : undefined}
+                onChange={(e: { target: { checked: boolean } }) =>
+                  setP("showRewards", e.target.checked)
+                }
+              >
+                Show rewards section
+              </s-checkbox>
+              <s-checkbox
+                checked={form.page.showReferral ? true : undefined}
+                disabled={!paid ? true : undefined}
+                onChange={(e: { target: { checked: boolean } }) =>
+                  setP("showReferral", e.target.checked)
+                }
+              >
+                Show referral section
+              </s-checkbox>
+            </s-stack>
+          </Gated>
           <s-box padding="base" borderWidth="base" borderRadius="base">
             <s-text tone="subdued">Live preview</s-text>
             <div
@@ -507,39 +597,45 @@ export default function BrandingPage() {
               setE("logoUrl", e.target.value)
             }
           />
-          {!paid && (
-            <LockedHint unlocks="Rewrite the 'Points earned' email subject line" />
-          )}
-          <s-text-field
-            label="&quot;Points earned&quot; subject"
-            value={form.emails.pointsEarnedSubject}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { value: string } }) =>
-              setE("pointsEarnedSubject", e.target.value)
-            }
-          />
-          {!paid && (
-            <LockedHint unlocks="Rewrite the 'Reward available' email subject line" />
-          )}
-          <s-text-field
-            label="&quot;Reward available&quot; subject"
-            value={form.emails.rewardAvailableSubject}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { value: string } }) =>
-              setE("rewardAvailableSubject", e.target.value)
-            }
-          />
-          {!paid && (
-            <LockedHint unlocks="Rewrite the tier-change email subject line" />
-          )}
-          <s-text-field
-            label="&quot;Tier change&quot; subject"
-            value={form.emails.tierChangeSubject}
-            disabled={!paid ? true : undefined}
-            onChange={(e: { target: { value: string } }) =>
-              setE("tierChangeSubject", e.target.value)
-            }
-          />
+          <Gated
+            locked={!paid}
+            unlocks="Rewrite the 'Points earned' email subject line"
+          >
+            <s-text-field
+              label="&quot;Points earned&quot; subject"
+              value={form.emails.pointsEarnedSubject}
+              disabled={!paid ? true : undefined}
+              onChange={(e: { target: { value: string } }) =>
+                setE("pointsEarnedSubject", e.target.value)
+              }
+            />
+          </Gated>
+          <Gated
+            locked={!paid}
+            unlocks="Rewrite the 'Reward available' email subject line"
+          >
+            <s-text-field
+              label="&quot;Reward available&quot; subject"
+              value={form.emails.rewardAvailableSubject}
+              disabled={!paid ? true : undefined}
+              onChange={(e: { target: { value: string } }) =>
+                setE("rewardAvailableSubject", e.target.value)
+              }
+            />
+          </Gated>
+          <Gated
+            locked={!paid}
+            unlocks="Rewrite the tier-change email subject line"
+          >
+            <s-text-field
+              label="&quot;Tier change&quot; subject"
+              value={form.emails.tierChangeSubject}
+              disabled={!paid ? true : undefined}
+              onChange={(e: { target: { value: string } }) =>
+                setE("tierChangeSubject", e.target.value)
+              }
+            />
+          </Gated>
           <s-box padding="base" borderWidth="base" borderRadius="base">
             <s-text tone="subdued">Live preview</s-text>
             <div
