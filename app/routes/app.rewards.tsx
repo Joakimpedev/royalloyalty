@@ -19,6 +19,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
+import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 const REWARD_TYPES = [
   "amount_off",
@@ -199,9 +200,7 @@ export default function RewardsPage() {
 
   return (
     <s-page heading="Rewards">
-      <s-link slot="breadcrumbActions" href="/app/program">
-        Program
-      </s-link>
+      <BreadcrumbBackLink href="/app/program" label="Program" />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="rewards-save-bar" ref={saveBarRef}>

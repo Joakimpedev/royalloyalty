@@ -19,6 +19,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 const DOCS_URL = "https://royalloyalty.help";
 
@@ -104,9 +105,7 @@ export default function SupportPage() {
 
   return (
     <s-page heading="Support">
-      <s-link slot="breadcrumbActions" href="/app/settings">
-        Settings
-      </s-link>
+      <BreadcrumbBackLink href="/app/settings" label="Settings" />
 
       <s-section heading="Help &amp; documentation">
         <s-stack direction="block" gap="base">

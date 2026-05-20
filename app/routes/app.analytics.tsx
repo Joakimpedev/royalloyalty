@@ -11,6 +11,7 @@ import prisma from "../db.server";
 import { getProgramMetrics } from "../lib/analytics.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
+import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -71,9 +72,7 @@ export default function AnalyticsPage() {
 
   return (
     <s-page heading="Analytics">
-      <s-link slot="breadcrumbActions" href="/app">
-        Home
-      </s-link>
+      <BreadcrumbBackLink href="/app" label="Home" />
 
       <s-section heading="Members & points">
         <s-stack direction="inline" gap="large">

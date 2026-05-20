@@ -10,6 +10,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { AppLink } from "../lib/app-navigate";
+import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -87,9 +88,7 @@ export default function Suggestions() {
   if (suggestions.length === 0) {
     return (
       <s-page heading="Optimization suggestions">
-        <s-link slot="breadcrumbActions" href="/app/program">
-          Program
-        </s-link>
+        <BreadcrumbBackLink href="/app/program" label="Program" />
         <s-section heading="No suggestions yet">
           <s-paragraph>
             As your program collects redemption and earning data, Royal Loyalty
@@ -104,9 +103,7 @@ export default function Suggestions() {
 
   return (
     <s-page heading="Optimization suggestions">
-      <s-link slot="breadcrumbActions" href="/app/program">
-        Program
-      </s-link>
+      <BreadcrumbBackLink href="/app/program" label="Program" />
       <s-section heading="Reviewable suggestions">
         <s-paragraph>
           Each suggestion is computed from your own program data. Review and

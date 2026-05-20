@@ -24,6 +24,7 @@ import prisma from "../db.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import { WidgetPreview } from "../components/WidgetPreview";
 import { useAppNavigate } from "../lib/app-navigate";
+import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 export interface BrandingConfig {
   widget: {
@@ -212,9 +213,7 @@ export default function BrandingPage() {
   return (
     <s-page heading="Branding">
       {!inOnboardingChain && (
-        <s-link slot="breadcrumbActions" href="/app">
-          Home
-        </s-link>
+        <BreadcrumbBackLink href="/app" label="Home" />
       )}
       {inOnboardingChain && (
         <s-button

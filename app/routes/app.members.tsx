@@ -13,6 +13,7 @@ import prisma from "../db.server";
 import { getBalance } from "../lib/points.server";
 import { canAwardLoyalty } from "../lib/quota.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -174,9 +175,7 @@ export default function MembersPage() {
 
   return (
     <s-page heading="Members">
-      <s-link slot="breadcrumbActions" href="/app">
-        Home
-      </s-link>
+      <BreadcrumbBackLink href="/app" label="Home" />
 
       <s-section heading="All members">
         {members.length === 0 ? (

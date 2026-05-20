@@ -49,6 +49,7 @@ import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { formatMoney } from "../lib/use-money";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
+import { ChoiceList, BreadcrumbBackLink } from "../lib/polaris-bindings";
 
 const ACTIONS = [
   "purchase",
@@ -343,13 +344,10 @@ export default function EarnRuleEditor() {
 
   return (
     <s-page heading={meta.title}>
-      {/* Polaris `breadcrumbActions` slot puts the back link inline with the
-          page heading on the LEFT (← Program · Place an order). Shopify's
-          page chrome owns the click routing for this slot — App Bridge
-          intercepts the navigation, so the iframe stays alive. */}
-      <s-link slot="breadcrumbActions" href="/app/program">
-        Program
-      </s-link>
+      {/* `breadcrumbActions` slot puts the back arrow inline with the page
+          heading on the LEFT. <BreadcrumbBackLink> intercepts the click
+          and routes via App Bridge so the iframe (and session) stays alive. */}
+      <BreadcrumbBackLink href="/app/program" label="Program" />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="earn-rule-save-bar" ref={saveBarRef}>
@@ -390,19 +388,16 @@ export default function EarnRuleEditor() {
       <s-section heading={isPurchase ? "Earning method" : "Points awarded"}>
         <s-stack direction="block" gap="base">
           {isPurchase && (
-            <s-choice-list
+            <ChoiceList
               label="Method"
-              values={[perDollar ? "increments" : "fixed"]}
-              onChange={(e: any) => {
-                const vs = (e.target?.values as string[] | undefined) ?? [];
-                setPerDollar(vs[0] === "increments");
-              }}
+              value={perDollar ? "increments" : "fixed"}
+              onChange={(v) => setPerDollar(v === "increments")}
             >
               <s-choice value="increments">
                 Increments of points (recommended)
               </s-choice>
               <s-choice value="fixed">Fixed amount of points</s-choice>
-            </s-choice-list>
+            </ChoiceList>
           )}
 
           <s-stack direction="inline" gap="base">
@@ -456,17 +451,14 @@ export default function EarnRuleEditor() {
       {/* ───── Right rail (Polaris page aside) ───── */}
 
       <s-section slot="aside" heading="Status">
-        <s-choice-list
+        <ChoiceList
           label="Status"
-          values={[enabled ? "enabled" : "disabled"]}
-          onChange={(e: any) => {
-            const vs = (e.target?.values as string[] | undefined) ?? [];
-            setEnabled(vs[0] === "enabled");
-          }}
+          value={enabled ? "enabled" : "disabled"}
+          onChange={(v) => setEnabled(v === "enabled")}
         >
           <s-choice value="enabled">Enabled</s-choice>
           <s-choice value="disabled">Disabled</s-choice>
-        </s-choice-list>
+        </ChoiceList>
       </s-section>
 
       <s-section slot="aside" heading="Summary">

@@ -13,6 +13,7 @@ import { useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { AppLink } from "../lib/app-navigate";
+import { BreadcrumbBackLink } from "../lib/polaris-bindings";
 import {
   buildPreview,
   commitImport,
@@ -107,9 +108,7 @@ export default function ImportPage() {
 
   return (
     <s-page heading="Import members & balances">
-      <s-link slot="breadcrumbActions" href="/app/settings">
-        Settings
-      </s-link>
+      <BreadcrumbBackLink href="/app/settings" label="Settings" />
       {data?.ok === false && (
         <s-banner tone="critical">
           <s-paragraph>{data.error}</s-paragraph>

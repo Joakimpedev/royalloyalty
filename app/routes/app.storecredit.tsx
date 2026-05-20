@@ -19,6 +19,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
+import { ChoiceList, BreadcrumbBackLink } from "../lib/polaris-bindings";
 import {
   getCashbackSettings,
   saveCashbackSettings,
@@ -142,9 +143,7 @@ export default function StoreCreditPage() {
 
   return (
     <s-page heading="Store Credit">
-      <s-link slot="breadcrumbActions" href="/app/program">
-        Program
-      </s-link>
+      <BreadcrumbBackLink href="/app/program" label="Program" />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="storecredit-save-bar" ref={saveBarRef}>
@@ -181,17 +180,14 @@ export default function StoreCreditPage() {
             as native Shopify store credit. Shopify holds the balance; Royal
             mirrors every transaction here for history and reconciliation.
           </s-paragraph>
-          <s-choice-list
+          <ChoiceList
             label="Status"
-            values={[form.enabled ? "on" : "off"]}
-            onChange={(e: any) => {
-              const vs = (e.target?.values as string[] | undefined) ?? [];
-              setForm((f) => ({ ...f, enabled: vs[0] === "on" }));
-            }}
+            value={form.enabled ? "on" : "off"}
+            onChange={(v) => setForm((f) => ({ ...f, enabled: v === "on" }))}
           >
             <s-choice value="on">Enabled</s-choice>
             <s-choice value="off">Disabled</s-choice>
-          </s-choice-list>
+          </ChoiceList>
           <s-text-field
             label="Cashback percent (e.g. 5 for 5%)"
             type="number"

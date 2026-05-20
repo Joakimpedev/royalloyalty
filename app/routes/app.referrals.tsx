@@ -8,6 +8,7 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { useAppNavigate } from "../lib/app-navigate";
+import { ChoiceList, BreadcrumbBackLink } from "../lib/polaris-bindings";
 import {
   useLoaderData,
   useActionData,
@@ -183,9 +184,7 @@ export default function ReferralsPage() {
 
   return (
     <s-page heading="Referrals">
-      <s-link slot="breadcrumbActions" href="/app/program">
-        Program
-      </s-link>
+      <BreadcrumbBackLink href="/app/program" label="Program" />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="referrals-save-bar" ref={saveBarRef}>
@@ -217,17 +216,14 @@ export default function ReferralsPage() {
 
       <s-section heading="Referral program">
         <s-stack direction="block" gap="base">
-          <s-choice-list
+          <ChoiceList
             label="Status"
-            values={[form.enabled ? "on" : "off"]}
-            onChange={(e: any) => {
-              const vs = (e.target?.values as string[] | undefined) ?? [];
-              setForm((f) => ({ ...f, enabled: vs[0] === "on" }));
-            }}
+            value={form.enabled ? "on" : "off"}
+            onChange={(v) => setForm((f) => ({ ...f, enabled: v === "on" }))}
           >
             <s-choice value="on">Enabled</s-choice>
             <s-choice value="off">Disabled</s-choice>
-          </s-choice-list>
+          </ChoiceList>
           <s-text-field
             label="Referrer reward (points)"
             type="number"
@@ -266,24 +262,22 @@ export default function ReferralsPage() {
             customers who were already members before the referral are always
             blocked automatically.
           </s-paragraph>
-          <s-choice-list
+          <ChoiceList
             label="Same-IP referrals"
-            values={[form.sameIpBlocks ? "block" : "flag"]}
-            onChange={(e: any) => {
-              const vs = (e.target?.values as string[] | undefined) ?? [];
-              setForm((f) => ({ ...f, sameIpBlocks: vs[0] === "block" }));
-            }}
+            value={form.sameIpBlocks ? "block" : "flag"}
+            onChange={(v) =>
+              setForm((f) => ({ ...f, sameIpBlocks: v === "block" }))
+            }
           >
             <s-choice value="block">Block automatically</s-choice>
             <s-choice value="flag">Flag for review</s-choice>
-          </s-choice-list>
-          <s-choice-list
+          </ChoiceList>
+          <ChoiceList
             label="Payout approval"
-            values={[form.reviewBeforePayout ? "manual" : "auto"]}
-            onChange={(e: any) => {
-              const vs = (e.target?.values as string[] | undefined) ?? [];
-              setForm((f) => ({ ...f, reviewBeforePayout: vs[0] === "manual" }));
-            }}
+            value={form.reviewBeforePayout ? "manual" : "auto"}
+            onChange={(v) =>
+              setForm((f) => ({ ...f, reviewBeforePayout: v === "manual" }))
+            }
           >
             <s-choice value="auto">
               Pay out automatically after the holdback window
@@ -291,7 +285,7 @@ export default function ReferralsPage() {
             <s-choice value="manual">
               Require manual approval for every payout
             </s-choice>
-          </s-choice-list>
+          </ChoiceList>
           <s-text-field
             label="Post-order holdback (hours before payout)"
             type="number"
