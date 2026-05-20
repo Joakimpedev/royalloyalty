@@ -302,11 +302,12 @@ export default function MembersPage() {
   return (
     <s-page heading="Members">
       <s-section>
-        {/* Segment tabs — Polaris underline-tab pattern */}
+        {/* Segment tabs — Polaris chip/filter style (no native s-tabs exists) */}
         <div
           style={{
             display: "flex",
-            borderBottom: "1px solid #e1e3e5",
+            alignItems: "center",
+            gap: 4,
             marginBottom: 16,
           }}
         >
@@ -318,20 +319,17 @@ export default function MembersPage() {
                 type="button"
                 onClick={() => switchSegment(s)}
                 style={{
-                  border: "none",
-                  background: "transparent",
+                  border: active ? "1px solid #919eab" : "1px solid transparent",
+                  background: active ? "#ffffff" : "transparent",
                   color: active ? "#202223" : "#6d7175",
-                  fontWeight: active ? 600 : 400,
-                  padding: "10px 16px",
-                  fontSize: 14,
+                  fontWeight: active ? 500 : 400,
+                  padding: "3px 10px",
+                  borderRadius: 4,
+                  fontSize: 13,
                   lineHeight: "20px",
                   cursor: "pointer",
-                  borderBottom: active
-                    ? "2px solid #2c6ecb"
-                    : "2px solid transparent",
-                  marginBottom: -1,
-                  transition: "color 100ms ease, border-color 100ms ease",
                   outline: "none",
+                  font: "inherit",
                 }}
               >
                 {s === "all" ? "All" : s === "members" ? "Members" : "Excluded"}
