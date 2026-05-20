@@ -1,32 +1,33 @@
-// Per-rule earn editor — two-column layout matching the Essent reference:
+// Per-rule earn editor — Polaris-native, two-column page layout.
 //
-//   ← Place an order                             [Discard] [Save]
+// Layout uses <s-page>'s built-in main + aside columns (same pattern as
+// app._index.tsx): regular <s-section> goes in the main column, <s-section
+// slot="aside"> goes in the right rail. Polaris owns the responsive
+// breakpoints, so the cards don't overlap or escape the page chrome.
+//
+//   ← Place an order                                    [Discard][Save]
 //      Points awarded for placing an order on your store
-//   ┌──────────────────────────────┐  ┌────────────────────┐
-//   │ Title                        │  │ Status             │
-//   │ [Place an order            ] │  │ ◉ Enabled  ○ Off   │
-//   └──────────────────────────────┘  └────────────────────┘
-//   ┌──────────────────────────────┐  ┌────────────────────┐
-//   │ Earning method               │  │ Summary            │
-//   │ ◉ Increments of points       │  │ • Customer earns 8 │
-//   │ ○ Fixed amount of points     │  │   points for every │
-//   │ Customer gets │ For every    │  │   kr 1 spent       │
-//   │ [ 8  points ]│ [ kr 1 ]      │  │ • Awarded for an   │
-//   │                              │  │   order            │
-//   │ Times a customer can do this │  └────────────────────┘
-//   │ [Unlimited]                  │
-//   └──────────────────────────────┘
+//
+//   ┌── Title ──────────────────────┐    ┌── Status ─────────────┐
+//   │ [Place an order             ] │    │ ◉ Enabled  ○ Disabled │
+//   └───────────────────────────────┘    └───────────────────────┘
+//   ┌── Earning method ─────────────┐    ┌── Summary ────────────┐
+//   │ ◉ Increments of points        │    │ • Customer earns ...  │
+//   │ ○ Fixed amount of points      │    │ • Awarded for ...     │
+//   │ [Points] [for every kr 1 …]   │    └───────────────────────┘
+//   │ Times … [Unlimited]           │
+//   └───────────────────────────────┘
 //
 // Per-action visibility:
 //   purchase  → Earning method radios + "For every amount spent" field
-//   others    → "Customer gets" only (fixed flat amount, always)
+//   others    → Just "Customer gets X points" (flat, no per-spend axis)
 //
 // Persistence:
-//   points / perDollar / enabled are real columns on EarnRule (since Phase 1).
-//   title and completionLimit live inside the existing `config` JSON column.
-//   The Points Icon picker is intentionally cosmetic only for now (one design
-//   slot, no real custom-upload yet) — the schema doesn't have anywhere to
-//   store an icon image, and adding that goes with a follow-up migration.
+//   points / perDollar / enabled are EarnRule columns.
+//   title and completionLimit live in the existing EarnRule.config JSON
+//   blob (no schema migration). The previous build's Points-Icon card has
+//   been removed: storefront extensions render the rule's label, not a
+//   per-rule icon, so the icon was purely admin-side decoration.
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type {
@@ -46,7 +47,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
-import { useMoney, useShopMoney } from "../lib/use-money";
+import { formatMoney } from "../lib/use-money";
+import { loadShopMoneyContext } from "../lib/shop-context.server";
 
 const ACTIONS = [
   "purchase",
@@ -76,15 +78,14 @@ const LABELS: Record<
   },
   birthday: {
     title: "Celebrate a birthday",
-    description:
-      "Awarded once per year on the customer's saved birthday",
+    description: "Awarded once per year on the customer's saved birthday",
     summaryTail: "Awarded once per year on the customer's birthday",
   },
   newsletter: {
     title: "Subscribe to newsletter",
     description:
       "Awarded when a customer signs up for marketing emails through your storefront",
-    summaryTail: "Awarded once when the customer subscribes to the newsletter",
+    summaryTail: "Awarded once when the customer subscribes",
   },
   social: {
     title: "Follow on social",
@@ -94,8 +95,7 @@ const LABELS: Record<
   },
   review: {
     title: "Leave a product review",
-    description:
-      "Awarded when a customer submits a verified product review",
+    description: "Awarded when a customer submits a verified product review",
     summaryTail: "Awarded once per review (requires a reviews integration)",
   },
   anniversary: {
@@ -122,7 +122,7 @@ type ConfigBlob = {
 };
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
   const action = String(params.action ?? "");
   if (!isActionName(action))
@@ -133,12 +133,19 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   });
 
   const config = (existing?.config ?? null) as ConfigBlob | null;
-  const defaultLabel = LABELS[action].title;
+  const defaultTitle = LABELS[action].title;
+
+  // Fetch the shop's currency directly here too — the parent app.tsx loader
+  // also fetches it, but the previous useRouteLoaderData wiring couldn't be
+  // trusted to resolve the parent route ID across flatRoutes setups. Reading
+  // it in this loader and returning it on `money` removes the dependency.
+  const money = await loadShopMoneyContext(admin, session.shop);
 
   return {
     action,
+    money,
     rule: {
-      title: config?.title ?? defaultLabel,
+      title: config?.title ?? defaultTitle,
       points: existing?.points ?? (action === "purchase" ? 1 : 50),
       perDollar: existing?.perDollar ?? action === "purchase",
       enabled:
@@ -214,17 +221,17 @@ export const action = async ({
 };
 
 export default function EarnRuleEditor() {
-  const { action: actionName, rule } = useLoaderData<typeof loader>();
+  const { action: actionName, rule, money: moneyCtx } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData() as EarnActionResult | undefined;
   const nav = useNavigation();
   const submit = useSubmit();
   const appNav = useAppNavigate();
-  const money = useMoney();
-  const { currencyCode } = useShopMoney();
+  const currencyCode = moneyCtx.currencyCode;
+  const money = (n: number) =>
+    formatMoney(n, moneyCtx.currencyCode, moneyCtx.locale);
   const saveBarRef = useRef<HTMLElement | null>(null);
 
-  // Action returns { ok: true, redirectTo } on save — navigate client-side
-  // (see NAVIGATION-AUDIT.md rule #6).
   useEffect(() => {
     if (
       actionData?.ok &&
@@ -298,7 +305,9 @@ export default function EarnRuleEditor() {
   // Summary bullets — currency-aware, mirrors Essent's right-column summary.
   const summaryBullets: string[] = [];
   if (!enabled) {
-    summaryBullets.push("This rule is currently inactive — no points awarded.");
+    summaryBullets.push(
+      "This rule is currently inactive — no points awarded.",
+    );
   } else if (isPurchase && perDollar) {
     summaryBullets.push(
       `Customer earns ${points} point${points === 1 ? "" : "s"} for every ${money(1)} spent`,
@@ -316,7 +325,9 @@ export default function EarnRuleEditor() {
     summaryBullets.push(meta.summaryTail);
   }
   if (completionLimit !== null) {
-    summaryBullets.push(`Up to ${completionLimit} time${completionLimit === 1 ? "" : "s"} per customer`);
+    summaryBullets.push(
+      `Up to ${completionLimit} time${completionLimit === 1 ? "" : "s"} per customer`,
+    );
   }
 
   return (
@@ -349,159 +360,103 @@ export default function EarnRuleEditor() {
         </s-section>
       )}
 
-      <s-paragraph>{meta.description}</s-paragraph>
+      {/* Page subtitle as a leading paragraph above the cards. */}
+      <s-section>
+        <s-paragraph>{meta.description}</s-paragraph>
+      </s-section>
 
-      {/* Two-column layout (Essent reference): form on the left, side panel
-          with Status / Summary / Points Icon on the right. Collapses to a
-          single column under ~720px via the auto-fit grid. */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 16,
-          marginTop: 12,
-          alignItems: "start",
-        }}
-      >
-        {/* ───── Left column ───── */}
-        <div style={{ display: "grid", gap: 16 }}>
-          <Card heading="Title">
-            <s-text-field
-              label=""
-              value={title}
+      {/* ───── Main column ───── */}
+
+      <s-section heading="Title">
+        <s-text-field
+          label="Title"
+          value={title}
+          onChange={(e: { target: { value: string } }) =>
+            setTitle(e.target.value)
+          }
+        />
+      </s-section>
+
+      <s-section heading={isPurchase ? "Earning method" : "Points awarded"}>
+        <s-stack direction="block" gap="base">
+          {isPurchase && (
+            <s-choice-list
+              label="Method"
+              value={perDollar ? "increments" : "fixed"}
               onChange={(e: { target: { value: string } }) =>
-                setTitle(e.target.value)
+                setPerDollar(e.target.value === "increments")
+              }
+            >
+              <s-choice value="increments">
+                Increments of points (recommended)
+              </s-choice>
+              <s-choice value="fixed">Fixed amount of points</s-choice>
+            </s-choice-list>
+          )}
+
+          <s-stack direction="inline" gap="base">
+            <s-text-field
+              label={
+                isPurchase && perDollar
+                  ? "Customer gets (points)"
+                  : "Points the customer earns"
+              }
+              type="number"
+              value={String(points)}
+              onChange={(e: { target: { value: string } }) =>
+                setPoints(Math.max(0, Number.parseInt(e.target.value, 10) || 0))
               }
             />
-          </Card>
-
-          <Card heading={isPurchase ? "Earning method" : "Points awarded"}>
-            {isPurchase && (
-              <RadioGroup
-                value={perDollar ? "increments" : "fixed"}
-                onChange={(v) => setPerDollar(v === "increments")}
-                options={[
-                  {
-                    value: "increments",
-                    label: "Increments of points (recommended)",
-                  },
-                  { value: "fixed", label: "Fixed amount of points" },
-                ]}
+            {isPurchase && perDollar && (
+              <s-text-field
+                label={`For every amount spent (${currencyCode})`}
+                type="number"
+                value="1"
+                readOnly
               />
             )}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isPurchase && perDollar ? "1fr 1fr" : "1fr",
-                gap: 12,
-                marginTop: 12,
-              }}
-            >
-              <NumberFieldWithSuffix
-                label="Customer gets"
-                value={points}
-                suffix="Points"
-                onChange={(n) => setPoints(Math.max(0, n))}
-              />
-              {isPurchase && perDollar && (
-                <NumberFieldWithSuffix
-                  label="For every amount spent"
-                  value={1}
-                  suffix={currencyCode}
-                  fixed
-                />
-              )}
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <s-text-field
-                label="Times a customer can complete this action"
-                value={completionLimit === null ? "Unlimited" : String(completionLimit)}
-                onChange={(e: { target: { value: string } }) => {
-                  const v = e.target.value.trim();
-                  if (v === "" || v.toLowerCase() === "unlimited") {
-                    setCompletionLimit(null);
-                    return;
-                  }
-                  const n = Number.parseInt(v, 10);
-                  setCompletionLimit(Number.isFinite(n) && n > 0 ? n : null);
-                }}
-              />
-            </div>
-          </Card>
-        </div>
+          </s-stack>
 
-        {/* ───── Right column ───── */}
-        <div style={{ display: "grid", gap: 16 }}>
-          <Card heading="Status">
-            <RadioGroup
-              value={enabled ? "enabled" : "disabled"}
-              onChange={(v) => setEnabled(v === "enabled")}
-              options={[
-                { value: "enabled", label: "Enabled" },
-                { value: "disabled", label: "Disabled" },
-              ]}
-            />
-          </Card>
+          <s-text-field
+            label="Times a customer can complete this action"
+            value={
+              completionLimit === null ? "Unlimited" : String(completionLimit)
+            }
+            onChange={(e: { target: { value: string } }) => {
+              const v = e.target.value.trim();
+              if (v === "" || v.toLowerCase() === "unlimited") {
+                setCompletionLimit(null);
+                return;
+              }
+              const n = Number.parseInt(v, 10);
+              setCompletionLimit(Number.isFinite(n) && n > 0 ? n : null);
+            }}
+          />
+        </s-stack>
+      </s-section>
 
-          <Card heading="Summary">
-            <ul
-              style={{
-                margin: 0,
-                paddingLeft: 18,
-                fontSize: 13,
-                lineHeight: 1.55,
-                color: "#202223",
-              }}
-            >
-              {summaryBullets.map((b, i) => (
-                <li key={i} style={{ marginBottom: 4 }}>
-                  {b}
-                </li>
-              ))}
-            </ul>
-          </Card>
+      {/* ───── Right rail (Polaris page aside) ───── */}
 
-          <Card heading="Points Icon">
-            <RadioGroup
-              value="default"
-              onChange={() => {}}
-              options={[
-                { value: "default", label: "Default" },
-                { value: "custom", label: "Custom image", disabled: true },
-              ]}
-            />
-            <div
-              aria-hidden="true"
-              style={{
-                marginTop: 10,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 44,
-                height: 44,
-                borderRadius: 8,
-                border: "1px solid #d1d5db",
-                background: "#fff",
-                fontSize: 20,
-              }}
-            >
-              {actionName === "purchase"
-                ? "🛍"
-                : actionName === "signup"
-                  ? "👤"
-                  : actionName === "birthday"
-                    ? "🎂"
-                    : actionName === "newsletter"
-                      ? "✉"
-                      : actionName === "social"
-                        ? "🔗"
-                        : actionName === "review"
-                          ? "★"
-                          : "🎉"}
-            </div>
-          </Card>
-        </div>
-      </div>
+      <s-section slot="aside" heading="Status">
+        <s-choice-list
+          label="Status"
+          value={enabled ? "enabled" : "disabled"}
+          onChange={(e: { target: { value: string } }) =>
+            setEnabled(e.target.value === "enabled")
+          }
+        >
+          <s-choice value="enabled">Enabled</s-choice>
+          <s-choice value="disabled">Disabled</s-choice>
+        </s-choice-list>
+      </s-section>
+
+      <s-section slot="aside" heading="Summary">
+        <s-stack direction="block" gap="small-100">
+          {summaryBullets.map((b, i) => (
+            <s-paragraph key={i}>• {b}</s-paragraph>
+          ))}
+        </s-stack>
+      </s-section>
 
       {blocker.state === "blocked" && (
         <s-section>
@@ -518,181 +473,6 @@ export default function EarnRuleEditor() {
         </s-section>
       )}
     </s-page>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────
-// Local presentational helpers — kept inside this file because the two-column
-// editor is the only place that needs them. Plain JSX + inline styles match
-// the Polaris-native restraint from the visual-style memory.
-// ───────────────────────────────────────────────────────────────────────────
-
-function Card({
-  heading,
-  children,
-}: {
-  heading: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #e3e5e7",
-        borderRadius: 10,
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          fontWeight: 600,
-          fontSize: 14,
-          marginBottom: 12,
-          color: "#202223",
-        }}
-      >
-        {heading}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function RadioGroup({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string; disabled?: boolean }[];
-}) {
-  return (
-    <div style={{ display: "grid", gap: 8 }}>
-      {options.map((o) => {
-        const selected = o.value === value;
-        return (
-          <label
-            key={o.value}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              cursor: o.disabled ? "default" : "pointer",
-              fontSize: 14,
-              color: o.disabled ? "#8c9196" : "#202223",
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                border: `1.5px solid ${selected ? "#202223" : "#8c9196"}`,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {selected && (
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: "#202223",
-                  }}
-                />
-              )}
-            </span>
-            <input
-              type="radio"
-              checked={selected}
-              disabled={o.disabled}
-              onChange={() => !o.disabled && onChange(o.value)}
-              style={{
-                position: "absolute",
-                opacity: 0,
-                pointerEvents: "none",
-                width: 0,
-                height: 0,
-              }}
-            />
-            {o.label}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
-function NumberFieldWithSuffix({
-  label,
-  value,
-  suffix,
-  onChange,
-  fixed,
-}: {
-  label: string;
-  value: number;
-  suffix: string;
-  onChange?: (n: number) => void;
-  fixed?: boolean;
-}) {
-  return (
-    <div>
-      <div
-        style={{
-          fontSize: 13,
-          color: "#6d7175",
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "stretch",
-          border: "1px solid #d1d5db",
-          borderRadius: 6,
-          background: "#fff",
-          overflow: "hidden",
-        }}
-      >
-        <input
-          type="number"
-          min={0}
-          value={value}
-          readOnly={fixed}
-          onChange={(e) => onChange?.(Number.parseInt(e.target.value, 10) || 0)}
-          style={{
-            flex: 1,
-            border: 0,
-            outline: 0,
-            padding: "8px 10px",
-            fontSize: 14,
-            color: "#202223",
-            background: "transparent",
-            font: "inherit",
-          }}
-        />
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "0 12px",
-            background: "#f6f6f7",
-            color: "#6d7175",
-            fontSize: 13,
-            borderLeft: "1px solid #d1d5db",
-          }}
-        >
-          {suffix}
-        </span>
-      </div>
-    </div>
   );
 }
 

@@ -10,20 +10,17 @@
 // loadShopMoneyContext() below.
 
 import prisma from "../db.server";
-import {
-  formatCurrency,
-  normalizeLocale,
-  type LocaleCode,
-} from "./i18n.server";
+import { formatCurrency, type LocaleCode } from "./i18n.server";
 
+// Only field we need. Asking for shopLocales here would require the
+// read_locales scope (which the app doesn't currently request) — if Shopify
+// errors that field out, the whole query may come back with null data and
+// we'd silently fall back to USD. Keep this minimal so the query never
+// fails for permission reasons.
 const SHOP_QUERY = `#graphql
   query RoyalLoyaltyShopContext {
     shop {
       currencyCode
-    }
-    shopLocales {
-      locale
-      primary
     }
   }`;
 
@@ -56,29 +53,20 @@ export async function refreshShopFromAdmin(
     const res = await admin.graphql(SHOP_QUERY);
     const json = await res.json();
     const currencyCode: string | undefined = json?.data?.shop?.currencyCode;
-    const locales: Array<{ locale?: string; primary?: boolean }> =
-      json?.data?.shopLocales ?? [];
-    const primary = locales.find((l) => l.primary) ?? locales[0];
-    const localeRaw = primary?.locale ?? "en";
 
     if (!currencyCode) return null;
 
-    const normalizedLocale = normalizeLocale(localeRaw);
-
+    // We don't have read_locales scope, so we can't pull the shop's primary
+    // locale from the Admin API. Default to "en" — Intl.NumberFormat resolves
+    // the currency symbol from the currencyCode regardless of the locale, so
+    // NOK still renders as "kr" / "NOK", EUR as "€", etc.
     await prisma.shop.upsert({
       where: { shopDomain },
-      update: {
-        currencyCode,
-        primaryLocale: localeRaw,
-      },
-      create: {
-        shopDomain,
-        currencyCode,
-        primaryLocale: localeRaw,
-      },
+      update: { currencyCode },
+      create: { shopDomain, currencyCode },
     });
 
-    return { currencyCode, locale: normalizedLocale };
+    return { currencyCode, locale: "en" };
   } catch {
     return null;
   }
@@ -111,13 +99,10 @@ export async function loadShopMoneyContext(
   // 2. Live fetch failed — fall back to the last cached value if we have one.
   const cached = await prisma.shop.findUnique({
     where: { shopDomain },
-    select: { currencyCode: true, primaryLocale: true },
+    select: { currencyCode: true },
   });
   if (cached?.currencyCode) {
-    return {
-      currencyCode: cached.currencyCode,
-      locale: normalizeLocale(cached.primaryLocale ?? "en"),
-    };
+    return { currencyCode: cached.currencyCode, locale: "en" };
   }
 
   // 3. No fresh, no cache — last-resort default. The next successful admin

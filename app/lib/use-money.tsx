@@ -32,16 +32,21 @@ export function formatMoney(
   }
 }
 
-type ParentLoaderData = {
-  apiKey: string;
-  money: { currencyCode: string; locale: string };
+type MaybeMoneyData = {
+  money?: { currencyCode: string; locale: string };
 };
 
+// flatRoutes' route IDs aren't fully consistent across versions — depending
+// on the setup, `app/routes/app.tsx` can be registered as "routes/app" OR
+// "app". Try both so the hook resolves regardless. If neither is reachable
+// (e.g. the page renders outside the /app layout, or the parent loader
+// hasn't run yet), fall back to USD/en as a last resort.
 export function useShopMoney(): { currencyCode: string; locale: string } {
-  const parent = useRouteLoaderData("routes/app") as
-    | ParentLoaderData
-    | undefined;
-  return parent?.money ?? { currencyCode: "USD", locale: "en" };
+  const a = useRouteLoaderData("routes/app") as MaybeMoneyData | undefined;
+  if (a?.money) return a.money;
+  const b = useRouteLoaderData("app") as MaybeMoneyData | undefined;
+  if (b?.money) return b.money;
+  return { currencyCode: "USD", locale: "en" };
 }
 
 /**
