@@ -25,36 +25,36 @@ import { BrandingPalette } from "../components/BrandingPalette";
 import { WidgetPreview } from "../components/WidgetPreview";
 import { useAppNavigate } from "../lib/app-navigate";
 
-// Small pill rendered above each paid-only field on the FREE plan. The hover
-// tooltip uses the native `title` attribute (works across browsers; no
-// dependency on a tooltip library) and is framed around *what unlocks* rather
-// than what's restricted — reads as a preview of the upgrade, not a wall.
+// A 12px muted lock glyph rendered next to each paid-only field on the FREE
+// plan. No background, no label — just an icon the merchant can hover. The
+// native `title` tooltip carries the actual message and frames it around
+// *what unlocks* rather than what's restricted.
 function LockedHint({ unlocks }: { unlocks: string }) {
+  const message = `${unlocks} — available on a paid plan`;
   return (
-    <div
-      title={`${unlocks} — available on a paid plan`}
+    <span
+      title={message}
       role="note"
-      aria-label={`${unlocks} — available on a paid plan`}
+      aria-label={message}
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        color: "#8a6116",
-        background: "#fdf4dc",
-        border: "1px solid #f1d990",
-        borderRadius: 4,
-        padding: "1px 6px",
-        marginBottom: 4,
+        color: "#8c9196",
         cursor: "help",
-        userSelect: "none",
-        width: "fit-content",
+        marginBottom: 2,
+        lineHeight: 0,
       }}
     >
-      <span aria-hidden>🔒</span>
-      <span>Paid plan</span>
-    </div>
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path d="M10 1a4 4 0 0 1 4 4v2h1.5A1.5 1.5 0 0 1 17 8.5v8A1.5 1.5 0 0 1 15.5 18h-11A1.5 1.5 0 0 1 3 16.5v-8A1.5 1.5 0 0 1 4.5 7H6V5a4 4 0 0 1 4-4Zm0 2a2 2 0 0 0-2 2v2h4V5a2 2 0 0 0-2-2Z" />
+      </svg>
+    </span>
   );
 }
 
