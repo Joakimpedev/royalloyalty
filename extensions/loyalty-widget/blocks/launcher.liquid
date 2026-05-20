@@ -92,10 +92,35 @@
       function load() {
         R.setStatus(status, 'loading', '');
         R.loadBalance(cfg, function (d) {
-          var b = document.getElementById('royal-balance');
-          var t = document.getElementById('royal-tier');
-          if (b) b.textContent = (d.balance || 0) + ' points';
-          if (t) t.textContent = d.tier ? 'Your tier: ' + d.tier : '';
+          /* Apply branding from the admin Branding page (colors override the
+             theme-editor settings used as initial render defaults). */
+          R.applyBranding(root, d.branding);
+          if (d.branding) {
+            var panelTitle = document.querySelector('#royal-panel h2');
+            if (panelTitle && d.branding.programName)
+              panelTitle.textContent = d.branding.programName;
+            var btnLabel = document.getElementById('royal-launcher-btn');
+            if (btnLabel && d.branding.launcherText) {
+              /* Only replace the trailing text node so the crown icon stays. */
+              var last = btnLabel.lastChild;
+              if (last && last.nodeType === 3) last.textContent = ' ' + d.branding.launcherText;
+            }
+          }
+
+          if (!d.enrolled) {
+            /* Signed-in customer who isn't a member yet — show a friendly
+               prompt instead of "0 points" without context. */
+            var bAnon = document.getElementById('royal-balance');
+            var tAnon = document.getElementById('royal-tier');
+            if (bAnon) bAnon.textContent = 'Sign up to start earning';
+            if (tAnon) tAnon.textContent = '';
+          } else {
+            var b = document.getElementById('royal-balance');
+            var t = document.getElementById('royal-tier');
+            if (b) b.textContent = (d.balance || 0) + ' ' + (d.branding && d.branding.pointsName ? d.branding.pointsName.toLowerCase() : 'points');
+            if (t) t.textContent = d.tier ? 'Your tier: ' + d.tier : '';
+          }
+
           var wrap = document.getElementById('royal-rewards');
           if (!wrap) return;
           if (!d.rewards || !d.rewards.length) {
@@ -106,23 +131,24 @@
           d.rewards.forEach(function (rw) {
             var card = document.createElement('div');
             card.className = 'royal-card';
-            var canAfford = (d.balance || 0) >= rw.pointsCost;
+            var canAfford = d.enrolled && (d.balance || 0) >= rw.pointsCost;
+            var label = R.rewardLabel(rw, d.currencyCode);
             card.innerHTML =
-              '<div><strong>' + (rw.label || rw.type) + '</strong></div>' +
+              '<div><strong>' + label + '</strong></div>' +
               '<div class="royal-muted">' + rw.pointsCost + ' points</div>';
             var rb = document.createElement('button');
             rb.className = 'royal-btn';
             rb.type = 'button';
             rb.textContent = 'Redeem';
             rb.disabled = !canAfford;
-            if (!canAfford) rb.title = 'Not enough points yet';
+            if (!canAfford) rb.title = d.enrolled ? 'Not enough points yet' : 'Sign in to redeem';
             rb.addEventListener('click', function () {
               rb.disabled = true;
               R.setStatus(status, 'loading', 'Redeeming…');
               R.redeem(cfg, rw.id).then(function (res) {
                 R.setStatus(status, 'success',
-                  res.discountCode
-                    ? 'Reward redeemed — your code is ' + res.discountCode + '.'
+                  res && res.result && res.result.discountCode
+                    ? 'Reward redeemed — your code is ' + res.result.discountCode + '.'
                     : 'Reward redeemed.');
               }).catch(function () {
                 rb.disabled = false;

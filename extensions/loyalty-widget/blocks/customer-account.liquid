@@ -55,6 +55,8 @@
       var status = document.getElementById('royal-acc-status');
 
       R.loadBalance(cfg, function (d) {
+        R.applyBranding(root, d.branding);
+
         var b = document.getElementById('royal-acc-balance');
         var t = document.getElementById('royal-acc-tier');
         if (b) b.textContent = (d.balance || 0);
@@ -64,9 +66,13 @@
         if (act) {
           act.innerHTML = (d.activity && d.activity.length)
             ? d.activity.map(function (a) {
+                var dateStr = (function () {
+                  try { return new Date(a.date).toLocaleDateString(); }
+                  catch (e) { return a.date; }
+                })();
                 return '<div class="royal-card">' + a.reason + ' — ' +
                   (a.points > 0 ? '+' : '') + a.points + ' pts ' +
-                  '<span class="royal-muted">' + a.date + '</span></div>';
+                  '<span class="royal-muted">' + dateStr + '</span></div>';
               }).join('')
             : '<p class="royal-muted">No activity yet. Place an order to start earning.</p>';
         }
@@ -74,7 +80,7 @@
         if (rw) {
           rw.innerHTML = (d.rewards && d.rewards.length)
             ? d.rewards.map(function (x) {
-                return '<div class="royal-card"><strong>' + (x.label || x.type) +
+                return '<div class="royal-card"><strong>' + R.rewardLabel(x, d.currencyCode) +
                   '</strong> — ' + x.pointsCost + ' pts</div>';
               }).join('')
             : '<p class="royal-muted">No rewards available yet — check back soon.</p>';

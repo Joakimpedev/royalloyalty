@@ -64,13 +64,26 @@
       if (!root || !window.RoyalLoyalty) return setTimeout(init, 50);
       var R = window.RoyalLoyalty, cfg = R.readConfig(root);
       var status = document.getElementById('royal-page-status');
-      if (!cfg.loggedIn) return;
 
+      /* The loyalty page renders earn rules + rewards for everyone (so
+         signed-out visitors see the value prop), but only renders
+         balance / tier / referral for enrolled customers. */
       R.loadBalance(cfg, function (d) {
-        var b = document.getElementById('royal-page-balance');
-        var t = document.getElementById('royal-page-tier');
-        if (b) b.textContent = (d.balance || 0) + ' points';
-        if (t && d.tier) t.textContent = 'Your tier: ' + d.tier;
+        R.applyBranding(root, d.branding);
+
+        if (d.branding) {
+          var heroH1 = root.querySelector('header h1');
+          if (heroH1 && d.branding.heroTitle) heroH1.textContent = d.branding.heroTitle;
+          var heroP = root.querySelector('header p');
+          if (heroP && d.branding.heroSubtitle) heroP.textContent = d.branding.heroSubtitle;
+        }
+
+        if (d.enrolled) {
+          var b = document.getElementById('royal-page-balance');
+          var t = document.getElementById('royal-page-tier');
+          if (b) b.textContent = (d.balance || 0) + ' ' + (d.branding && d.branding.pointsName ? d.branding.pointsName.toLowerCase() : 'points');
+          if (t && d.tier) t.textContent = 'Your tier: ' + d.tier;
+        }
 
         var earn = document.getElementById('royal-page-earn');
         if (earn) {
@@ -84,7 +97,7 @@
         if (rw) {
           rw.innerHTML = (d.rewards && d.rewards.length)
             ? d.rewards.map(function (x) {
-                return '<div class="royal-card"><strong>' + (x.label || x.type) +
+                return '<div class="royal-card"><strong>' + R.rewardLabel(x, d.currencyCode) +
                   '</strong> — ' + x.pointsCost + ' pts</div>';
               }).join('')
             : '<p class="royal-muted">No rewards available yet — check back soon.</p>';

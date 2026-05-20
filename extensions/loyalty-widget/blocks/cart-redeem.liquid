@@ -44,8 +44,14 @@
       var status = document.getElementById('royal-cart-status');
 
       R.loadBalance(cfg, function (d) {
+        R.applyBranding(root, d.branding);
+        var pointsName = (d.branding && d.branding.pointsName ? d.branding.pointsName.toLowerCase() : 'points');
         var bal = document.getElementById('royal-cart-balance');
-        if (bal) bal.textContent = 'You have ' + (d.balance || 0) + ' points.';
+        if (bal) bal.textContent = 'You have ' + (d.balance || 0) + ' ' + pointsName + '.';
+        if (!d.enrolled) {
+          if (bal) bal.textContent = 'Sign in to apply your ' + pointsName + ' at checkout.';
+          return;
+        }
         var affordable = (d.rewards || []).filter(function (r) {
           return (d.balance || 0) >= r.pointsCost;
         });
@@ -58,7 +64,7 @@
         affordable.forEach(function (r) {
           var o = document.createElement('option');
           o.value = r.id;
-          o.textContent = (r.label || r.type) + ' (' + r.pointsCost + ' pts)';
+          o.textContent = R.rewardLabel(r, d.currencyCode) + ' (' + r.pointsCost + ' pts)';
           sel.appendChild(o);
         });
         box.hidden = false;
