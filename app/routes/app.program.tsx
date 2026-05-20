@@ -11,6 +11,7 @@ import {
   useLoaderData,
   useActionData,
   useNavigation,
+  useSearchParams,
   useSubmit,
   useBlocker,
   useRouteError,
@@ -110,6 +111,11 @@ export default function ProgramPage() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const submit = useSubmit();
+  const [searchParams] = useSearchParams();
+  // Onboarding redirect-chain marker (Essent pattern): when the wizard activates
+  // a program it sends the merchant here with ?onboarding=1 so this page shows a
+  // "Step 1 of 2" banner and a Continue CTA into /app/branding.
+  const inOnboardingChain = searchParams.get("onboarding") === "1";
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [rules, setRules] = useState(earnRules);
@@ -165,9 +171,24 @@ export default function ProgramPage() {
 
   return (
     <s-page heading="Program">
-      <s-button slot="primary-action" href="/app">
-        Back to Home
+      <s-button
+        slot="primary-action"
+        href={inOnboardingChain ? "/app/branding?onboarding=1" : "/app"}
+        variant={inOnboardingChain ? "primary" : undefined}
+      >
+        {inOnboardingChain ? "Continue to Branding" : "Back to Home"}
       </s-button>
+
+      {inOnboardingChain && (
+        <s-section>
+          <s-banner tone="info" heading="Step 1 of 2 — Review your earn rules">
+            <s-paragraph>
+              Your program is activated. Confirm the points each action awards,
+              then continue to Branding to pick your widget look.
+            </s-paragraph>
+          </s-banner>
+        </s-section>
+      )}
 
       {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
       <ui-save-bar id="program-save-bar" ref={saveBarRef}>

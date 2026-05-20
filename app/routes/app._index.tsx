@@ -6,7 +6,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useLoaderData, useRouteError } from "react-router";
+import { useLoaderData, useRouteError, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -102,6 +102,8 @@ export default function Home() {
         View analytics
       </s-button>
 
+      <WelcomeCard />
+
       <s-section heading="Program health">
         {m.hasActivity ? (
           <s-stack direction="block" gap="base">
@@ -189,6 +191,35 @@ export default function Home() {
         )}
       </s-section>
     </s-page>
+  );
+}
+
+// One-time celebration shown when the merchant lands here from the onboarding
+// chain (Onboarding → Program → Branding → Home?welcomed=1). Theme-app-embed
+// activation is the only remaining setup step, so we nudge it inline rather
+// than dropping the merchant straight into the theme editor.
+function WelcomeCard() {
+  const [searchParams] = useSearchParams();
+  if (searchParams.get("welcomed") !== "1") return null;
+  return (
+    <s-section>
+      <s-banner tone="success" heading="You're all set up">
+        <s-paragraph>
+          Your program is activated and your branding is saved. One last thing
+          to go live: enable the loyalty widget in your Shopify theme editor.
+        </s-paragraph>
+        <s-stack direction="inline" gap="base">
+          <s-button
+            href="shopify:admin/themes/current/editor?context=apps"
+            target="_top"
+            variant="primary"
+          >
+            Open theme editor
+          </s-button>
+          <s-button href="/app">Dismiss</s-button>
+        </s-stack>
+      </s-banner>
+    </s-section>
   );
 }
 

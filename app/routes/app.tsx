@@ -21,21 +21,16 @@ export default function App() {
           Components). The dev-plan/audit note preferred <ui-nav-menu> from an
           older App Bridge v4.x context; this template version is authoritative
           for this stack, so we follow it. Reconciliation logged in ACTION-REQUIRED. */}
+      {/* Nav compressed to 6 items (was 15) per competitor analysis: Program is a
+          catalog landing that folds Earn/Redeem/Referrals/VIP/Store Credit/Suggestions;
+          Settings absorbs Billing/Import/Support; Integrations removed entirely.
+          Setup/onboarding is a flow reached from Home, not a nav destination. */}
       <s-app-nav>
         <s-link href="/app" rel="home">Home</s-link>
-        <s-link href="/app/onboarding">Setup</s-link>
         <s-link href="/app/program">Program</s-link>
-        <s-link href="/app/tiers">VIP Tiers</s-link>
-        <s-link href="/app/rewards">Rewards</s-link>
-        <s-link href="/app/referrals">Referrals</s-link>
-        <s-link href="/app/storecredit">Store Credit</s-link>
         <s-link href="/app/members">Members</s-link>
-        <s-link href="/app/analytics">Analytics</s-link>
-        <s-link href="/app/suggestions">Suggestions</s-link>
         <s-link href="/app/branding">Branding</s-link>
-        <s-link href="/app/integrations">Integrations</s-link>
-        <s-link href="/app/import">Import</s-link>
-        <s-link href="/app/support">Support</s-link>
+        <s-link href="/app/analytics">Analytics</s-link>
         <s-link href="/app/settings">Settings</s-link>
       </s-app-nav>
       <Outlet />

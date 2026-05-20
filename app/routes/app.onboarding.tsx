@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useBlocker, useFetcher, useLoaderData } from "react-router";
+import { redirect, useBlocker, useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import {
@@ -143,7 +143,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       await recordActivation(tx, shop.id);
     });
 
-    return { ok: true, activated: true };
+    // Post-onboarding redirect chain: Program → Branding → Home (?welcomed=1).
+    // The merchant is guided through the next two setup pages instead of being
+    // dropped on the dashboard with no narrative.
+    return redirect("/app/program?onboarding=1");
   }
 
   return { ok: false, error: "Unknown intent" };

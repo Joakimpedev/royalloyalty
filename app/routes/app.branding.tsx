@@ -13,6 +13,7 @@ import {
   useLoaderData,
   useActionData,
   useNavigation,
+  useSearchParams,
   useSubmit,
   useBlocker,
   useRouteError,
@@ -151,6 +152,11 @@ export default function BrandingPage() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const submit = useSubmit();
+  const [searchParams] = useSearchParams();
+  // Final stop of the onboarding redirect chain. When ?onboarding=1 we frame the
+  // page as "Step 2 of 2" and the primary CTA finishes the chain by sending the
+  // merchant to /app?welcomed=1.
+  const inOnboardingChain = searchParams.get("onboarding") === "1";
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [form, setForm] = useState<BrandingConfig>(branding);
@@ -201,9 +207,24 @@ export default function BrandingPage() {
 
   return (
     <s-page heading="Branding">
-      <s-button slot="primary-action" href="/app">
-        Back to Home
+      <s-button
+        slot="primary-action"
+        href={inOnboardingChain ? "/app?welcomed=1" : "/app"}
+        variant={inOnboardingChain ? "primary" : undefined}
+      >
+        {inOnboardingChain ? "Finish setup" : "Back to Home"}
       </s-button>
+
+      {inOnboardingChain && (
+        <s-section>
+          <s-banner tone="info" heading="Step 2 of 2 — Customize your widget">
+            <s-paragraph>
+              Pick the colors, copy and sections shoppers will see. When you're
+              happy, click <strong>Finish setup</strong> to wrap up.
+            </s-paragraph>
+          </s-banner>
+        </s-section>
+      )}
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="branding-save-bar" ref={saveBarRef}>
