@@ -18,6 +18,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { useMoney, useShopMoney } from "../lib/use-money";
 
 const REWARD_TYPES = [
   "amount_off",
@@ -137,6 +138,7 @@ export default function RewardsPage() {
   const nav = useNavigation();
   const submit = useSubmit();
   const appNav = useAppNavigate();
+  const money = useMoney();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
@@ -265,7 +267,7 @@ export default function RewardsPage() {
               label={
                 form.type === "percent_off"
                   ? "Percent (e.g. 10 for 10%)"
-                  : "Value (currency amount)"
+                  : `Value (in your store currency, ${useShopMoney().currencyCode})`
               }
               type="number"
               value={String(form.value)}
@@ -344,7 +346,15 @@ export default function RewardsPage() {
                   <s-table-cell>
                     {r.type === "free_product"
                       ? r.productId || "—"
-                      : r.value || "—"}
+                      : r.type === "percent_off"
+                        ? r.value
+                          ? `${r.value}%`
+                          : "—"
+                        : r.type === "free_shipping"
+                          ? "Free shipping"
+                          : r.value !== null && r.value !== undefined
+                            ? money(r.value)
+                            : "—"}
                   </s-table-cell>
                   <s-table-cell>
                     <s-badge tone={r.enabled ? "success" : "neutral"}>

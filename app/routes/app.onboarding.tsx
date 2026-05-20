@@ -23,6 +23,7 @@ import { recordActivation } from "../lib/ttv.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import { WidgetPreview } from "../components/WidgetPreview";
 import { AppLink, useAppNavigate } from "../lib/app-navigate";
+import { useMoney, useShopMoney } from "../lib/use-money";
 
 // ---------------------------------------------------------------------------
 // Loader — generate (or reuse persisted) program preview
@@ -250,6 +251,8 @@ function ProgramPreview({
   const [program, setProgram] = useState<ProposedProgram>(initial);
   const [dirty, setDirty] = useState(false);
   const appNav = useAppNavigate();
+  const money = useMoney();
+  const { currencyCode } = useShopMoney();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const isSaving =
@@ -580,7 +583,11 @@ function ProgramPreview({
                 />
                 {rw.value !== null && (
                   <s-number-field
-                    label="Value"
+                    label={
+                      rw.type === "percent_off"
+                        ? "Value (% off)"
+                        : `Value (${currencyCode})`
+                    }
                     value={String(rw.value)}
                     onInput={(e: any) =>
                       mutate((p) => {

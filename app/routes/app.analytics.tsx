@@ -10,6 +10,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getProgramMetrics } from "../lib/analytics.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { useMoney } from "../lib/use-money";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -36,6 +37,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 export default function AnalyticsPage() {
   const { metrics: m } = useLoaderData<typeof loader>();
   const nav = useAppNavigate();
+  const money = useMoney();
 
   if (!m.hasActivity) {
     return (
@@ -121,21 +123,15 @@ export default function AnalyticsPage() {
           <s-stack direction="inline" gap="large">
             <Stat
               label="Revenue influenced (estimated)"
-              value={m.revenueInfluencedEstimated.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-              })}
+              value={money(m.revenueInfluencedEstimated)}
             />
             <Stat
               label="Points liability (value)"
-              value={m.roi.pointsLiabilityValue.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-              })}
+              value={money(m.roi.pointsLiabilityValue)}
             />
             <Stat
               label="Redeemed value"
-              value={m.roi.redeemedValue.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-              })}
+              value={money(m.roi.redeemedValue)}
             />
             <Stat
               label="ROI ratio"

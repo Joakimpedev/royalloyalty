@@ -18,6 +18,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { useMoney } from "../lib/use-money";
 import {
   getCashbackSettings,
   saveCashbackSettings,
@@ -97,6 +98,7 @@ export default function StoreCreditPage() {
   const nav = useNavigation();
   const submit = useSubmit();
   const appNav = useAppNavigate();
+  const money = useMoney();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [form, setForm] = useState(settings);
@@ -263,7 +265,7 @@ export default function StoreCreditPage() {
                 <s-table-row key={l.id}>
                   <s-table-cell>{l.createdAt}</s-table-cell>
                   <s-table-cell>{l.direction}</s-table-cell>
-                  <s-table-cell>{l.amount.toFixed(2)}</s-table-cell>
+                  <s-table-cell>{money(l.amount)}</s-table-cell>
                   <s-table-cell>{l.orderId}</s-table-cell>
                   <s-table-cell>{l.reason}</s-table-cell>
                   <s-table-cell>

@@ -4,12 +4,22 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
+import { loadShopMoneyContext } from "../lib/shop-context.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+
+  // Bootstrap (and lazy-refresh) the shop's currency + primary locale on every
+  // authenticated load. The first authenticated render hits Shopify's Admin
+  // API once and persists the values; subsequent loads read straight from the
+  // DB. The shop/update webhook also calls refreshShopFromAdmin to keep this
+  // current if the merchant switches their store currency. The shape returned
+  // here is meant to be the currency for *display* — server-side billing
+  // amounts (Shopify Billing API) intentionally stay in USD; see billing.server.ts.
+  const money = await loadShopMoneyContext(admin, session.shop);
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", money };
 };
 
 export default function App() {

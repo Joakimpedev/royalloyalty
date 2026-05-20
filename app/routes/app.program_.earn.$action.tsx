@@ -23,6 +23,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { useMoney } from "../lib/use-money";
 
 const ACTIONS = [
   "purchase",
@@ -159,6 +160,7 @@ export default function EarnRuleEditor() {
   const nav = useNavigation();
   const submit = useSubmit();
   const appNav = useAppNavigate();
+  const money = useMoney();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   // Action returns { ok: true, redirectTo } on save — navigate client-side so
@@ -217,7 +219,7 @@ export default function EarnRuleEditor() {
     if (!enabled) return "This rule is currently inactive — no points awarded.";
     if (actionName === "purchase") {
       return perDollar
-        ? `Customers earn ${points} point${points === 1 ? "" : "s"} for every $1 they spend.`
+        ? `Customers earn ${points} point${points === 1 ? "" : "s"} for every ${money(1)} they spend.`
         : `Customers earn ${points} point${points === 1 ? "" : "s"} for each completed order, regardless of order value.`;
     }
     return `Customers earn ${points} point${points === 1 ? "" : "s"} for ${meta.title.toLowerCase()}.`;

@@ -18,6 +18,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { useMoney } from "../lib/use-money";
 
 const ACTIONS = [
   "purchase",
@@ -106,6 +107,7 @@ export default function ProgramPage() {
   const rules = earnRules;
   const saving = nav.state === "submitting";
   const appNav = useAppNavigate();
+  const money = useMoney();
 
   return (
     <s-page heading="Program">
@@ -206,7 +208,9 @@ export default function ProgramPage() {
               </s-badge>
               <div style={{ fontSize: 13, color: "#6d7175", minWidth: 90, textAlign: "right" }}>
                 {r.points} pts
-                {r.action === "purchase" && r.perDollar ? " / $1" : ""}
+                {r.action === "purchase" && r.perDollar
+                  ? ` / ${money(1)}`
+                  : ""}
               </div>
             </button>
           ))}

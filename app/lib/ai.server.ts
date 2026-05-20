@@ -253,6 +253,21 @@ export async function collectShopSignals(
 export function fallbackTemplate(signals?: Partial<ShopSignals>): ProposedProgram {
   const primary = signals?.themeColors?.primary ?? "#7B2D8E";
   const secondary = signals?.themeColors?.secondary ?? "#F4E9B8";
+  const currencyCode = signals?.currencyCode ?? "USD";
+  // Format amounts in the shop's currency so the fallback labels read
+  // correctly for non-USD stores (e.g. "kr 5 off" for a Norwegian store).
+  const fmt = (amount: number): string => {
+    try {
+      return new Intl.NumberFormat("en", {
+        style: "currency",
+        currency: currencyCode,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    } catch {
+      return `${amount} ${currencyCode}`;
+    }
+  };
+  const one = fmt(1);
   return {
     source: "fallback-template",
     rationale:
@@ -260,7 +275,7 @@ export function fallbackTemplate(signals?: Partial<ShopSignals>): ProposedProgra
       "catalog/order history to personalise from yet, so this is a proven " +
       "starting point — every value below is editable before you activate.",
     earnRules: [
-      { action: "purchase", points: 1, perDollar: true, enabled: true, label: "Earn 1 point per $1 spent" },
+      { action: "purchase", points: 1, perDollar: true, enabled: true, label: `Earn 1 point per ${one} spent` },
       { action: "signup", points: 100, perDollar: false, enabled: true, label: "100 points for joining" },
       { action: "birthday", points: 200, perDollar: false, enabled: true, label: "200 points on your birthday" },
       { action: "newsletter", points: 50, perDollar: false, enabled: true, label: "50 points for newsletter signup" },
@@ -274,8 +289,8 @@ export function fallbackTemplate(signals?: Partial<ShopSignals>): ProposedProgra
       { name: "Gold", thresholdType: "points", threshold: 1500, earnMultiplier: 1.5, perks: ["1.5x points", "Free shipping", "VIP support"], sortOrder: 2 },
     ],
     rewards: [
-      { type: "amount_off", pointsCost: 500, value: 5, label: "$5 off" },
-      { type: "amount_off", pointsCost: 1000, value: 10, label: "$10 off" },
+      { type: "amount_off", pointsCost: 500, value: 5, label: `${fmt(5)} off` },
+      { type: "amount_off", pointsCost: 1000, value: 10, label: `${fmt(10)} off` },
       { type: "percent_off", pointsCost: 1500, value: 15, label: "15% off" },
       { type: "free_shipping", pointsCost: 750, value: null, label: "Free shipping" },
     ],
@@ -311,6 +326,7 @@ Rules:
 - Scale point costs and earn rates to the store's average order value so a typical
   customer reaches their first reward within ~3-5 orders (not too easy, not unreachable).
 - Reward "value" is a number for amount_off (currency)/percent_off (percent), null otherwise.
+- All money-bearing labels (earn-rule labels like "Earn 1 point per X spent", reward labels like "5 X off") MUST use the storeSignals.currencyCode as the unit — do NOT hardcode "$" or any other symbol. Use a recognisable native form (e.g. "kr 5 off" for NOK, "€5 off" for EUR, "$5 off" for USD). The merchant's store currency is in storeSignals.currencyCode.
 - Colors must be 6-digit hex with leading '#'. Use the supplied theme colors when present.
 - programName/pointsName: short, brand-appropriate, no trademarked terms.
 - Provide 4 default transactional emails (points_earned, reward_available, tier_change, referral_success).

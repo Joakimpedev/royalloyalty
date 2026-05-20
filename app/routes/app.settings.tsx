@@ -475,6 +475,14 @@ export default function SettingsPage() {
 // The 3 paid plans render as a horizontal card row with the middle tier
 // (Growth) outlined as "Most popular"; Free renders as a full-width strip
 // below with the current-plan disabled pill, matching BON's layout.
+//
+// IMPORTANT: plan prices are intentionally rendered in USD ($) regardless of
+// the shop's currency. Shopify's Billing API (appSubscriptionCreate) only
+// accepts USD, and Shopify itself handles FX conversion to the merchant's
+// payout currency. Displaying these in the shop's local currency would be
+// misleading (a NOK shop is still billed in USD). All OTHER money in the app
+// — reward values, store credit, analytics, etc. — goes through useMoney()
+// and renders in the shop's actual currency. This is the one exception.
 // ---------------------------------------------------------------------------
 
 type PlanRow = {

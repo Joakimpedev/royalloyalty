@@ -18,6 +18,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { useMoney, useShopMoney } from "../lib/use-money";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -115,6 +116,7 @@ export default function TiersPage() {
   const nav = useNavigation();
   const submit = useSubmit();
   const appNav = useAppNavigate();
+  const money = useMoney();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
@@ -230,7 +232,11 @@ export default function TiersPage() {
             <s-option value="spend">Lifetime earned (spend proxy)</s-option>
           </s-select>
           <s-text-field
-            label="Threshold"
+            label={
+              form.thresholdType === "spend"
+                ? `Threshold (lifetime earned, ${useShopMoney().currencyCode})`
+                : "Threshold (points)"
+            }
             type="number"
             value={String(form.threshold)}
             onChange={(e: { target: { value: string } }) =>
@@ -315,7 +321,9 @@ export default function TiersPage() {
                 <s-table-row key={t.id}>
                   <s-table-cell>{t.name}</s-table-cell>
                   <s-table-cell>
-                    {t.threshold} ({t.thresholdType})
+                    {t.thresholdType === "spend"
+                      ? `${money(t.threshold)} spent`
+                      : `${t.threshold.toLocaleString()} points`}
                   </s-table-cell>
                   <s-table-cell>{t.earnMultiplier}x</s-table-cell>
                   <s-table-cell>
