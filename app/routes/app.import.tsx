@@ -107,6 +107,9 @@ export default function ImportPage() {
 
   return (
     <s-page heading="Import members & balances">
+      <s-link slot="breadcrumbActions" href="/app/settings">
+        Settings
+      </s-link>
       {data?.ok === false && (
         <s-banner tone="critical">
           <s-paragraph>{data.error}</s-paragraph>

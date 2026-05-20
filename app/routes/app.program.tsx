@@ -111,17 +111,20 @@ export default function ProgramPage() {
 
   return (
     <s-page heading="Program">
-      <s-button
-        slot="primary-action"
-        onClick={() =>
-          appNav(
-            inOnboardingChain ? "/app/branding?onboarding=1" : "/app",
-          )
-        }
-        variant={inOnboardingChain ? "primary" : undefined}
-      >
-        {inOnboardingChain ? "Continue to Branding" : "Back to Home"}
-      </s-button>
+      {!inOnboardingChain && (
+        <s-link slot="breadcrumbActions" href="/app">
+          Home
+        </s-link>
+      )}
+      {inOnboardingChain && (
+        <s-button
+          slot="primary-action"
+          onClick={() => appNav("/app/branding?onboarding=1")}
+          variant="primary"
+        >
+          Continue to Branding
+        </s-button>
+      )}
 
       {inOnboardingChain && (
         <s-section>

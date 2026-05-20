@@ -180,9 +180,9 @@ export default function TiersPage() {
 
   return (
     <s-page heading="VIP Tiers">
-      <s-button slot="primary-action" onClick={() => appNav("/app")}>
-        Back to Home
-      </s-button>
+      <s-link slot="breadcrumbActions" href="/app/program">
+        Program
+      </s-link>
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="tiers-save-bar" ref={saveBarRef}>

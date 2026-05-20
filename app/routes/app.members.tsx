@@ -174,9 +174,9 @@ export default function MembersPage() {
 
   return (
     <s-page heading="Members">
-      <s-button slot="primary-action" onClick={() => nav("/app")}>
-        Back to Home
-      </s-button>
+      <s-link slot="breadcrumbActions" href="/app">
+        Home
+      </s-link>
 
       <s-section heading="All members">
         {members.length === 0 ? (

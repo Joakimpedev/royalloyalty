@@ -199,9 +199,9 @@ export default function RewardsPage() {
 
   return (
     <s-page heading="Rewards">
-      <s-button slot="primary-action" onClick={() => appNav("/app")}>
-        Back to Home
-      </s-button>
+      <s-link slot="breadcrumbActions" href="/app/program">
+        Program
+      </s-link>
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="rewards-save-bar" ref={saveBarRef}>

@@ -165,8 +165,15 @@ export async function awardForOrder(
     : null;
   const multiplier = tier?.earnMultiplier ?? 1.0;
 
+  // perAmount lives in the EarnRule.config JSON blob (set on the per-rule
+  // editor at /app/program/earn/purchase). When the merchant says "8 points
+  // for every kr 5 spent", perAmount=5 and rule.points=8 → 8 pts per 5 kr.
+  // Defaults to 1 (8 pts per 1 kr) so existing rules without the config
+  // field keep their previous behavior exactly.
+  const cfg = (rule.config ?? null) as { perAmount?: number } | null;
+  const perAmount = Math.max(1, cfg?.perAmount ?? 1);
   const base = rule.perDollar
-    ? Math.floor(orderTotal) * rule.points
+    ? Math.floor(orderTotal / perAmount) * rule.points
     : rule.points;
   const points = Math.floor(base * multiplier);
 

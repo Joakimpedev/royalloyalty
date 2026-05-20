@@ -104,9 +104,9 @@ export default function SupportPage() {
 
   return (
     <s-page heading="Support">
-      <s-button slot="primary-action" onClick={() => appNav("/app")}>
-        Back to Home
-      </s-button>
+      <s-link slot="breadcrumbActions" href="/app/settings">
+        Settings
+      </s-link>
 
       <s-section heading="Help &amp; documentation">
         <s-stack direction="block" gap="base">

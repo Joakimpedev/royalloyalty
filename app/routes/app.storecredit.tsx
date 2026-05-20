@@ -142,9 +142,9 @@ export default function StoreCreditPage() {
 
   return (
     <s-page heading="Store Credit">
-      <s-button slot="primary-action" onClick={() => appNav("/app")}>
-        Back to Home
-      </s-button>
+      <s-link slot="breadcrumbActions" href="/app/program">
+        Program
+      </s-link>
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="storecredit-save-bar" ref={saveBarRef}>

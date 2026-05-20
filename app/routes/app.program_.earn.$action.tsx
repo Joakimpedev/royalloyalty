@@ -119,6 +119,8 @@ async function requireShop(shopDomain: string) {
 type ConfigBlob = {
   title?: string;
   completionLimit?: number | null; // null = unlimited
+  /** "X points per Y currency units"; 1 = points-per-1-unit. */
+  perAmount?: number;
 };
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
@@ -152,6 +154,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
         existing?.enabled ?? (action === "purchase" || action === "signup"),
       completionLimit:
         config?.completionLimit === undefined ? null : config.completionLimit,
+      perAmount: Math.max(1, config?.perAmount ?? 1),
     },
   };
 };
@@ -188,8 +191,12 @@ export const action = async ({
     limitRaw === "" || limitRaw.toLowerCase() === "unlimited"
       ? null
       : Math.max(1, Number.parseInt(limitRaw, 10) || 0) || null;
+  const perAmount = Math.max(
+    1,
+    Number.parseInt(String(form.get("perAmount") ?? "1"), 10) || 1,
+  );
 
-  const config: ConfigBlob = { title, completionLimit };
+  const config: ConfigBlob = { title, completionLimit, perAmount };
 
   const existing = await prisma.earnRule.findFirst({
     where: { shopId: shop.id, action: a },
@@ -252,13 +259,15 @@ export default function EarnRuleEditor() {
   const [completionLimit, setCompletionLimit] = useState<number | null>(
     rule.completionLimit,
   );
+  const [perAmount, setPerAmount] = useState(rule.perAmount);
 
   const dirty =
     title !== rule.title ||
     points !== rule.points ||
     perDollar !== rule.perDollar ||
     enabled !== rule.enabled ||
-    completionLimit !== rule.completionLimit;
+    completionLimit !== rule.completionLimit ||
+    perAmount !== rule.perAmount;
   const saving = nav.state === "submitting";
 
   const blocker = useBlocker(
@@ -291,8 +300,9 @@ export default function EarnRuleEditor() {
       "completionLimit",
       completionLimit === null ? "unlimited" : String(completionLimit),
     );
+    fd.set("perAmount", String(perAmount));
     submit(fd, { method: "POST" });
-  }, [title, points, perDollar, enabled, completionLimit, submit]);
+  }, [title, points, perDollar, enabled, completionLimit, perAmount, submit]);
 
   const discard = useCallback(() => {
     setTitle(rule.title);
@@ -300,6 +310,7 @@ export default function EarnRuleEditor() {
     setPerDollar(rule.perDollar);
     setEnabled(rule.enabled);
     setCompletionLimit(rule.completionLimit);
+    setPerAmount(rule.perAmount);
   }, [rule]);
 
   // Summary bullets — currency-aware, mirrors Essent's right-column summary.
@@ -310,7 +321,7 @@ export default function EarnRuleEditor() {
     );
   } else if (isPurchase && perDollar) {
     summaryBullets.push(
-      `Customer earns ${points} point${points === 1 ? "" : "s"} for every ${money(1)} spent`,
+      `Customer earns ${points} point${points === 1 ? "" : "s"} for every ${money(perAmount)} spent`,
     );
     summaryBullets.push(meta.summaryTail);
   } else if (isPurchase) {
@@ -332,12 +343,13 @@ export default function EarnRuleEditor() {
 
   return (
     <s-page heading={meta.title}>
-      <s-button
-        slot="primary-action"
-        onClick={() => appNav("/app/program")}
-      >
-        Back to Program
-      </s-button>
+      {/* Polaris `breadcrumbActions` slot puts the back link inline with the
+          page heading on the LEFT (← Program · Place an order). Shopify's
+          page chrome owns the click routing for this slot — App Bridge
+          intercepts the navigation, so the iframe stays alive. */}
+      <s-link slot="breadcrumbActions" href="/app/program">
+        Program
+      </s-link>
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="earn-rule-save-bar" ref={saveBarRef}>
@@ -409,8 +421,16 @@ export default function EarnRuleEditor() {
               <s-number-field
                 label="For every amount spent"
                 suffix={currencyCode}
-                value="1"
-                readOnly
+                min={1}
+                value={String(perAmount)}
+                onChange={(e: any) =>
+                  setPerAmount(
+                    Math.max(
+                      1,
+                      Number.parseInt(String(e.target.value), 10) || 1,
+                    ),
+                  )
+                }
               />
             )}
           </s-stack>

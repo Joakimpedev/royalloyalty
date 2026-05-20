@@ -258,9 +258,9 @@ export default function SettingsPage() {
 
   return (
     <s-page heading="Settings">
-      <s-button slot="primary-action" onClick={() => appNav("/app")}>
-        Back to Home
-      </s-button>
+      <s-link slot="breadcrumbActions" href="/app">
+        Home
+      </s-link>
 
       {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
       <ui-save-bar id="settings-save-bar" ref={saveBarRef}>

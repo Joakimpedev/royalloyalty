@@ -87,6 +87,9 @@ export default function Suggestions() {
   if (suggestions.length === 0) {
     return (
       <s-page heading="Optimization suggestions">
+        <s-link slot="breadcrumbActions" href="/app/program">
+          Program
+        </s-link>
         <s-section heading="No suggestions yet">
           <s-paragraph>
             As your program collects redemption and earning data, Royal Loyalty
@@ -101,6 +104,9 @@ export default function Suggestions() {
 
   return (
     <s-page heading="Optimization suggestions">
+      <s-link slot="breadcrumbActions" href="/app/program">
+        Program
+      </s-link>
       <s-section heading="Reviewable suggestions">
         <s-paragraph>
           Each suggestion is computed from your own program data. Review and

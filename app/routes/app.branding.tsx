@@ -211,15 +211,20 @@ export default function BrandingPage() {
 
   return (
     <s-page heading="Branding">
-      <s-button
-        slot="primary-action"
-        onClick={() =>
-          appNav(inOnboardingChain ? "/app?welcomed=1" : "/app")
-        }
-        variant={inOnboardingChain ? "primary" : undefined}
-      >
-        {inOnboardingChain ? "Finish setup" : "Back to Home"}
-      </s-button>
+      {!inOnboardingChain && (
+        <s-link slot="breadcrumbActions" href="/app">
+          Home
+        </s-link>
+      )}
+      {inOnboardingChain && (
+        <s-button
+          slot="primary-action"
+          onClick={() => appNav("/app?welcomed=1")}
+          variant="primary"
+        >
+          Finish setup
+        </s-button>
+      )}
 
       {inOnboardingChain && (
         <s-section>

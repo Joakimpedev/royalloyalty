@@ -71,9 +71,9 @@ export default function AnalyticsPage() {
 
   return (
     <s-page heading="Analytics">
-      <s-button slot="primary-action" onClick={() => nav("/app")}>
-        Back to Home
-      </s-button>
+      <s-link slot="breadcrumbActions" href="/app">
+        Home
+      </s-link>
 
       <s-section heading="Members & points">
         <s-stack direction="inline" gap="large">
