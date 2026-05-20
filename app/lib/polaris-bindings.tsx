@@ -63,14 +63,19 @@ export function ChoiceList({
 }
 
 /**
- * Polaris page-chrome breadcrumb back link with App Bridge interception.
+ * Polaris page-chrome breadcrumb back link.
  *
- * `<s-link slot="breadcrumbActions">` is the documented Polaris pattern for
- * the back arrow next to the page heading, but every other body <s-link>
- * in this codebase does a full iframe reload that breaks auth (see
- * app/lib/NAVIGATION-AUDIT.md). To be safe, we intercept the click here
- * with preventDefault + useAppNavigate so it always routes through React
- * Router, regardless of what the slot does internally.
+ * Slot naming: Polaris React-prop is `breadcrumbActions` (camelCase) but the
+ * actual DOM slot attribute is **kebab-case** — same convention as
+ * `primary-action`, which is the working reference in this codebase. Passing
+ * `slot="breadcrumbActions"` silently fails (the link falls out of the
+ * chrome slot and renders as plain inline text in the page body).
+ *
+ * The click is also intercepted with preventDefault + useAppNavigate so the
+ * iframe (and the embedded session) stays alive regardless of whether
+ * Shopify's page chrome would have handled it natively — every other body
+ * `<s-link>` in this codebase full-reloads the iframe and breaks auth (see
+ * app/lib/NAVIGATION-AUDIT.md).
  */
 export function BreadcrumbBackLink({
   href,
@@ -83,7 +88,7 @@ export function BreadcrumbBackLink({
   return (
     // @ts-expect-error - s-link custom element JSX types
     <s-link
-      slot="breadcrumbActions"
+      slot="breadcrumb-actions"
       href={href}
       onClick={(e: Event) => {
         e.preventDefault?.();
