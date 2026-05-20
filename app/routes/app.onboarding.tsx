@@ -21,6 +21,7 @@ import {
 } from "../lib/ai.server";
 import { recordActivation } from "../lib/ttv.server";
 import { BrandingPalette } from "../components/BrandingPalette";
+import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
 import { AppLink, useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
@@ -423,26 +424,36 @@ function ProgramPreview({
             }}
           >
             <s-stack direction="block" gap="base">
-              <s-text-field
-                label="Primary color (hex)"
-                value={program.branding.primaryColor}
-                onInput={(e: any) =>
-                  mutate((p) => {
-                    p.branding.primaryColor = e.target.value;
-                    return p;
-                  })
-                }
-              />
-              <s-text-field
-                label="Secondary color (hex)"
-                value={program.branding.secondaryColor}
-                onInput={(e: any) =>
-                  mutate((p) => {
-                    p.branding.secondaryColor = e.target.value;
-                    return p;
-                  })
-                }
-              />
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 13, color: "#202223" }}>
+                  Primary color
+                </span>
+                <ColorPicker
+                  value={program.branding.primaryColor}
+                  label="Primary color"
+                  onChange={(v) =>
+                    mutate((p) => {
+                      p.branding.primaryColor = v;
+                      return p;
+                    })
+                  }
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 13, color: "#202223" }}>
+                  Secondary color
+                </span>
+                <ColorPicker
+                  value={program.branding.secondaryColor}
+                  label="Secondary color"
+                  onChange={(v) =>
+                    mutate((p) => {
+                      p.branding.secondaryColor = v;
+                      return p;
+                    })
+                  }
+                />
+              </div>
             </s-stack>
             <div style={{ position: "sticky", top: 16 }}>
               <s-text tone="subdued">Live preview</s-text>
