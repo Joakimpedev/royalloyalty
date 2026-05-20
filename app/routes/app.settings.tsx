@@ -350,61 +350,29 @@ export default function SettingsPage() {
         </s-stack>
       </s-section>
 
-      {/* Plan picker — prices shown BEFORE subscribe; no feature gating copy */}
+      {/* Plan picker — Essent+BON archetype: 3 paid cards in a row + Free strip
+          below + FAQ accordion. Royal stays volume-only (no feature gating) so
+          every card lists the same feature bullets and only the order quota
+          differs. The middle tier (Growth) is the "Most popular" highlight. */}
       <s-section heading="Choose a plan">
         <s-paragraph>
           Every plan includes every feature — points, VIP tiers, referrals,
           store credit, AI setup and branding. Plans differ only by how many
-          loyalty orders you can process per month.
+          loyalty orders you can process per month.{" "}
+          <s-badge tone="info">30-day money-back guarantee</s-badge>
         </s-paragraph>
-        <s-stack direction="block" gap="base">
-          {data.plans.map((p) => {
-            const isCurrent = p.tier === data.plan;
-            return (
-              <s-box
-                key={p.tier}
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-              >
-                <s-stack direction="block" gap="base">
-                  <s-stack direction="inline" gap="base">
-                    <s-text fontWeight="bold">{p.name}</s-text>
-                    {isCurrent && <s-badge tone="success">Current</s-badge>}
-                  </s-stack>
-                  <s-text>
-                    {p.priceUsd === 0
-                      ? "Free"
-                      : `$${p.priceUsd}/month`}
-                    {p.trialDays > 0 ? ` · ${p.trialDays}-day free trial` : ""}
-                  </s-text>
-                  <s-text tone="subdued">
-                    {p.cap === null
-                      ? "High-volume: 2,000+ loyalty orders per month"
-                      : `Up to ${p.cap.toLocaleString()} loyalty orders per month`}
-                  </s-text>
-                  <s-text tone="subdued">{p.blurb}</s-text>
-                  {!isCurrent && (
-                    <s-button
-                      variant={p.priceUsd === 0 ? "secondary" : "primary"}
-                      onClick={() =>
-                        submit(
-                          { _intent: "subscribe", tier: p.tier },
-                          { method: "POST" },
-                        )
-                      }
-                      {...(busy ? { loading: "" } : {})}
-                    >
-                      {p.priceUsd === 0
-                        ? "Switch to Free"
-                        : `Subscribe — $${p.priceUsd}/mo`}
-                    </s-button>
-                  )}
-                </s-stack>
-              </s-box>
-            );
-          })}
-        </s-stack>
+
+        <PricingCards
+          plans={data.plans}
+          currentTier={data.plan}
+          busy={busy}
+          onSubscribe={(tier) =>
+            submit(
+              { _intent: "subscribe", tier },
+              { method: "POST" },
+            )
+          }
+        />
 
         <s-stack direction="inline" gap="base">
           <s-button
@@ -428,6 +396,8 @@ export default function SettingsPage() {
           )}
         </s-stack>
       </s-section>
+
+      <BillingFAQ />
 
       <s-section heading="Support contact">
         <s-paragraph>
@@ -462,6 +432,355 @@ export default function SettingsPage() {
         </s-section>
       )}
     </s-page>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pricing cards — Essent+BON archetype, Polaris-native styling per the visual
+// directive (no pink-magenta highlights, no illustrations, no bold gradients).
+// The 3 paid plans render as a horizontal card row with the middle tier
+// (Growth) outlined as "Most popular"; Free renders as a full-width strip
+// below with the current-plan disabled pill, matching BON's layout.
+// ---------------------------------------------------------------------------
+
+type PlanRow = {
+  tier: "FREE" | "STARTER" | "GROWTH" | "PRO";
+  name: string;
+  priceUsd: number;
+  cap: number | null;
+  trialDays: number;
+  blurb: string;
+};
+
+function PricingCards({
+  plans,
+  currentTier,
+  busy,
+  onSubscribe,
+}: {
+  plans: PlanRow[];
+  currentTier: PlanRow["tier"];
+  busy: boolean;
+  onSubscribe: (tier: PlanRow["tier"]) => void;
+}) {
+  const free = plans.find((p) => p.tier === "FREE")!;
+  const paid = plans.filter((p) => p.tier !== "FREE");
+  const popularTier: PlanRow["tier"] = "GROWTH";
+
+  const sharedFeatures = [
+    "All earn rules (orders, signup, birthday, newsletter, social, reviews)",
+    "VIP tiers with per-tier earn multipliers",
+    "Two-sided referrals with fraud controls",
+    "Rewards catalog — discounts, free shipping, free products",
+    "Native Shopify store credit & cashback",
+    "AI program builder + ongoing optimization suggestions",
+    "Branding hub with palette presets & live preview",
+  ];
+
+  return (
+    <s-stack direction="block" gap="large">
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 12,
+          alignItems: "stretch",
+        }}
+      >
+        {paid.map((p) => {
+          const isCurrent = p.tier === currentTier;
+          const isPopular = p.tier === popularTier;
+          return (
+            <div
+              key={p.tier}
+              style={{
+                position: "relative",
+                padding: 20,
+                border: isPopular
+                  ? "2px solid #202223"
+                  : "1px solid #e3e5e7",
+                borderRadius: 10,
+                background: "#fff",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {isPopular && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: -10,
+                    left: 16,
+                    padding: "2px 10px",
+                    background: "#2c6ecb",
+                    color: "#fff",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  Most popular
+                </div>
+              )}
+              <div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: "0.05em",
+                    textTransform: "uppercase",
+                    color: "#6d7175",
+                  }}
+                >
+                  {p.name}
+                </div>
+                <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span style={{ fontSize: 14, color: "#6d7175" }}>$</span>
+                  <span style={{ fontSize: 36, fontWeight: 700, color: "#202223" }}>
+                    {p.priceUsd}
+                  </span>
+                  <span style={{ fontSize: 14, color: "#6d7175" }}>/month</span>
+                </div>
+                <div style={{ fontSize: 13, color: "#6d7175", marginTop: 4 }}>
+                  {p.cap === null
+                    ? "Unlimited loyalty orders"
+                    : `Includes ${p.cap.toLocaleString()} loyalty orders / month`}
+                </div>
+                {p.trialDays > 0 && (
+                  <div style={{ fontSize: 12, color: "#6d7175", marginTop: 4 }}>
+                    {p.trialDays}-day free trial
+                  </div>
+                )}
+              </div>
+
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#202223" }}>
+                Everything in Free, plus more volume.
+              </div>
+
+              <div style={{ marginTop: "auto" }}>
+                {isCurrent ? (
+                  <s-button disabled>Current plan</s-button>
+                ) : (
+                  <s-button
+                    variant={isPopular ? "primary" : "secondary"}
+                    onClick={() => onSubscribe(p.tier)}
+                    {...(busy ? { loading: "" } : {})}
+                  >
+                    Choose plan
+                  </s-button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Free-tier strip below the paid row (BON pattern). Royal enumerates the
+          Free features (Essent pattern) so Free reads as a real product, not a
+          teaser. */}
+      <div
+        style={{
+          padding: 20,
+          border: "1px solid #e3e5e7",
+          borderRadius: 10,
+          background: "#fff",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+                color: "#6d7175",
+              }}
+            >
+              {free.name}
+            </div>
+            <div style={{ marginTop: 6, display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span style={{ fontSize: 14, color: "#6d7175" }}>$</span>
+              <span style={{ fontSize: 32, fontWeight: 700, color: "#202223" }}>
+                0
+              </span>
+              <span style={{ fontSize: 14, color: "#6d7175" }}>/month</span>
+            </div>
+            <div style={{ fontSize: 13, color: "#6d7175", marginTop: 4 }}>
+              Includes {free.cap?.toLocaleString() ?? "250"} loyalty orders / month
+            </div>
+          </div>
+          <div>
+            {currentTier === "FREE" ? (
+              <s-button disabled>Your current plan</s-button>
+            ) : (
+              <s-button
+                variant="secondary"
+                onClick={() => onSubscribe("FREE")}
+                {...(busy ? { loading: "" } : {})}
+              >
+                Switch to Free
+              </s-button>
+            )}
+          </div>
+        </div>
+        <div
+          style={{
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: "1px solid #f1f2f3",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+            gap: 6,
+          }}
+        >
+          {sharedFeatures.map((f) => (
+            <div key={f} style={{ fontSize: 13, color: "#202223" }}>
+              ✓ {f}
+            </div>
+          ))}
+        </div>
+      </div>
+    </s-stack>
+  );
+}
+
+// FAQ accordion with grouped sub-headers (BON pattern: General / Payment /
+// Customization). Plain HTML details/summary so we don't pull in a third-party
+// accordion library.
+function BillingFAQ() {
+  const groups: { heading: string; items: { q: string; a: string }[] }[] = [
+    {
+      heading: "General",
+      items: [
+        {
+          q: "Do you offer a free trial?",
+          a: "Yes — every paid plan starts with a 14-day free trial. You can cancel any time during the trial without being charged.",
+        },
+        {
+          q: "Is there a free plan?",
+          a: "Yes. The Free plan keeps every feature available — points, VIP tiers, referrals, store credit, AI setup and branding — with room for up to 250 loyalty orders per month.",
+        },
+        {
+          q: "Are any features locked to paid plans?",
+          a: "No. Royal's pricing model is volume-only. Every feature is available on every plan; the paid tiers exist to handle higher monthly loyalty-order volume.",
+        },
+        {
+          q: "Can I upgrade or downgrade any time?",
+          a: "Yes. Switch plans from this page or directly in Shopify admin. Shopify computes proration based on how many days of the current billing cycle you've used.",
+        },
+        {
+          q: "What's a 'loyalty order'?",
+          a: "A single Shopify order that earned points or cashback, or redeemed points or store credit, this calendar month. An order counts once regardless of how many loyalty actions it triggers. Orders with no member, no earn and no redeem don't count.",
+        },
+      ],
+    },
+    {
+      heading: "Payment & billing",
+      items: [
+        {
+          q: "How am I charged?",
+          a: "Royal doesn't charge merchants directly. Shopify includes the Royal subscription on your Shopify invoice during your normal Shopify billing cycle. You can review charges in Shopify admin.",
+        },
+        {
+          q: "When am I charged?",
+          a: "On the first day of the 30-day billing cycle after your trial ends. Cancel any time before that and you won't be charged.",
+        },
+        {
+          q: "What happens if I exceed my monthly loyalty-order limit?",
+          a: "On a paid plan you stay live and the next tier's volume kicks in automatically (no manual upgrade required for one-off spikes). On Free, new orders stop accruing points or cashback until the count resets at the start of next month. No data is lost in either case.",
+        },
+        {
+          q: "Money-back guarantee?",
+          a: "Yes — 30 days. If Royal isn't a fit, contact us within 30 days of your first paid charge and we'll refund the most recent month.",
+        },
+      ],
+    },
+    {
+      heading: "Customization & migration",
+      items: [
+        {
+          q: "Can you build something custom?",
+          a: "Yes. Contact us via the support email below; we can scope custom features or a custom plan if your store has specific needs that aren't covered by the standard tiers.",
+        },
+        {
+          q: "Can I migrate from another loyalty app?",
+          a: "Yes. Royal can import points balances and members from a CSV export. See Settings → Import once you're on a paid plan, or contact support for hands-on help.",
+        },
+      ],
+    },
+  ];
+
+  return (
+    <s-section heading="Frequently asked questions">
+      <s-paragraph>
+        Don't see your answer? <s-link href="/app/support">Contact support</s-link> and
+        we'll get back to you within one business day.
+      </s-paragraph>
+      <s-stack direction="block" gap="large">
+        {groups.map((g) => (
+          <div key={g.heading}>
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 14,
+                color: "#202223",
+                marginBottom: 8,
+              }}
+            >
+              {g.heading}
+            </div>
+            <div
+              style={{
+                border: "1px solid #e3e5e7",
+                borderRadius: 8,
+                background: "#fff",
+                overflow: "hidden",
+              }}
+            >
+              {g.items.map((item, i) => (
+                <details
+                  key={item.q}
+                  style={{
+                    borderTop: i === 0 ? "none" : "1px solid #f1f2f3",
+                  }}
+                >
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      padding: "12px 16px",
+                      listStyle: "none",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      color: "#202223",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span>{item.q}</span>
+                    <span aria-hidden="true" style={{ color: "#6d7175" }}>
+                      +
+                    </span>
+                  </summary>
+                  <div
+                    style={{
+                      padding: "0 16px 14px",
+                      fontSize: 13,
+                      color: "#454f5b",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {item.a}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        ))}
+      </s-stack>
+    </s-section>
   );
 }
 
