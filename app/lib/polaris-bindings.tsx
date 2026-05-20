@@ -63,24 +63,25 @@ export function ChoiceList({
 }
 
 /**
- * Body-level page title: a left-arrow icon (Polaris `arrow-left`) + bold
- * heading on one row, optional subtitle underneath. This is what Essent
- * uses on its per-rule pages and what the user has asked for — a TITLE in
- * the iframe body, not in the Shopify chrome bar at the top.
+ * Body-level page title for sub-pages: back-arrow button + bold heading on
+ * one row, optional subtitle paragraph below.
  *
- * Why a body title and not <s-page heading=...>:
- *   <s-page heading> renders the title in Shopify's outer admin chrome bar
- *   (small text next to the app icon). It's fine for accessibility but it
- *   is NOT the prominent page-title look the Essent reference shows.
- *   Polaris-Web doesn't ship a "page header" component, so we compose one
- *   from primitives that ARE in the library: s-icon + s-heading + s-text.
+ * Composed entirely from Polaris primitives that pass the
+ * `validate_component_codeblocks` MCP validator:
+ *   - <s-stack direction="block">   vertical wrapper
+ *   - <s-stack direction="inline">  horizontal row (button + heading)
+ *   - <s-button variant="tertiary" icon="arrow-left">  the back arrow
+ *   - <s-heading>                  the title text
+ *   - <s-paragraph>                the subtitle
  *
- * Why a plain <button> for the back trigger:
- *   We want a minimal icon-only click target (no Polaris button frame
- *   around it). s-clickable would also work but adds its own padding /
- *   default appearance. A native <button styled transparent> renders the
- *   bare s-icon cleanly. The click goes through useAppNavigate so the
- *   iframe (and the embedded session) stays alive.
+ * No raw <div> wrappers. The previous version used a <div> as the outer
+ * container and <s-page> rendered it as empty / invisible — likely because
+ * <s-page> filters its children to Polaris primitives and discards plain
+ * HTML elements. Keeping every node as a registered Polaris custom element
+ * means <s-page> sees them as valid children.
+ *
+ * The button's onClick goes through useAppNavigate so the iframe and the
+ * embedded session stay alive (App Bridge-aware client-side nav).
  */
 export function PageTitle({
   title,
@@ -93,47 +94,28 @@ export function PageTitle({
 }) {
   const nav = useAppNavigate();
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    // @ts-expect-error - s-stack custom element JSX types
+    <s-stack direction="block" gap="small-200">
+      {/* @ts-expect-error - s-stack custom element JSX types */}
+      <s-stack direction="inline" gap="small-300" alignItems="center">
         {backHref && (
-          <button
-            type="button"
+          // @ts-expect-error - s-button custom element JSX types
+          <s-button
+            variant="tertiary"
+            icon="arrow-left"
             onClick={() => nav(backHref)}
-            aria-label="Back"
-            style={{
-              background: "transparent",
-              border: 0,
-              padding: 4,
-              margin: 0,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#202223",
-              font: "inherit",
-              lineHeight: 0,
-            }}
-          >
-            {/* @ts-expect-error - s-icon custom element JSX types */}
-            <s-icon type="arrow-left" />
-          </button>
+            accessibilityLabel="Back"
+          ></s-button>
         )}
         {/* @ts-expect-error - s-heading custom element JSX types */}
         <s-heading>{title}</s-heading>
-      </div>
+        {/* @ts-expect-error - s-stack custom element JSX types */}
+      </s-stack>
       {subtitle && (
-        <div
-          style={{
-            marginTop: 4,
-            marginLeft: backHref ? 32 : 0,
-            color: "#6d7175",
-            fontSize: 13,
-            lineHeight: 1.5,
-          }}
-        >
-          {subtitle}
-        </div>
+        // @ts-expect-error - s-paragraph custom element JSX types
+        <s-paragraph>{subtitle}</s-paragraph>
       )}
-    </div>
+      {/* @ts-expect-error - s-stack custom element JSX types */}
+    </s-stack>
   );
 }
