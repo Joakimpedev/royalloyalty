@@ -16,6 +16,7 @@ import prisma from "../db.server";
 import type { Shop } from "@prisma/client";
 import { getBalance } from "./points.server";
 import { issueReferralCode, referralLink } from "./referrals.server";
+import { readCashbackSettings } from "./storecredit.server";
 
 export interface StorefrontBranding {
   primaryColor: string;
@@ -67,6 +68,12 @@ export interface StorefrontActivity {
   date: string;
 }
 
+export interface StorefrontCashback {
+  enabled: boolean;
+  /** Percent of the order total credited as Shopify store credit. */
+  percent: number;
+}
+
 export interface StorefrontSocialPlatform {
   id: "instagram" | "tiktok" | "x" | "facebook" | "youtube";
   handle: string;
@@ -105,6 +112,9 @@ export interface StorefrontPayload {
    *  the platform URL in a new tab AND POSTs to the proxy to award points
    *  (gated once per platform per member). */
   socialPlatforms: StorefrontSocialPlatform[];
+  /** Cashback settings — drives the "Earn X% back as store credit"
+   *  callouts on the loyalty page, launcher panel, and cart widget. */
+  cashback: StorefrontCashback;
   branding: StorefrontBranding;
 }
 
@@ -213,6 +223,8 @@ export async function buildStorefrontLoyaltyPayload(params: {
     }),
   ]);
 
+  const cashback: StorefrontCashback = readCashbackSettings(shop.aiConfigSnapshot);
+
   // Build the social platforms list off the social earn rule's config blob.
   // Each entry becomes a Follow button on the storefront — server-side
   // computes the canonical platform URL so the client can be dumb.
@@ -296,6 +308,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       activity: [],
       activeCodes: [],
       socialPlatforms,
+      cashback,
       branding,
     };
   }
@@ -324,6 +337,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       activity: [],
       activeCodes: [],
       socialPlatforms,
+      cashback,
       branding,
     };
   }
@@ -372,6 +386,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       : null,
     activeCodes: await buildActiveCodes(activeRedemptions),
     socialPlatforms,
+    cashback,
     activity: activityRows.map((a) => ({
       type: a.type,
       reason: a.reason,

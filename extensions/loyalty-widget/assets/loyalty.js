@@ -459,18 +459,43 @@
             return r.json();
           })
           .then(function (c) {
-            var earn = pointsForAmount(
-              (c.total_price || 0) / 100,
-              payload.earnRules
-            );
+            var totalDollars = (c.total_price || 0) / 100;
+            var earn = pointsForAmount(totalDollars, payload.earnRules);
             var line = card.querySelector("#royal-injected-cart-earn");
-            if (line)
-              line.textContent =
+            var pieces = [];
+            if (earn > 0) {
+              pieces.push(
                 "+" +
-                earn +
-                " " +
-                ((b.pointsName && b.pointsName.toLowerCase()) || "points") +
-                " for this order";
+                  earn +
+                  " " +
+                  ((b.pointsName && b.pointsName.toLowerCase()) || "points")
+              );
+            }
+            // Cashback callout — encourage repeat purchases by surfacing
+            // the store credit they'll earn on this specific order.
+            if (
+              payload.cashback &&
+              payload.cashback.enabled &&
+              payload.cashback.percent > 0 &&
+              totalDollars > 0
+            ) {
+              var credit =
+                Math.round(
+                  totalDollars * (payload.cashback.percent / 100) * 100
+                ) / 100;
+              if (credit > 0) {
+                pieces.push(
+                  "+" + formatMoney(credit, payload.currencyCode) + " store credit"
+                );
+              }
+            }
+            if (line) {
+              if (pieces.length) {
+                line.textContent = pieces.join(" · ") + " for this order";
+              } else {
+                line.remove();
+              }
+            }
           })
           .catch(function () {
             var line = card.querySelector("#royal-injected-cart-earn");

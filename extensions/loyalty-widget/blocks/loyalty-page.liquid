@@ -38,6 +38,10 @@
     </p>
   {%- endif -%}
 
+  <div id="royal-page-cashback-wrap" hidden style="margin-top: 24px;">
+    <div class="royal-card" id="royal-page-cashback"></div>
+  </div>
+
   {%- if block.settings.show_earn -%}
     <h2>Ways to earn</h2>
     <div id="royal-page-earn"><p class="royal-muted">Loading…</p></div>
@@ -99,6 +103,22 @@
           document.getElementById('royal-page-active-codes'),
           d.activeCodes
         );
+
+        // Cashback callout — only when the merchant has it enabled.
+        var cbWrap = document.getElementById('royal-page-cashback-wrap');
+        var cbCard = document.getElementById('royal-page-cashback');
+        if (d.cashback && d.cashback.enabled && d.cashback.percent > 0) {
+          if (cbWrap) cbWrap.hidden = false;
+          if (cbCard) {
+            cbCard.innerHTML =
+              '<strong>Earn ' + d.cashback.percent + '% back as store credit</strong>' +
+              '<div class="royal-muted" style="font-size:13px;margin-top:4px;">' +
+              'Every order automatically credits your account. Use your store credit at checkout — no code required.' +
+              '</div>';
+          }
+        } else if (cbWrap) {
+          cbWrap.hidden = true;
+        }
 
         var socialWrap = document.getElementById('royal-page-social-wrap');
         var socialList = document.getElementById('royal-page-social');

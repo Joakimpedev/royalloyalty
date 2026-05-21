@@ -44,6 +44,7 @@
 
     {%- if customer -%}
       <p id="royal-balance" class="royal-points">Loading…</p>
+      <p id="royal-cashback-line" class="royal-muted" hidden style="margin-top:-4px;font-size:13px;"></p>
       {%- comment -%} Tier line hidden — backend still ships tier in payload but feature is not yet user-facing. {%- endcomment -%}
       <div id="royal-active-codes-wrap" hidden>
         <h3 style="margin:12px 0 4px;">Your active codes</h3>
@@ -133,6 +134,19 @@
             var t = document.getElementById('royal-tier');
             if (b) b.textContent = (d.balance || 0) + ' ' + (d.branding && d.branding.pointsName ? d.branding.pointsName.toLowerCase() : 'points');
             if (t) t.textContent = d.tier ? 'Your tier: ' + d.tier : '';
+          }
+
+          /* Cashback line under the balance — keeps customers aware they
+             are earning store credit on every order. */
+          var cbLine = document.getElementById('royal-cashback-line');
+          if (cbLine) {
+            if (d.cashback && d.cashback.enabled && d.cashback.percent > 0) {
+              cbLine.textContent =
+                'Earn ' + d.cashback.percent + '% back as store credit on every order.';
+              cbLine.hidden = false;
+            } else {
+              cbLine.hidden = true;
+            }
           }
 
           /* Active codes — the customer's redeemed-but-still-usable reward
