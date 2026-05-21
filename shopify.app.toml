@@ -7,7 +7,6 @@ embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 # API version pinned to 2026-01 — must match ApiVersion.January26 in
 # app/shopify.server.ts and .graphqlrc.ts (GraphQL queries are validated
