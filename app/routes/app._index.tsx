@@ -12,9 +12,24 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getProgramMetrics } from "../lib/analytics.server";
+import { checkAppEmbedEnabled } from "../lib/theme-embed.server";
+
+// Mirror the defaults declared in app/routes/app.program.tsx so the home
+// page counts an unsaved-but-default-enabled earn rule the same way the
+// program editor displays it. Otherwise the home tile reports "0
+// configured" while the program page shows 2 visible defaults — confusing.
+const EARN_ACTION_DEFAULTS: Record<string, boolean> = {
+  purchase: true,
+  signup: true,
+  birthday: false,
+  newsletter: false,
+  social: false,
+  review: false,
+  anniversary: false,
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   // Upsert (not findUnique): a freshly installed store has no Shop row yet and
   // nothing else bootstraps it on the home page, so reading-only dead-ended on
@@ -25,7 +40,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     create: { shopDomain: session.shop },
   });
 
-  const [metrics, suggestions, earnRuleCount, tierCount, rewardCount] =
+  const [metrics, suggestions, earnRuleRows, tierCount, rewardCount, embed] =
     await Promise.all([
       getProgramMetrics(shop.id),
       prisma.aiSuggestion.findMany({
@@ -33,10 +48,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         orderBy: { createdAt: "desc" },
         take: 5,
       }),
-      prisma.earnRule.count({ where: { shopId: shop.id, enabled: true } }),
+      prisma.earnRule.findMany({
+        where: { shopId: shop.id },
+        select: { action: true, enabled: true },
+      }),
       prisma.tier.count({ where: { shopId: shop.id } }),
       prisma.reward.count({ where: { shopId: shop.id, enabled: true } }),
+      checkAppEmbedEnabled(admin),
     ]);
+
+  // Effective earn count = explicit DB rows where enabled=true PLUS the
+  // default-enabled actions (purchase, signup) that don't have a DB row
+  // yet. Mirrors the program page's "show defaults until saved" logic.
+  const byAction = new Map(earnRuleRows.map((r) => [r.action, r.enabled]));
+  const earnRuleCount = Object.keys(EARN_ACTION_DEFAULTS).reduce(
+    (sum, action) => {
+      const fromDb = byAction.get(action);
+      const enabled =
+        fromDb === undefined ? EARN_ACTION_DEFAULTS[action] : fromDb;
+      return enabled ? sum + 1 : sum;
+    },
+    0,
+  );
 
   const checklist = [
     {
@@ -74,7 +107,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       detail:
         "In Shopify admin go to Sales channels > Online store > Themes, then Edit theme > App embeds, and turn on the Royal Loyalty widget so shoppers can see it.",
       cta: "Open theme editor",
-      done: false,
+      done: embed.enabled === true,
       href: "shopify:admin/themes/current/editor?context=apps",
     },
   ];
@@ -94,6 +127,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       body: s.body,
     })),
     programActivated: Boolean(shop.programActivatedAt),
+    embedEnabled: embed.enabled,
   };
 };
 
@@ -129,6 +163,60 @@ export default function Home() {
 
       <WelcomeCard />
 
+      {/* Setup guide first — the merchant should see "what to do next"
+          above analytics. One active step is expanded with detail + CTA;
+          every other step collapses to a one-line row with a status badge. */}
+      <s-section heading="Setup guide">
+        <s-stack direction="block" gap="base">
+          <s-paragraph>
+            <s-text tone="subdued">
+              {remaining.length === 0
+                ? "Setup complete — your loyalty program is fully configured."
+                : `${data.checklist.length - remaining.length} of ${data.checklist.length} steps complete`}
+            </s-text>
+          </s-paragraph>
+          {activeStep && (
+            <s-box padding="base" borderWidth="base" borderRadius="base">
+              <s-stack direction="block" gap="base">
+                <s-text fontWeight="bold">{activeStep.label}</s-text>
+                <s-paragraph>{activeStep.detail}</s-paragraph>
+                <div>
+                  <s-button
+                    onClick={() => nav(activeStep.href)}
+                    variant="primary"
+                  >
+                    {activeStep.cta}
+                  </s-button>
+                </div>
+              </s-stack>
+            </s-box>
+          )}
+          {data.checklist.filter((c) => c.id !== activeStep?.id).length > 0 && (
+            <s-stack direction="block" gap="small-200">
+              {data.checklist
+                .filter((c) => c.id !== activeStep?.id)
+                .map((c) => (
+                  <s-stack
+                    key={c.id}
+                    direction="inline"
+                    gap="base"
+                    alignItems="center"
+                  >
+                    <s-badge tone={c.done ? "success" : "neutral"}>
+                      {c.done ? "Done" : "To do"}
+                    </s-badge>
+                    {c.done ? (
+                      <s-text>{c.label}</s-text>
+                    ) : (
+                      <AppLink href={c.href}>{c.label}</AppLink>
+                    )}
+                  </s-stack>
+                ))}
+            </s-stack>
+          )}
+        </s-stack>
+      </s-section>
+
       {/* Program-status audit card (BON pattern): three concrete signals so the
           merchant can tell at a glance whether the program is actually visible
           to shoppers, with a one-click remediation button on each. */}
@@ -155,12 +243,20 @@ export default function Home() {
           />
           <StatusTile
             label="Storefront widget"
-            active={null}
-            activeText="Check in theme"
-            inactiveText="Check in theme"
-            body="Open the Shopify theme editor and confirm the Royal Loyalty app embed is turned on."
+            active={data.embedEnabled}
+            activeText="App embed enabled"
+            inactiveText="App embed disabled"
+            body={
+              data.embedEnabled === true
+                ? "Royal Loyalty is active on your live theme."
+                : data.embedEnabled === false
+                  ? "The Royal Loyalty app embed is off. Enable it in the theme editor so shoppers can see the widget."
+                  : "We couldn't confirm whether the Royal Loyalty app embed is on. Open the theme editor to check."
+            }
             ctaHref="shopify:admin/themes/current/editor?context=apps"
-            ctaLabel="Open theme editor"
+            ctaLabel={
+              data.embedEnabled === true ? "Open theme editor" : "Enable embed"
+            }
           />
           <StatusTile
             label="Earn rules"
@@ -217,52 +313,6 @@ export default function Home() {
             </s-button>
           </s-stack>
         )}
-      </s-section>
-
-      {/* Setup guide (BON pattern): one expanded active step with verbose copy
-          and a deeplink button, every other step collapses to a thin row.
-          Reduces visual noise; gives the merchant exactly one obvious next
-          action. */}
-      <s-section heading="Setup guide">
-        <s-paragraph>
-          {remaining.length === 0
-            ? "Setup complete — your loyalty program is fully configured."
-            : `${data.checklist.length - remaining.length} of ${data.checklist.length} steps complete`}
-        </s-paragraph>
-        {activeStep && (
-          <s-box
-            padding="base"
-            borderWidth="base"
-            borderRadius="base"
-          >
-            <s-stack direction="block" gap="base">
-              <s-text fontWeight="bold">{activeStep.label}</s-text>
-              <s-paragraph>{activeStep.detail}</s-paragraph>
-              <s-button
-                onClick={() => nav(activeStep.href)}
-                variant="primary"
-              >
-                {activeStep.cta}
-              </s-button>
-            </s-stack>
-          </s-box>
-        )}
-        <s-stack direction="block" gap="none">
-          {data.checklist
-            .filter((c) => c.id !== activeStep?.id)
-            .map((c) => (
-              <s-stack key={c.id} direction="inline" gap="base">
-                <s-badge tone={c.done ? "success" : "neutral"}>
-                  {c.done ? "Done" : "To do"}
-                </s-badge>
-                {c.done ? (
-                  <s-text>{c.label}</s-text>
-                ) : (
-                  <AppLink href={c.href}>{c.label}</AppLink>
-                )}
-              </s-stack>
-            ))}
-        </s-stack>
       </s-section>
 
       <s-section slot="aside" heading="AI suggestions">
