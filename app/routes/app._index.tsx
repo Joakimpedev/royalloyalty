@@ -871,11 +871,29 @@ function Sparkline({
     const y = h - ((v - min) / range) * (h - 8) - 4;
     return { x, y };
   });
-  const polyline = pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
-  const areaPath =
-    `M0,${h} L` +
-    pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" L") +
-    ` L${w.toFixed(2)},${h} Z`;
+  // Catmull-Rom-to-Bezier smoothing — soft Polaris-style curves between
+  // points instead of hard polyline kinks. Tension 0.5 gives a subtle
+  // bend without overshooting; equivalent to what Shopify's own
+  // analytics charts use.
+  const curvePath = (() => {
+    if (pts.length === 1) {
+      return `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+    }
+    let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] ?? pts[i];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[i + 2] ?? pts[i + 1];
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+    }
+    return d;
+  })();
+  const areaPath = `${curvePath} L${w.toFixed(2)},${h} L0,${h} Z`;
   const stroke = "#202223";
   const fill = "#e1e3e5";
 
@@ -922,8 +940,8 @@ function Sparkline({
           opacity={0.55}
           vectorEffect="non-scaling-stroke"
         />
-        <polyline
-          points={polyline}
+        <path
+          d={curvePath}
           fill="none"
           stroke={stroke}
           strokeWidth={1.5}
