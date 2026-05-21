@@ -379,7 +379,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
   const paid = shop.plan !== "FREE";
-  const embed = await checkAppEmbedEnabled(admin);
+  const embed = await checkAppEmbedEnabled(admin, {
+    shop: session.shop,
+    accessToken: session.accessToken,
+  });
   // Surface the session's actual granted scopes in the diagnostic. If
   // `read_themes` isn't in here, the OAuth re-grant didn't take and the
   // merchant needs to reinstall / re-auth the app explicitly.

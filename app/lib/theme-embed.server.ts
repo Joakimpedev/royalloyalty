@@ -40,6 +40,18 @@ interface AdminLike {
   graphql: (query: string) => Promise<Response>;
 }
 
+// Use the raw fetch path (not admin.graphql) because the SDK wrapper throws
+// on non-2xx and only surfaces the error message string, which obscures the
+// actual response body. With a direct fetch we keep the full status, error
+// extensions, and body even on failure — critical for diagnosing
+// "Access denied" cases without a scope name.
+export interface RawSession {
+  shop: string;
+  accessToken?: string;
+}
+
+const API_VERSION = "2026-01";
+
 export interface EmbedCheck {
   enabled: boolean | null;
   /** Short human-readable summary surfaced in the admin. */
@@ -57,17 +69,43 @@ function truncate(s: string, max: number): string {
 
 export async function checkAppEmbedEnabled(
   admin: AdminLike,
+  session?: RawSession,
 ): Promise<EmbedCheck> {
   const dump: Record<string, unknown> = {
     extension_uid: EXTENSION_UID,
     query: QUERY,
-    api_version: "2026-01",
+    api_version: API_VERSION,
     timestamp: new Date().toISOString(),
+    transport: session?.accessToken ? "raw-fetch" : "sdk-admin.graphql",
   };
 
   try {
-    const res = await admin.graphql(QUERY);
+    let res: Response;
+    if (session?.accessToken && session.shop) {
+      // Raw fetch — preserves the response body even on non-2xx so we can
+      // see why Shopify denies the call.
+      res = await fetch(
+        `https://${session.shop}/admin/api/${API_VERSION}/graphql.json`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": session.accessToken,
+          },
+          body: JSON.stringify({ query: QUERY }),
+        },
+      );
+    } else {
+      res = await admin.graphql(QUERY);
+    }
     dump.http_status = res.status;
+    dump.http_ok = res.ok;
+    // Include a couple of response headers that Shopify sets on auth failures.
+    dump.response_headers = {
+      "x-request-id": res.headers.get("x-request-id"),
+      "x-shopify-api-version": res.headers.get("x-shopify-api-version"),
+      "www-authenticate": res.headers.get("www-authenticate"),
+    };
     const raw = await res.text();
     dump.raw_response_first_4kb = truncate(raw, 4000);
 
