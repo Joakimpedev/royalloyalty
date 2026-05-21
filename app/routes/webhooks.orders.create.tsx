@@ -15,7 +15,7 @@ import {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   // 1. HMAC. Invalid signature => authenticate.webhook throws a 401 Response.
-  const { shop, topic, payload } = await authenticate.webhook(request);
+  const { shop, topic, payload, admin } = await authenticate.webhook(request);
 
   // 2. Dedup on X-Shopify-Event-Id. Duplicate delivery => ack 200, do nothing.
   const first = await shouldProcess(request, topic);
@@ -28,7 +28,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   //    SUM aggregation — no fan-out, no external calls — so it completes well
   //    within the webhook budget. canAwardLoyalty() is gated inside awardForOrder.
   try {
-    const result = await awardForOrder(shop, payload as OrdersCreatePayload);
+    const result = await awardForOrder(shop, payload as OrdersCreatePayload, {
+      adminGraphql: admin?.graphql,
+    });
     safeLog(topic, shop, `order processed (${result.outcome})`);
     // Mark any redemption rows whose code was applied to this order as
     // used, so the customer's active-codes list drops them. Failure here

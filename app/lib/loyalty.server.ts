@@ -117,6 +117,7 @@ function toCustomerGid(shopifyCustomerId: string): string {
 export async function awardForOrder(
   shopDomain: string,
   payload: OrdersCreatePayload,
+  opts: { adminGraphql?: GraphqlClient } = {},
 ): Promise<{ outcome: AwardOutcome; points?: number }> {
   const shop = await getActiveShop(shopDomain);
   if (!shop || !shop.isActive) return { outcome: "skipped_shop_inactive" };
@@ -203,6 +204,26 @@ export async function awardForOrder(
   // Recompute tier off the new balance (DB-only here; Shopify tagging is done
   // when an admin client is available — recomputeTier handles a missing client).
   await recomputeTier(shop.id, member.id);
+
+  // Cashback: configured per-shop, credited as native Shopify store credit
+  // via Shopify's storeCreditAccountCredit mutation. No-op when the shop
+  // has cashback disabled or when no admin GraphQL client is available
+  // (webhook authenticate.webhook can return undefined admin in rare cases).
+  if (opts.adminGraphql) {
+    try {
+      const { awardCashback } = await import("./storecredit.server");
+      await awardCashback({
+        graphql: opts.adminGraphql,
+        shopId: shop.id,
+        shopifyCustomerId,
+        orderId,
+        orderTotal,
+        currencyCode: payload.currency ?? shop.currencyCode ?? "USD",
+      });
+    } catch {
+      /* non-fatal — earn already happened */
+    }
+  }
 
   return { outcome: "awarded", points };
 }
@@ -378,7 +399,24 @@ export async function redeemReward(params: {
     await transitionStatus("redemption", redemption.id, "ACTIVE");
 
     let discountCode: string | undefined;
-    if (reward.type !== "store_credit") {
+    if (reward.type === "store_credit") {
+      // Convert the redeemed points into native Shopify store credit via
+      // the storeCreditAccountCredit mutation. The customer's points are
+      // already debited above; this credits their account for reward.value
+      // and writes a mirror row to StoreCreditLedger.
+      const { redeemStoreCreditReward } = await import("./storecredit.server");
+      const res = await redeemStoreCreditReward({
+        graphql: params.admin.graphql,
+        shopId: shop.id,
+        shopifyCustomerId: member.shopifyCustomerId,
+        amount: reward.value ?? 0,
+        currencyCode: shop.currencyCode ?? "USD",
+        redemptionId: redemption.id,
+      });
+      if (!res.ok) {
+        throw new Error(res.error ?? "Store credit issue failed.");
+      }
+    } else {
       discountCode = await createDiscountCode(params.admin.graphql, reward);
       await prisma.redemption.update({
         where: { id: redemption.id },
