@@ -681,7 +681,6 @@ function Sparkline({
     `M0,${h} L` +
     pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" L") +
     ` L${w.toFixed(2)},${h} Z`;
-  const allZero = values.every((v) => v === 0);
   const stroke = "#202223";
   const fill = "#e1e3e5";
 
@@ -722,37 +721,21 @@ function Sparkline({
         aria-label="trend"
         style={{ width: "100%", height, display: "block" }}
       >
-        {allZero ? (
-          <line
-            x1={0}
-            x2={w}
-            y1={h - 4}
-            y2={h - 4}
-            stroke={stroke}
-            strokeOpacity={0.2}
-            strokeWidth={1.2}
-            strokeDasharray="2 2"
-            vectorEffect="non-scaling-stroke"
-          />
-        ) : (
-          <>
-            <path
-              d={areaPath}
-              fill={fill}
-              opacity={0.55}
-              vectorEffect="non-scaling-stroke"
-            />
-            <polyline
-              points={polyline}
-              fill="none"
-              stroke={stroke}
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          </>
-        )}
+        <path
+          d={areaPath}
+          fill={fill}
+          opacity={0.55}
+          vectorEffect="non-scaling-stroke"
+        />
+        <polyline
+          points={polyline}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
       {hovered != null && pts[hovered] && (
         <>
