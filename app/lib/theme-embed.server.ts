@@ -172,6 +172,12 @@ export async function checkAppEmbedEnabled(
     }
     dump.settings_data_size = content.length;
     dump.settings_data_first_2kb = truncate(content, 2000);
+    // Surface every `shopify://apps/{client}/blocks/{handle}/{uuid}` reference
+    // anywhere in the file, regardless of whether it's in current.blocks or
+    // a preset. This lets us see exactly which extensions Shopify recognizes
+    // and compare their UIDs against ours.
+    const refs = content.match(/shopify:\/\/apps\/[^"\s]+/g) ?? [];
+    dump.app_block_refs = Array.from(new Set(refs));
 
     // Shopify wraps settings_data.json with a /* ... */ header comment
     // explaining it's auto-generated. JSON.parse can't handle it, so strip

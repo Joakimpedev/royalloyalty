@@ -583,12 +583,21 @@ export default function BrandingPage() {
         </s-section>
       )}
 
-      {embed.enabled === null && (
+      {embed.enabled !== true && (
         <s-section>
-          <s-banner tone="warning" heading="App embed status check failed">
+          <s-banner
+            tone={embed.enabled === null ? "warning" : "info"}
+            heading={
+              embed.enabled === null
+                ? "App embed status check failed"
+                : "App embed reported as disabled — diagnostic"
+            }
+          >
             <s-paragraph>
-              We couldn't determine whether the Royal Loyalty app embed is
-              enabled on your live theme. Diagnostic: <strong>{embed.debug}</strong>
+              {embed.enabled === null
+                ? "We couldn't determine whether the Royal Loyalty app embed is enabled on your live theme."
+                : "The check ran but didn't find Royal Loyalty among the MAIN theme's active blocks. Use the dump below to see which blocks Shopify reported and how their UIDs compare to ours."}{" "}
+              Diagnostic: <strong>{embed.debug}</strong>
             </s-paragraph>
             <EmbedDiagnostic dump={embed.dump} />
           </s-banner>
