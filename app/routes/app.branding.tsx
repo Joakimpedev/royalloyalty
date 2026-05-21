@@ -188,12 +188,22 @@ export interface BrandingConfig {
     showRewards: boolean;
     showReferral: boolean;
   };
-  emails: {
+  // Product page injection (above add-to-cart). Rendered by the launcher app
+  // embed scanning the page for the add-to-cart form — no theme block needed.
+  product: {
+    enabled: boolean;
     accentColor: string;
-    logoUrl: string;
-    pointsEarnedSubject: string;
-    rewardAvailableSubject: string;
-    tierChangeSubject: string;
+    heading: string;
+    subtext: string;
+  };
+  // Cart drawer / cart page injection. Same story — the app embed listens for
+  // cart events and inserts the redeem card; merchants can't drop blocks into
+  // the drawer anyway, so injection is the only practical option.
+  cart: {
+    enabled: boolean;
+    accentColor: string;
+    heading: string;
+    showEarnLine: boolean;
   };
 }
 
@@ -215,12 +225,17 @@ const DEFAULTS: BrandingConfig = {
     showRewards: true,
     showReferral: true,
   },
-  emails: {
+  product: {
+    enabled: true,
     accentColor: "#2C2A29",
-    logoUrl: "",
-    pointsEarnedSubject: "You earned {points} points",
-    rewardAvailableSubject: "A reward is ready for you",
-    tierChangeSubject: "Welcome to {tier}",
+    heading: "Earn {points} points with this purchase",
+    subtext: "You have {balance} points. Earn {more} more with this order!",
+  },
+  cart: {
+    enabled: true,
+    accentColor: "#2C2A29",
+    heading: "Use your points",
+    showEarnLine: true,
   },
 };
 
@@ -234,7 +249,8 @@ function readBranding(snapshot: unknown): BrandingConfig {
   return {
     widget: { ...DEFAULTS.widget, ...(snap?.widget ?? {}) },
     page: { ...DEFAULTS.page, ...(snap?.page ?? {}) },
-    emails: { ...DEFAULTS.emails, ...(snap?.emails ?? {}) },
+    product: { ...DEFAULTS.product, ...(snap?.product ?? {}) },
+    cart: { ...DEFAULTS.cart, ...(snap?.cart ?? {}) },
   };
 }
 
@@ -262,7 +278,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const current = readBranding(shop.aiConfigSnapshot);
 
-  // Free plan: only colors + logo are persisted; copy/section toggles are
+  // Free plan: only colors + logo + on/off toggles are persisted; copy is
   // ignored server-side (defense in depth — the UI also disables them).
   const next: BrandingConfig = paid
     ? incoming
@@ -277,10 +293,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           themeColor: incoming.page.themeColor,
           logoUrl: incoming.page.logoUrl,
         },
-        emails: {
-          ...current.emails,
-          accentColor: incoming.emails.accentColor,
-          logoUrl: incoming.emails.logoUrl,
+        product: {
+          ...current.product,
+          enabled: incoming.product.enabled,
+          accentColor: incoming.product.accentColor,
+        },
+        cart: {
+          ...current.cart,
+          enabled: incoming.cart.enabled,
+          accentColor: incoming.cart.accentColor,
+          showEarnLine: incoming.cart.showEarnLine,
         },
       };
 
@@ -351,8 +373,14 @@ export default function BrandingPage() {
     k: keyof BrandingConfig["page"],
     v: string | boolean,
   ) => setForm((f) => ({ ...f, page: { ...f.page, [k]: v } }));
-  const setE = (k: keyof BrandingConfig["emails"], v: string) =>
-    setForm((f) => ({ ...f, emails: { ...f.emails, [k]: v } }));
+  const setPr = (
+    k: keyof BrandingConfig["product"],
+    v: string | boolean,
+  ) => setForm((f) => ({ ...f, product: { ...f.product, [k]: v } }));
+  const setC = (
+    k: keyof BrandingConfig["cart"],
+    v: string | boolean,
+  ) => setForm((f) => ({ ...f, cart: { ...f.cart, [k]: v } }));
 
   return (
     <s-page heading="Branding">
@@ -441,7 +469,8 @@ export default function BrandingPage() {
                       secondaryColor: preset.secondary,
                     },
                     page: { ...f.page, themeColor: preset.primary },
-                    emails: { ...f.emails, accentColor: preset.primary },
+                    product: { ...f.product, accentColor: preset.primary },
+                    cart: { ...f.cart, accentColor: preset.primary },
                   }));
                 }}
               />
@@ -556,32 +585,30 @@ export default function BrandingPage() {
           >
             <s-stack direction="block" gap="small-200">
               <s-checkbox
+                label={'Show "ways to earn" section'}
                 checked={form.page.showEarn ? true : undefined}
                 disabled={!paid ? true : undefined}
                 onChange={(e: { target: { checked: boolean } }) =>
                   setP("showEarn", e.target.checked)
                 }
-              >
-                Show &quot;ways to earn&quot; section
-              </s-checkbox>
+              />
               <s-checkbox
+                label="Show rewards section"
                 checked={form.page.showRewards ? true : undefined}
                 disabled={!paid ? true : undefined}
                 onChange={(e: { target: { checked: boolean } }) =>
                   setP("showRewards", e.target.checked)
                 }
-              >
-                Show rewards section
-              </s-checkbox>
+              />
               <s-checkbox
+                label="Show referral section"
                 checked={form.page.showReferral ? true : undefined}
                 disabled={!paid ? true : undefined}
                 onChange={(e: { target: { checked: boolean } }) =>
                   setP("showReferral", e.target.checked)
                 }
-              >
-                Show referral section
-              </s-checkbox>
+              />
+
             </s-stack>
           </Gated>
           <s-box padding="base" borderWidth="base" borderRadius="base">
@@ -604,54 +631,139 @@ export default function BrandingPage() {
         </s-stack>
       </s-section>
 
-      {/* ---- Emails ---- */}
-      <s-section heading="Emails">
+      {/* ---- Product page widget ---- */}
+      <s-section heading="Product page widget">
         <s-stack direction="block" gap="base">
-          <ColorField
-            label="Accent color"
-            value={form.emails.accentColor}
-            onChange={(v) => setE("accentColor", v)}
-          />
-          <s-text-field
-            label="Email logo URL"
-            value={form.emails.logoUrl}
-            onChange={(e: { target: { value: string } }) =>
-              setE("logoUrl", e.target.value)
+          <s-paragraph>
+            <s-text tone="subdued">
+              Shows above the add-to-cart button so shoppers see how many
+              points they'll earn. Requires the Royal Loyalty app embed to be
+              enabled in your theme — once on, this toggle controls visibility.
+            </s-text>
+          </s-paragraph>
+          <s-checkbox
+            label="Show on product pages"
+            checked={form.product.enabled ? true : undefined}
+            onChange={(e: { target: { checked: boolean } }) =>
+              setPr("enabled", e.target.checked)
             }
           />
-          <Gated
-            locked={!paid}
-            label={'"Points earned" subject'}
-          >
+          <ColorField
+            label="Accent color"
+            value={form.product.accentColor}
+            onChange={(v) => setPr("accentColor", v)}
+          />
+          <Gated locked={!paid} label="Heading">
             <s-text-field
-              value={form.emails.pointsEarnedSubject}
+              value={form.product.heading}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) =>
-                setE("pointsEarnedSubject", e.target.value)
+                setPr("heading", e.target.value)
               }
             />
           </Gated>
-          <Gated
-            locked={!paid}
-            label={'"Reward available" subject'}
-          >
+          <Gated locked={!paid} label="Subtext">
             <s-text-field
-              value={form.emails.rewardAvailableSubject}
+              value={form.product.subtext}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) =>
-                setE("rewardAvailableSubject", e.target.value)
+                setPr("subtext", e.target.value)
               }
             />
           </Gated>
-          <Gated
-            locked={!paid}
-            label={'"Tier change" subject'}
-          >
+          <s-paragraph>
+            <s-text tone="subdued">
+              Placeholders: {"{points}"} (earned for this item), {"{balance}"}
+              {" "}(customer's current points), {"{more}"} (points needed for
+              next reward).
+            </s-text>
+          </s-paragraph>
+          <s-box padding="base" borderWidth="base" borderRadius="base">
+            <s-text tone="subdued">Live preview</s-text>
+            <div
+              style={{
+                marginTop: 8,
+                padding: 14,
+                borderRadius: 8,
+                border: "1px solid #e1e3e5",
+                background: "#fff",
+                color: "#202223",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <div
+                aria-hidden
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: form.product.accentColor,
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                ★
+              </div>
+              <div>
+                <div style={{ fontWeight: 600 }}>
+                  {form.product.heading
+                    .replaceAll("{points}", "120")
+                    .replaceAll("{balance}", "350")
+                    .replaceAll("{more}", "150")}
+                </div>
+                <div style={{ fontSize: 13, color: "#6d7175" }}>
+                  {form.product.subtext
+                    .replaceAll("{points}", "120")
+                    .replaceAll("{balance}", "350")
+                    .replaceAll("{more}", "150")}
+                </div>
+              </div>
+            </div>
+          </s-box>
+        </s-stack>
+      </s-section>
+
+      {/* ---- Cart widget ---- */}
+      <s-section heading="Cart widget">
+        <s-stack direction="block" gap="base">
+          <s-paragraph>
+            <s-text tone="subdued">
+              Shows inside the cart drawer and cart page so shoppers can pick a
+              reward to apply to their order. Requires the Royal Loyalty app
+              embed to be enabled in your theme.
+            </s-text>
+          </s-paragraph>
+          <s-checkbox
+            label="Show in cart"
+            checked={form.cart.enabled ? true : undefined}
+            onChange={(e: { target: { checked: boolean } }) =>
+              setC("enabled", e.target.checked)
+            }
+          />
+          <s-checkbox
+            label='Show "+X points for this order" line'
+            checked={form.cart.showEarnLine ? true : undefined}
+            onChange={(e: { target: { checked: boolean } }) =>
+              setC("showEarnLine", e.target.checked)
+            }
+          />
+          <ColorField
+            label="Accent color"
+            value={form.cart.accentColor}
+            onChange={(v) => setC("accentColor", v)}
+          />
+          <Gated locked={!paid} label="Heading">
             <s-text-field
-              value={form.emails.tierChangeSubject}
+              value={form.cart.heading}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) =>
-                setE("tierChangeSubject", e.target.value)
+                setC("heading", e.target.value)
               }
             />
           </Gated>
@@ -660,16 +772,59 @@ export default function BrandingPage() {
             <div
               style={{
                 marginTop: 8,
-                borderTop: `4px solid ${form.emails.accentColor}`,
-                padding: 16,
+                padding: 14,
+                borderRadius: 8,
+                border: "1px solid #e1e3e5",
                 background: "#fff",
                 color: "#202223",
               }}
             >
-              <strong>{form.emails.pointsEarnedSubject}</strong>
-              <p style={{ marginTop: 8 }}>
-                Thanks for your order! You earned points.
-              </p>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginBottom: form.cart.showEarnLine ? 8 : 0,
+                }}
+              >
+                <div
+                  aria-hidden
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    background: form.cart.accentColor,
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 700,
+                    fontSize: 14,
+                  }}
+                >
+                  ★
+                </div>
+                <strong>{form.cart.heading}</strong>
+              </div>
+              {form.cart.showEarnLine && (
+                <div style={{ fontSize: 13, color: "#6d7175" }}>
+                  +120 points for this order
+                </div>
+              )}
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: "8px 12px",
+                  background: "#f6f6f7",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>$5 Off</span>
+                <span style={{ color: "#6d7175" }}>1000 pts</span>
+              </div>
             </div>
           </s-box>
         </s-stack>

@@ -2,9 +2,10 @@
 //
 // Path layout (Shopify rewrites /apps/{prefix}/{...sub} → /proxy/{...sub}):
 //   /loyalty/balance     storefront widget data (balance + everything the
-//                        launcher / loyalty page / cart-redeem / customer-
-//                        account block need to render: tier, earn rules,
-//                        rewards, referral link, recent activity, branding)
+//                        launcher / loyalty page / customer-account block /
+//                        product+cart injections need to render: tier, earn
+//                        rules, rewards, referral link, recent activity,
+//                        branding)
 //   /loyalty/redeem      storefront reward redemption
 //   /pos/balance         POS extension balance lookup
 //   /pos/redeem          POS reward redemption
@@ -62,7 +63,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const customerId = url.searchParams.get("logged_in_customer_id");
 
   // Storefront widget data — single rich payload powering the launcher
-  // panel, loyalty page, cart-redeem block, and customer-account block.
+  // panel, the dedicated loyalty page block, the customer-account block,
+  // and the launcher-driven product/cart injections.
   if (sub === "balance") {
     const shop = await prisma.shop.findUnique({ where: { shopDomain } });
     if (!shop) return jsonCors({ error: "shop_not_found" }, 404);

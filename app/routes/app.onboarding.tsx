@@ -159,12 +159,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           showRewards: true,
           showReferral: true,
         },
-        emails: {
+        product: {
+          enabled: true,
           accentColor: program.branding.primaryColor,
-          logoUrl: "",
-          pointsEarnedSubject: `You earned {points} ${program.branding.pointsName}`,
-          rewardAvailableSubject: "A reward is ready for you",
-          tierChangeSubject: "Welcome to {tier}",
+          heading: `Earn {points} ${program.branding.pointsName} with this purchase`,
+          subtext: `You have {balance} ${program.branding.pointsName}. Earn {more} more with this order!`,
+        },
+        cart: {
+          enabled: true,
+          accentColor: program.branding.primaryColor,
+          heading: `Use your ${program.branding.pointsName}`,
+          showEarnLine: true,
         },
       };
       await tx.shop.update({
@@ -214,13 +219,6 @@ const CHECKLIST = [
     // with https://admin.shopify.com/... + target="_top" — that breaks auth.
     href: "shopify:admin/apps",
     cta: "Open Shopify POS",
-  },
-  {
-    key: "emails",
-    title: "Customize emails",
-    desc: "Tune the default transactional copy to your brand voice.",
-    href: "/app/branding",
-    cta: "Edit emails",
   },
   {
     key: "widget",

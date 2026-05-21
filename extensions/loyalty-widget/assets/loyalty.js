@@ -121,6 +121,282 @@
     });
   }
 
+  /* Substitute {points} {balance} {more} placeholders in a string. */
+  function fillTemplate(tpl, vars) {
+    return String(tpl || "")
+      .replace(/\{points\}/g, vars.points == null ? "0" : vars.points)
+      .replace(/\{balance\}/g, vars.balance == null ? "0" : vars.balance)
+      .replace(/\{more\}/g, vars.more == null ? "0" : vars.more);
+  }
+
+  /* Calculate points earned for a given money amount using the shop's first
+   * purchase earn rule. Returns 0 if no purchase rule is configured. */
+  function pointsForAmount(amount, earnRules) {
+    if (!earnRules || !earnRules.length || !amount) return 0;
+    var rule = null;
+    for (var i = 0; i < earnRules.length; i++) {
+      if (earnRules[i].action === "purchase") {
+        rule = earnRules[i];
+        break;
+      }
+    }
+    if (!rule) return 0;
+    if (rule.perDollar) {
+      var per = Math.max(1, rule.perAmount || 1);
+      return Math.floor((amount / per) * (rule.points || 0));
+    }
+    return rule.points || 0;
+  }
+
+  /* Read product price from common Shopify globals. Returns dollars (not
+   * cents). Falls back to 0 if we can't find it — the card just renders
+   * with 0 points, which is better than not rendering at all. */
+  function readProductPrice() {
+    try {
+      if (window.ShopifyAnalytics && window.ShopifyAnalytics.meta) {
+        var p =
+          window.ShopifyAnalytics.meta.product ||
+          (window.ShopifyAnalytics.meta.products &&
+            window.ShopifyAnalytics.meta.products[0]);
+        if (p && p.variants && p.variants[0] && p.variants[0].price != null) {
+          // Shopify ships variant price in cents.
+          return p.variants[0].price / 100;
+        }
+      }
+      var meta = document.querySelector(
+        'meta[property="product:price:amount"]'
+      );
+      if (meta && meta.content) return parseFloat(meta.content);
+    } catch (e) {
+      /* non-fatal */
+    }
+    return 0;
+  }
+
+  /* Inject the "Earn X points with this purchase" card above the add-to-cart
+   * button on product pages. No-op if not on a product page or the form
+   * can't be found. Idempotent — guards against double-insert. */
+  function injectProduct(cfg, payload) {
+    var b = payload && payload.branding;
+    if (!b || !b.productEnabled) return;
+    if (document.getElementById("royal-injected-product")) return;
+    // Detect product page: must have an add-to-cart form.
+    var form = document.querySelector(
+      'form[action^="/cart/add"], form[action*="/cart/add"]'
+    );
+    if (!form) return;
+    var btn =
+      form.querySelector('button[type="submit"], [type="submit"]') || null;
+    var price = readProductPrice();
+    var earned = pointsForAmount(price, payload.earnRules);
+    var pointsName =
+      (b.pointsName && b.pointsName.toLowerCase()) || "points";
+    var heading = fillTemplate(b.productHeading, {
+      points: earned,
+      balance: payload.balance || 0,
+      more: Math.max(0, (payload.rewards && payload.rewards[0]
+        ? payload.rewards[0].pointsCost
+        : 0) - (payload.balance || 0)),
+    });
+    var subtext = fillTemplate(b.productSubtext, {
+      points: earned,
+      balance: payload.balance || 0,
+      more: Math.max(0, (payload.rewards && payload.rewards[0]
+        ? payload.rewards[0].pointsCost
+        : 0) - (payload.balance || 0)),
+    });
+    var card = document.createElement("div");
+    card.id = "royal-injected-product";
+    card.className = "royal-injected royal-injected--product";
+    card.setAttribute("data-points-name", pointsName);
+    card.style.setProperty("--royal-primary", b.productAccent || "#2C2A29");
+    card.innerHTML =
+      '<div class="royal-injected__icon" aria-hidden="true">★</div>' +
+      '<div class="royal-injected__body">' +
+      '<div class="royal-injected__heading"></div>' +
+      '<div class="royal-injected__sub"></div>' +
+      "</div>";
+    card.querySelector(".royal-injected__heading").textContent = heading;
+    card.querySelector(".royal-injected__sub").textContent = subtext;
+    if (btn && btn.parentNode) {
+      btn.parentNode.insertBefore(card, btn);
+    } else {
+      form.insertBefore(card, form.firstChild);
+    }
+  }
+
+  /* Inject the cart redeem card into the cart drawer / cart page. Hooks a
+   * MutationObserver so it survives the drawer being re-rendered by the
+   * theme on each cart update. */
+  function injectCart(cfg, payload) {
+    var b = payload && payload.branding;
+    if (!b || !b.cartEnabled) return;
+
+    function render() {
+      if (document.getElementById("royal-injected-cart")) return;
+      // Find a cart form — covers the /cart page and most drawer themes.
+      var form = document.querySelector('form[action="/cart"], form[action^="/cart?"]');
+      if (!form) return;
+
+      var card = document.createElement("div");
+      card.id = "royal-injected-cart";
+      card.className = "royal-injected royal-injected--cart";
+      card.style.setProperty("--royal-primary", b.cartAccent || "#2C2A29");
+
+      if (!cfg.loggedIn) {
+        card.innerHTML =
+          '<div class="royal-injected__heading">' +
+          (b.cartHeading || "Use your points") +
+          '</div>' +
+          '<div class="royal-injected__sub"><a href="/account/login">Sign in</a> to apply your points to this order.</div>';
+        insertIntoForm(form, card);
+        return;
+      }
+
+      var balance = payload.balance || 0;
+      var rewards = (payload.rewards || []).slice().sort(function (a, b) {
+        return a.pointsCost - b.pointsCost;
+      });
+      var affordable = rewards.filter(function (r) {
+        return balance >= r.pointsCost;
+      });
+
+      var head =
+        '<div class="royal-injected__head">' +
+        '<div class="royal-injected__icon" aria-hidden="true">★</div>' +
+        '<div class="royal-injected__heading">' +
+        (b.cartHeading || "Use your points") +
+        " — " +
+        balance +
+        " " +
+        ((b.pointsName && b.pointsName.toLowerCase()) || "points") +
+        "</div>" +
+        "</div>";
+
+      var earnLine = b.cartShowEarnLine
+        ? '<div class="royal-injected__sub" id="royal-injected-cart-earn">' +
+          "Calculating points earned…" +
+          "</div>"
+        : "";
+
+      var list = "";
+      if (!affordable.length && rewards.length) {
+        list =
+          '<div class="royal-injected__sub">' +
+          "Keep shopping to unlock your first reward (" +
+          rewards[0].pointsCost +
+          " points)." +
+          "</div>";
+      } else if (affordable.length) {
+        list = '<div class="royal-injected__rewards">';
+        affordable.forEach(function (r) {
+          var label = rewardLabel(r, payload.currencyCode);
+          list +=
+            '<button type="button" class="royal-injected__reward" data-reward-id="' +
+            r.id +
+            '">' +
+            '<span>' +
+            label +
+            "</span>" +
+            '<span class="royal-injected__cost">' +
+            r.pointsCost +
+            " pts</span>" +
+            "</button>";
+        });
+        list += "</div>";
+      }
+
+      var status =
+        '<div class="royal-status" id="royal-injected-cart-status" aria-live="polite"></div>';
+
+      card.innerHTML = head + earnLine + list + status;
+      insertIntoForm(form, card);
+
+      // Wire reward buttons.
+      var statusEl = card.querySelector("#royal-injected-cart-status");
+      card
+        .querySelectorAll(".royal-injected__reward")
+        .forEach(function (rb) {
+          rb.addEventListener("click", function () {
+            rb.disabled = true;
+            setStatus(statusEl, "loading", "Redeeming…");
+            redeem(cfg, rb.getAttribute("data-reward-id"))
+              .then(function (res) {
+                if (res.discountCode) {
+                  window.location.href =
+                    "/discount/" +
+                    encodeURIComponent(res.discountCode) +
+                    "?redirect=/cart";
+                } else {
+                  setStatus(statusEl, "success", "Reward redeemed.");
+                  rb.disabled = false;
+                }
+              })
+              .catch(function () {
+                rb.disabled = false;
+                setStatus(
+                  statusEl,
+                  "error",
+                  "We couldn't apply that reward. Please try again."
+                );
+              });
+          });
+        });
+
+      // Populate "+X points for this order" once we know the cart total.
+      if (b.cartShowEarnLine) {
+        fetch("/cart.js", { credentials: "same-origin" })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (c) {
+            var earn = pointsForAmount(
+              (c.total_price || 0) / 100,
+              payload.earnRules
+            );
+            var line = card.querySelector("#royal-injected-cart-earn");
+            if (line)
+              line.textContent =
+                "+" +
+                earn +
+                " " +
+                ((b.pointsName && b.pointsName.toLowerCase()) || "points") +
+                " for this order";
+          })
+          .catch(function () {
+            var line = card.querySelector("#royal-injected-cart-earn");
+            if (line) line.remove();
+          });
+      }
+    }
+
+    function insertIntoForm(form, card) {
+      // Prefer above the checkout button.
+      var checkout =
+        form.querySelector('[name="checkout"], button[name="checkout"]') ||
+        form.querySelector('button[type="submit"]');
+      if (checkout && checkout.parentNode) {
+        checkout.parentNode.insertBefore(card, checkout);
+      } else {
+        form.appendChild(card);
+      }
+    }
+
+    render();
+    // Re-inject after drawer/cart re-renders. Throttled implicitly by the
+    // idempotency check inside render().
+    var pending = false;
+    var mo = new MutationObserver(function () {
+      if (pending) return;
+      pending = true;
+      setTimeout(function () {
+        pending = false;
+        if (!document.getElementById("royal-injected-cart")) render();
+      }, 50);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
+
   window.RoyalLoyalty = {
     readConfig: readConfig,
     setStatus: setStatus,
@@ -131,6 +407,9 @@
     applyBranding: applyBranding,
     formatMoney: formatMoney,
     rewardLabel: rewardLabel,
+    injectProduct: injectProduct,
+    injectCart: injectCart,
+    pointsForAmount: pointsForAmount,
   };
 
   document.addEventListener("DOMContentLoaded", captureReferral);

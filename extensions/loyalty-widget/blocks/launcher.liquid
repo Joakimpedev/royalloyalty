@@ -89,6 +89,16 @@
         if (e.key === 'Escape' && !panel.hidden) close();
       });
 
+      // Storefront injections (product card above add-to-cart, cart redeem
+      // card inside the drawer / cart page) are driven by the SAME branding
+      // payload the launcher uses. Fetch once on page load — independent of
+      // whether the user opens the launcher — so the cards render even if
+      // the shopper never touches the floating button.
+      R.loadBalance(cfg, function (d) {
+        try { R.injectProduct(cfg, d); } catch (e) { /* non-fatal */ }
+        try { R.injectCart(cfg, d); } catch (e) { /* non-fatal */ }
+      }, function () { /* network error — skip injections */ });
+
       function load() {
         R.setStatus(status, 'loading', '');
         R.loadBalance(cfg, function (d) {

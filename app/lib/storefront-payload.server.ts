@@ -1,7 +1,8 @@
 // Server-side assembler for the unified `/loyalty/balance` response.
 //
-// The storefront extension (launcher panel, loyalty page, cart-redeem block,
-// customer-account block) fetches this ONCE on widget open and uses it to
+// The storefront extension (launcher panel, loyalty page block, customer-
+// account block, and the launcher-driven product/cart injections) fetches
+// this ONCE on page load and uses it to
 // render every section: balance, tier, earn list, reward list, referral
 // link, recent activity, and branding (colors + copy chosen in the admin
 // Branding page). One round-trip per open so the panel is fast.
@@ -25,10 +26,20 @@ export interface StorefrontBranding {
   launcherPosition: "bottom-right" | "bottom-left";
   heroTitle: string;
   heroSubtitle: string;
-  emailAccentColor: string;
   showEarn: boolean;
   showRewards: boolean;
   showReferral: boolean;
+  // Product page injection (above add-to-cart). The launcher app embed reads
+  // these to decide whether/how to inject the "earn X points" card.
+  productEnabled: boolean;
+  productAccent: string;
+  productHeading: string;
+  productSubtext: string;
+  // Cart drawer / cart page injection.
+  cartEnabled: boolean;
+  cartAccent: string;
+  cartHeading: string;
+  cartShowEarnLine: boolean;
 }
 
 export interface StorefrontEarnRule {
@@ -79,10 +90,18 @@ const DEFAULT_BRANDING: StorefrontBranding = {
   launcherPosition: "bottom-right",
   heroTitle: "Earn points. Get rewards.",
   heroSubtitle: "Join the program and earn on every order.",
-  emailAccentColor: "#2C2A29",
   showEarn: true,
   showRewards: true,
   showReferral: true,
+  productEnabled: true,
+  productAccent: "#2C2A29",
+  productHeading: "Earn {points} points with this purchase",
+  productSubtext:
+    "You have {balance} points. Earn {more} more with this order!",
+  cartEnabled: true,
+  cartAccent: "#2C2A29",
+  cartHeading: "Use your points",
+  cartShowEarnLine: true,
 };
 
 function readBranding(snapshot: unknown): StorefrontBranding {
@@ -94,7 +113,8 @@ function readBranding(snapshot: unknown): StorefrontBranding {
   const br = (snap.branding as Record<string, any> | undefined) ?? {};
   const widget = (br.widget as Record<string, any> | undefined) ?? {};
   const page = (br.page as Record<string, any> | undefined) ?? {};
-  const emails = (br.emails as Record<string, any> | undefined) ?? {};
+  const product = (br.product as Record<string, any> | undefined) ?? {};
+  const cart = (br.cart as Record<string, any> | undefined) ?? {};
 
   // The onboarding wizard also writes a ProposedBranding shape sometimes,
   // so fall back to the flat fields if widget/page aren't present yet.
@@ -120,11 +140,27 @@ function readBranding(snapshot: unknown): StorefrontBranding {
       DEFAULT_BRANDING.launcherPosition,
     heroTitle: page.heroTitle ?? DEFAULT_BRANDING.heroTitle,
     heroSubtitle: page.heroSubtitle ?? DEFAULT_BRANDING.heroSubtitle,
-    emailAccentColor:
-      emails.accentColor ?? DEFAULT_BRANDING.emailAccentColor,
     showEarn: page.showEarn ?? DEFAULT_BRANDING.showEarn,
     showRewards: page.showRewards ?? DEFAULT_BRANDING.showRewards,
     showReferral: page.showReferral ?? DEFAULT_BRANDING.showReferral,
+    productEnabled:
+      product.enabled ?? DEFAULT_BRANDING.productEnabled,
+    productAccent:
+      product.accentColor ??
+      widget.primaryColor ??
+      DEFAULT_BRANDING.productAccent,
+    productHeading:
+      product.heading ?? DEFAULT_BRANDING.productHeading,
+    productSubtext:
+      product.subtext ?? DEFAULT_BRANDING.productSubtext,
+    cartEnabled: cart.enabled ?? DEFAULT_BRANDING.cartEnabled,
+    cartAccent:
+      cart.accentColor ??
+      widget.primaryColor ??
+      DEFAULT_BRANDING.cartAccent,
+    cartHeading: cart.heading ?? DEFAULT_BRANDING.cartHeading,
+    cartShowEarnLine:
+      cart.showEarnLine ?? DEFAULT_BRANDING.cartShowEarnLine,
   };
 }
 
