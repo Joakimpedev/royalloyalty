@@ -28,6 +28,10 @@
   {%- if customer -%}
     <p style="margin:20px 0 4px;">Your balance: <span id="royal-page-balance" class="royal-points">…</span></p>
     {%- comment -%} Tier line hidden — backend still ships tier in payload but feature is not yet user-facing. {%- endcomment -%}
+    <div id="royal-page-active-codes-wrap" hidden style="margin:16px 0;">
+      <h2 style="margin:0 0 8px;">Your active codes</h2>
+      <div id="royal-page-active-codes"></div>
+    </div>
   {%- else -%}
     <p style="margin:20px 0;">
       <a class="royal-btn" href="/account/login" style="display:inline-block;text-decoration:none;">Sign in to view your points</a>
@@ -84,6 +88,12 @@
           if (b) b.textContent = (d.balance || 0) + ' ' + (d.branding && d.branding.pointsName ? d.branding.pointsName.toLowerCase() : 'points');
           if (t && d.tier) t.textContent = 'Your tier: ' + d.tier;
         }
+
+        R.renderActiveCodes(
+          document.getElementById('royal-page-active-codes-wrap'),
+          document.getElementById('royal-page-active-codes'),
+          d.activeCodes
+        );
 
         var earn = document.getElementById('royal-page-earn');
         if (earn) {

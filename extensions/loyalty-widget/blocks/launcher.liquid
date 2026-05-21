@@ -45,6 +45,10 @@
     {%- if customer -%}
       <p id="royal-balance" class="royal-points">Loading…</p>
       {%- comment -%} Tier line hidden — backend still ships tier in payload but feature is not yet user-facing. {%- endcomment -%}
+      <div id="royal-active-codes-wrap" hidden>
+        <h3 style="margin:12px 0 4px;">Your active codes</h3>
+        <div id="royal-active-codes"></div>
+      </div>
       <h3 style="margin:12px 0 4px;">Rewards</h3>
       <div id="royal-rewards"><p class="royal-muted">Loading rewards…</p></div>
     {%- else -%}
@@ -130,6 +134,16 @@
             if (b) b.textContent = (d.balance || 0) + ' ' + (d.branding && d.branding.pointsName ? d.branding.pointsName.toLowerCase() : 'points');
             if (t) t.textContent = d.tier ? 'Your tier: ' + d.tier : '';
           }
+
+          /* Active codes — the customer's redeemed-but-still-usable reward
+             codes. Shown above the reward list so they can find a code they
+             redeemed earlier without an email channel. */
+          R.renderActiveCodes(
+            document.getElementById('royal-active-codes-wrap'),
+            document.getElementById('royal-active-codes'),
+            d.activeCodes,
+            status
+          );
 
           var wrap = document.getElementById('royal-rewards');
           if (!wrap) return;

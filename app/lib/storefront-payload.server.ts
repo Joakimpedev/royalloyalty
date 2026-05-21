@@ -67,6 +67,18 @@ export interface StorefrontActivity {
   date: string;
 }
 
+export interface StorefrontActiveCode {
+  id: string;
+  code: string;
+  /** Display label like "$5 off" or "Free shipping". */
+  label: string;
+  pointsSpent: number;
+  /** ISO date string. */
+  redeemedAt: string;
+  /** Reward type — used by clients to format / hint usage. */
+  type: string;
+}
+
 export interface StorefrontPayload {
   balance: number;
   enrolled: boolean;
@@ -76,6 +88,10 @@ export interface StorefrontPayload {
   rewards: StorefrontReward[];
   referralLink: string | null;
   activity: StorefrontActivity[];
+  /** The customer's redeemed-but-not-yet-used reward codes. We don't have
+   *  an email channel today, so this is how customers re-find a code
+   *  after closing the tab. Limited to the last 90 days. */
+  activeCodes: StorefrontActiveCode[];
   branding: StorefrontBranding;
 }
 
@@ -223,6 +239,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       rewards,
       referralLink: null,
       activity: [],
+      activeCodes: [],
       branding,
     };
   }
@@ -249,22 +266,41 @@ export async function buildStorefrontLoyaltyPayload(params: {
       rewards,
       referralLink: null,
       activity: [],
+      activeCodes: [],
       branding,
     };
   }
 
-  const [balance, activityRows, referralCode] = await Promise.all([
-    getBalance(shop.id, member.id),
-    prisma.pointTransaction.findMany({
-      where: { shopId: shop.id, memberId: member.id },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    }),
-    // Idempotent: returns the existing code if the member already has one.
-    issueReferralCode({ shopId: shop.id, memberId: member.id })
-      .then((r) => r.code)
-      .catch(() => null),
-  ]);
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const [balance, activityRows, referralCode, activeRedemptions] =
+    await Promise.all([
+      getBalance(shop.id, member.id),
+      prisma.pointTransaction.findMany({
+        where: { shopId: shop.id, memberId: member.id },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+      // Idempotent: returns the existing code if the member already has one.
+      issueReferralCode({ shopId: shop.id, memberId: member.id })
+        .then((r) => r.code)
+        .catch(() => null),
+      // Completed redemptions with a discount code, last 90 days. We don't
+      // yet track which codes the customer has actually used at checkout,
+      // so this can include already-used codes — Shopify will reject those
+      // on apply, and the storefront UI labels them as "single use".
+      prisma.redemption.findMany({
+        where: {
+          shopId: shop.id,
+          memberId: member.id,
+          status: "COMPLETED",
+          discountCode: { not: null },
+          createdAt: { gte: ninetyDaysAgo },
+        },
+        include: { reward: true },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
 
   return {
     balance,
@@ -276,6 +312,16 @@ export async function buildStorefrontLoyaltyPayload(params: {
     referralLink: referralCode
       ? referralLink(shopDomain, referralCode)
       : null,
+    activeCodes: activeRedemptions
+      .filter((r) => !!r.discountCode)
+      .map((r) => ({
+        id: r.id,
+        code: r.discountCode!,
+        label: defaultRewardLabel(r.reward.type, r.reward.value),
+        pointsSpent: r.pointsSpent,
+        redeemedAt: r.createdAt.toISOString(),
+        type: r.reward.type,
+      })),
     activity: activityRows.map((a) => ({
       type: a.type,
       reason: a.reason,

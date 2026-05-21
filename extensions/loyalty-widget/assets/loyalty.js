@@ -121,6 +121,98 @@
     });
   }
 
+  /* Render the customer's active discount codes into the given container.
+   * Used by launcher, loyalty page, and cart widget. Each card has:
+   *  - reward label + points spent
+   *  - the code (selectable text)
+   *  - Copy button (clipboard + fallback)
+   *  - Apply to cart button (Shopify /discount/CODE?redirect=/cart)
+   * Hides the wrap element when the list is empty. */
+  function renderActiveCodes(wrap, list, codes, statusEl) {
+    if (!list) return;
+    if (!codes || !codes.length) {
+      if (wrap) wrap.hidden = true;
+      list.innerHTML = "";
+      return;
+    }
+    if (wrap) wrap.hidden = false;
+    list.innerHTML = "";
+    codes.forEach(function (c) {
+      var card = document.createElement("div");
+      card.className = "royal-active-code";
+      var labelEl = document.createElement("div");
+      labelEl.className = "royal-active-code__label";
+      labelEl.innerHTML =
+        "<strong>" +
+        c.label +
+        "</strong>" +
+        '<span class="royal-muted"> · ' +
+        c.pointsSpent +
+        " pts</span>";
+      var codeRow = document.createElement("div");
+      codeRow.className = "royal-active-code__row";
+      var codeBox = document.createElement("code");
+      codeBox.className = "royal-active-code__code";
+      codeBox.textContent = c.code;
+      var copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "royal-btn royal-btn--ghost";
+      copyBtn.textContent = "Copy";
+      copyBtn.addEventListener("click", function () {
+        copyText(c.code).then(function () {
+          copyBtn.textContent = "Copied!";
+          setTimeout(function () {
+            copyBtn.textContent = "Copy";
+          }, 1500);
+        });
+      });
+      var applyBtn = document.createElement("a");
+      applyBtn.className = "royal-btn";
+      applyBtn.textContent = "Apply to cart";
+      applyBtn.href =
+        "/discount/" + encodeURIComponent(c.code) + "?redirect=/cart";
+      codeRow.appendChild(codeBox);
+      codeRow.appendChild(copyBtn);
+      codeRow.appendChild(applyBtn);
+      card.appendChild(labelEl);
+      card.appendChild(codeRow);
+      list.appendChild(card);
+    });
+    if (statusEl && typeof statusEl === "object") {
+      /* nothing — placeholder if we ever need to message after render */
+    }
+  }
+
+  function copyText(text) {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.clipboard &&
+      navigator.clipboard.writeText
+    ) {
+      return navigator.clipboard.writeText(text).catch(function () {
+        return fallbackCopy(text);
+      });
+    }
+    return fallbackCopy(text);
+  }
+  function fallbackCopy(text) {
+    return new Promise(function (resolve) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      } catch (e) {
+        /* non-fatal */
+      }
+      resolve();
+    });
+  }
+
   /* Substitute {points} {balance} {more} placeholders in a string. */
   function fillTemplate(tpl, vars) {
     return String(tpl || "")
@@ -306,11 +398,28 @@
         list += "</div>";
       }
 
+      var activeCodesBlock =
+        payload.activeCodes && payload.activeCodes.length
+          ? '<div class="royal-injected__active-codes-wrap">' +
+            '<div class="royal-injected__sub" style="margin-bottom:6px;"><strong>Your active codes</strong></div>' +
+            '<div id="royal-injected-cart-active-codes"></div>' +
+            "</div>"
+          : "";
+
       var status =
         '<div class="royal-status" id="royal-injected-cart-status" aria-live="polite"></div>';
 
-      card.innerHTML = head + earnLine + list + status;
+      card.innerHTML = head + earnLine + activeCodesBlock + list + status;
       insertIntoForm(form, card);
+
+      // Render active-code cards into the placeholder container.
+      if (payload.activeCodes && payload.activeCodes.length) {
+        renderActiveCodes(
+          null,
+          card.querySelector("#royal-injected-cart-active-codes"),
+          payload.activeCodes
+        );
+      }
 
       // Wire reward buttons.
       var statusEl = card.querySelector("#royal-injected-cart-status");
@@ -410,6 +519,8 @@
     injectProduct: injectProduct,
     injectCart: injectCart,
     pointsForAmount: pointsForAmount,
+    renderActiveCodes: renderActiveCodes,
+    copyText: copyText,
   };
 
   document.addEventListener("DOMContentLoaded", captureReferral);

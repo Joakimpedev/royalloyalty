@@ -130,3 +130,48 @@
 .royal-injected__reward:hover { border-color: var(--royal-primary, #2C2A29); }
 .royal-injected__reward[disabled] { opacity: 0.6; cursor: default; }
 .royal-injected__cost { color: #6d7175; }
+
+/* Active discount codes (rendered by RoyalLoyalty.renderActiveCodes
+   in the launcher panel, the cart widget, and the loyalty page). */
+.royal-active-code {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #e1e3e5;
+  border-radius: 8px;
+  background: #fafbfb;
+}
+.royal-active-code__label {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+.royal-active-code__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.royal-active-code__code {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px dashed #c9cccf;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  user-select: all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.royal-btn--ghost {
+  background: transparent;
+  color: #202223;
+  border: 1px solid #c9cccf;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.royal-btn--ghost:hover { border-color: var(--royal-primary, #2C2A29); }
