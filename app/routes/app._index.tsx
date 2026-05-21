@@ -319,59 +319,53 @@ export default function Home() {
                 data.currencyCode,
               )}
               delta={d.loyaltyDrivenRevenueEstimated.deltaFraction}
-              emptyHint="Order revenue from members earning points — appears once orders ship."
-              isEmpty={d.loyaltyDrivenRevenueEstimated.current === 0}
               series={d.loyaltyDrivenRevenueEstimated.series}
+              seriesLabels={d.seriesLabels}
+              formatTooltipValue={(v) => formatCurrency(v, data.currencyCode)}
             />
           ) : (
             <MetricCard
               label="Referral orders"
               value={d.referralOrders.current.toLocaleString()}
               delta={d.referralOrders.deltaFraction}
-              emptyHint="Orders attributed to a referral link in this period."
-              isEmpty={d.referralOrders.current === 0}
               series={d.referralOrders.series}
+              seriesLabels={d.seriesLabels}
             />
           )}
           <MetricCard
             label="Members added"
             value={d.membersAdded.current.toLocaleString()}
             delta={d.membersAdded.deltaFraction}
-            emptyHint="New customers enrolled in the program."
-            isEmpty={d.membersAdded.current === 0}
             series={d.membersAdded.series}
+            seriesLabels={d.seriesLabels}
           />
           <MetricCard
             label="Points issued"
             value={d.pointsIssued.current.toLocaleString()}
             delta={d.pointsIssued.deltaFraction}
-            emptyHint="Total points awarded across all activity."
-            isEmpty={d.pointsIssued.current === 0}
             series={d.pointsIssued.series}
+            seriesLabels={d.seriesLabels}
           />
           <MetricCard
             label="Points redeemed"
             value={d.pointsRedeemed.current.toLocaleString()}
             delta={d.pointsRedeemed.deltaFraction}
-            emptyHint="Total points spent on rewards."
-            isEmpty={d.pointsRedeemed.current === 0}
             series={d.pointsRedeemed.series}
+            seriesLabels={d.seriesLabels}
           />
           <MetricCard
             label="Earners"
             value={d.earners.current.toLocaleString()}
             delta={d.earners.deltaFraction}
-            emptyHint="Members who earned points in this period."
-            isEmpty={d.earners.current === 0}
             series={d.earners.series}
+            seriesLabels={d.seriesLabels}
           />
           <MetricCard
             label="Redeemers"
             value={d.redeemers.current.toLocaleString()}
             delta={d.redeemers.deltaFraction}
-            emptyHint="Members who spent points in this period."
-            isEmpty={d.redeemers.current === 0}
             series={d.redeemers.series}
+            seriesLabels={d.seriesLabels}
           />
         </div>
       </s-section>
@@ -651,16 +645,25 @@ function DateRangePicker({ value }: { value: DateRange }) {
   );
 }
 
-// Polaris-flavoured sparkline. Pure SVG, no chart lib. Dark line, subtle
-// area fill, no axes, no decorations. Matches the rest of the admin UI
-// instead of bringing in recharts just for one line per card.
+// Polaris-flavoured sparkline. Pure SVG, no chart lib. Always renders
+// (even all-zero data shows a flat baseline) so cards have consistent
+// vertical rhythm. Hover state: pointer-tracked dot on the line + small
+// tooltip showing the bucket label + value at that x. Tooltip stays in
+// HTML overlay so it renders crisp at any svg aspect ratio.
 function Sparkline({
   values,
-  height = 36,
+  labels,
+  height = 44,
+  formatValue,
 }: {
   values: number[];
+  /** One label per bucket, oldest -> newest. */
+  labels?: string[];
   height?: number;
+  /** Optional value formatter for the tooltip (e.g. money formatter). */
+  formatValue?: (v: number) => string;
 }) {
+  const [hovered, setHovered] = useState<number | null>(null);
   if (!values.length) return null;
   const w = 100;
   const h = height;
@@ -668,63 +671,136 @@ function Sparkline({
   const min = Math.min(...values, 0);
   const range = max - min || 1;
   const stepX = w / (values.length - 1 || 1);
-  const points = values.map((v, i) => {
+  const pts = values.map((v, i) => {
     const x = i * stepX;
-    const y = h - ((v - min) / range) * (h - 6) - 3;
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
+    const y = h - ((v - min) / range) * (h - 8) - 4;
+    return { x, y };
   });
-  const polyline = points.join(" ");
+  const polyline = pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
   const areaPath =
     `M0,${h} L` +
-    points.join(" L") +
+    pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" L") +
     ` L${w.toFixed(2)},${h} Z`;
   const allZero = values.every((v) => v === 0);
   const stroke = "#202223";
   const fill = "#e1e3e5";
+
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    let nearest = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const d = Math.abs(pts[i].x - xPct);
+      if (d < bestDist) {
+        bestDist = d;
+        nearest = i;
+      }
+    }
+    setHovered(nearest);
+  };
+  const handleLeave = () => setHovered(null);
+
+  const tipLabel = hovered != null && labels ? labels[hovered] : null;
+  const tipValue =
+    hovered != null
+      ? formatValue
+        ? formatValue(values[hovered])
+        : values[hovered].toLocaleString()
+      : null;
+
   return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      preserveAspectRatio="none"
-      role="img"
-      aria-label="trend"
-      style={{
-        width: "100%",
-        height,
-        display: "block",
-        marginTop: 6,
-      }}
+    <div
+      style={{ position: "relative", width: "100%", marginTop: 8 }}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
     >
-      {allZero ? (
-        <line
-          x1={0}
-          x2={w}
-          y1={h - 3}
-          y2={h - 3}
-          stroke={stroke}
-          strokeOpacity={0.25}
-          strokeWidth={1.5}
-          vectorEffect="non-scaling-stroke"
-        />
-      ) : (
-        <>
-          <path
-            d={areaPath}
-            fill={fill}
-            opacity={0.5}
-            vectorEffect="non-scaling-stroke"
-          />
-          <polyline
-            points={polyline}
-            fill="none"
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="trend"
+        style={{ width: "100%", height, display: "block" }}
+      >
+        {allZero ? (
+          <line
+            x1={0}
+            x2={w}
+            y1={h - 4}
+            y2={h - 4}
             stroke={stroke}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            strokeOpacity={0.2}
+            strokeWidth={1.2}
+            strokeDasharray="2 2"
             vectorEffect="non-scaling-stroke"
           />
+        ) : (
+          <>
+            <path
+              d={areaPath}
+              fill={fill}
+              opacity={0.55}
+              vectorEffect="non-scaling-stroke"
+            />
+            <polyline
+              points={polyline}
+              fill="none"
+              stroke={stroke}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          </>
+        )}
+      </svg>
+      {hovered != null && pts[hovered] && (
+        <>
+          {/* Hover dot — HTML-positioned so it stays circular regardless
+              of the SVG's non-uniform aspect ratio. */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: `${pts[hovered].x}%`,
+              top: `${(pts[hovered].y / h) * 100}%`,
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: stroke,
+              transform: "translate(-50%, -50%)",
+              pointerEvents: "none",
+              boxShadow: "0 0 0 1.5px #fff",
+            }}
+          />
+          {/* Tooltip */}
+          <div
+            role="tooltip"
+            style={{
+              position: "absolute",
+              left: `${pts[hovered].x}%`,
+              top: -8,
+              transform: "translate(-50%, -100%)",
+              background: "#1a1c1d",
+              color: "#fff",
+              padding: "4px 8px",
+              borderRadius: 6,
+              fontSize: 11,
+              lineHeight: 1.3,
+              whiteSpace: "nowrap",
+              pointerEvents: "none",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+              zIndex: 1,
+            }}
+          >
+            {tipLabel && (
+              <div style={{ color: "#a8acaf", fontSize: 10 }}>{tipLabel}</div>
+            )}
+            <div style={{ fontWeight: 600 }}>{tipValue}</div>
+          </div>
         </>
       )}
-    </svg>
+    </div>
   );
 }
 
@@ -732,16 +808,17 @@ function MetricCard({
   label,
   value,
   delta,
-  emptyHint,
-  isEmpty,
   series,
+  seriesLabels,
+  formatTooltipValue,
 }: {
   label: string;
   value: string;
   delta: number | null;
-  emptyHint: string;
-  isEmpty: boolean;
   series: number[];
+  seriesLabels: string[];
+  /** Tooltip value formatter (e.g. currency). Falls back to .toLocaleString(). */
+  formatTooltipValue?: (v: number) => string;
 }) {
   return (
     <s-box padding="base" borderWidth="base" borderRadius="base">
@@ -749,13 +826,13 @@ function MetricCard({
         <s-text tone="subdued">{label}</s-text>
         <s-stack direction="inline" gap="small-200" alignItems="baseline">
           <s-heading>{value}</s-heading>
-          {!isEmpty && delta !== null && <DeltaPill fraction={delta} />}
+          {delta !== null && <DeltaPill fraction={delta} />}
         </s-stack>
-        {isEmpty ? (
-          <s-text tone="subdued">{emptyHint}</s-text>
-        ) : (
-          <Sparkline values={series} />
-        )}
+        <Sparkline
+          values={series}
+          labels={seriesLabels}
+          formatValue={formatTooltipValue}
+        />
       </s-stack>
     </s-box>
   );
