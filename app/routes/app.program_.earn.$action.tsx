@@ -400,45 +400,44 @@ export default function EarnRuleEditor() {
             </ChoiceList>
           )}
 
-          {/* Number fields are intentionally capped at ~280px — a 14-digit
-              points value is already absurd; letting the field span the
-              whole card visually invited bogus huge values. */}
-          <s-stack direction="inline" gap="base">
+          {/* Number fields stack vertically and are capped at ~280px wide
+              — a 14-digit points value is already absurd; letting the
+              field span the whole card visually invited bogus huge
+              values. */}
+          <div style={{ maxWidth: 280, width: "100%" }}>
+            <s-number-field
+              label="Customer gets"
+              suffix="points"
+              min={0}
+              value={String(points)}
+              onChange={(e: any) =>
+                setPoints(
+                  Math.max(
+                    0,
+                    Number.parseInt(String(e.target.value), 10) || 0,
+                  ),
+                )
+              }
+            />
+          </div>
+          {isPurchase && perDollar && (
             <div style={{ maxWidth: 280, width: "100%" }}>
               <s-number-field
-                label="Customer gets"
-                suffix="points"
-                min={0}
-                value={String(points)}
+                label="For every amount spent"
+                suffix={currencyCode}
+                min={1}
+                value={String(perAmount)}
                 onChange={(e: any) =>
-                  setPoints(
+                  setPerAmount(
                     Math.max(
-                      0,
-                      Number.parseInt(String(e.target.value), 10) || 0,
+                      1,
+                      Number.parseInt(String(e.target.value), 10) || 1,
                     ),
                   )
                 }
               />
             </div>
-            {isPurchase && perDollar && (
-              <div style={{ maxWidth: 280, width: "100%" }}>
-                <s-number-field
-                  label="For every amount spent"
-                  suffix={currencyCode}
-                  min={1}
-                  value={String(perAmount)}
-                  onChange={(e: any) =>
-                    setPerAmount(
-                      Math.max(
-                        1,
-                        Number.parseInt(String(e.target.value), 10) || 1,
-                      ),
-                    )
-                  }
-                />
-              </div>
-            )}
-          </s-stack>
+          )}
 
           {/* Completion limit: radio for Unlimited vs Fixed amount. When
               "Fixed amount" is picked the number field auto-pops in with a
