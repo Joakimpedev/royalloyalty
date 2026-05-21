@@ -57,6 +57,15 @@ export interface DashboardMetrics {
   pointsRedeemed: DashboardMetric;
   /** Count of completed referrals in window. */
   referralOrders: DashboardMetric;
+  /** Count of completed Redemption rows in window — what competitors
+   *  call 'Rewards claimed'. Each redemption = a real reward action,
+   *  more business-meaningful than raw points redeemed. */
+  rewardsClaimed: DashboardMetric;
+  /** Redeemers divided by earners for the window, expressed as a
+   *  fraction (0..1). Smile's flagship engagement metric — answers
+   *  'are customers actually using the program?'. Sparkline shows
+   *  daily redemption events (trend of redeemer activity over time). */
+  redemptionRate: DashboardMetric;
   /** Latest 5 ledger rows with member name/email joined. */
   recentActivity: DashboardActivity[];
   /** Top 5 members by total earned points (lifetime, not windowed). */
@@ -163,6 +172,24 @@ export async function getDashboardMetrics(
     pointsIssued: metric(cur.pointsIssued, prev.pointsIssued, series.pointsIssuedByDay),
     pointsRedeemed: metric(cur.pointsRedeemed, prev.pointsRedeemed, series.pointsRedeemedByDay),
     referralOrders: metric(cur.referralOrders, prev.referralOrders, series.referralOrdersByDay),
+    rewardsClaimed: metric(
+      cur.rewardsClaimed,
+      prev.rewardsClaimed,
+      series.rewardsClaimedByDay,
+    ),
+    redemptionRate: {
+      // Fraction (0..1). Headline value formatted upstream as %.
+      current: cur.earners > 0 ? cur.redeemers / cur.earners : 0,
+      previous: prev.earners > 0 ? prev.redeemers / prev.earners : 0,
+      deltaFraction: fractionDelta(
+        cur.earners > 0 ? cur.redeemers / cur.earners : 0,
+        prev.earners > 0 ? prev.redeemers / prev.earners : 0,
+      ),
+      // Sparkline: daily redemption events. The headline is a ratio
+      // (redeemers/earners) which doesn't bucket meaningfully per day,
+      // so the trend shows redemption activity over time instead.
+      series: series.redeemEventsByDay,
+    },
     recentActivity: recentRows.map((r) => ({
       id: r.id,
       memberName: r.member.name ?? null,
@@ -196,6 +223,7 @@ interface SeriesBundle {
   redeemEventsByDay: number[];
   membersAddedByDay: number[];
   referralOrdersByDay: number[];
+  rewardsClaimedByDay: number[];
 }
 
 async function buildSeriesFor(
@@ -205,7 +233,7 @@ async function buildSeriesFor(
   dayKeys: string[],
 ): Promise<SeriesBundle> {
   // Pull only the columns we need to bucket — avoid loading entire rows.
-  const [txns, members, referrals] = await Promise.all([
+  const [txns, members, referrals, redemptions] = await Promise.all([
     prisma.pointTransaction.findMany({
       where: { shopId, createdAt: { gte: since, lt: until } },
       select: { type: true, points: true, orderId: true, createdAt: true },
@@ -215,6 +243,14 @@ async function buildSeriesFor(
       select: { enrolledAt: true },
     }),
     prisma.referral.findMany({
+      where: {
+        shopId,
+        status: "COMPLETED",
+        createdAt: { gte: since, lt: until },
+      },
+      select: { createdAt: true },
+    }),
+    prisma.redemption.findMany({
       where: {
         shopId,
         status: "COMPLETED",
@@ -234,6 +270,7 @@ async function buildSeriesFor(
     redeemEventsByDay: zeros(),
     membersAddedByDay: zeros(),
     referralOrdersByDay: zeros(),
+    rewardsClaimedByDay: zeros(),
   };
 
   for (const t of txns) {
@@ -257,6 +294,10 @@ async function buildSeriesFor(
     const i = idx.get(r.createdAt.toISOString().slice(0, 10));
     if (i !== undefined) out.referralOrdersByDay[i] += 1;
   }
+  for (const rd of redemptions) {
+    const i = idx.get(rd.createdAt.toISOString().slice(0, 10));
+    if (i !== undefined) out.rewardsClaimedByDay[i] += 1;
+  }
   return out;
 }
 
@@ -268,6 +309,7 @@ interface PeriodAggregates {
   pointsRedeemed: number;
   earnPurchasePoints: number;
   referralOrders: number;
+  rewardsClaimed: number;
 }
 
 async function aggregatesFor(
@@ -283,6 +325,7 @@ async function aggregatesFor(
     earnerGroups,
     redeemerGroups,
     referralOrders,
+    rewardsClaimed,
   ] = await Promise.all([
     prisma.member.count({
       where: { shopId, enrolledAt: { gte: since, lt: until } },
@@ -330,6 +373,13 @@ async function aggregatesFor(
         createdAt: { gte: since, lt: until },
       },
     }),
+    prisma.redemption.count({
+      where: {
+        shopId,
+        status: "COMPLETED",
+        createdAt: { gte: since, lt: until },
+      },
+    }),
   ]);
 
   return {
@@ -340,6 +390,7 @@ async function aggregatesFor(
     pointsRedeemed: Math.abs(redeemedAgg._sum.points ?? 0),
     earnPurchasePoints: purchaseAgg._sum.points ?? 0,
     referralOrders,
+    rewardsClaimed,
   };
 }
 

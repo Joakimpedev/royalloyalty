@@ -358,20 +358,6 @@ export default function Home() {
             seriesLabels={d.seriesLabels}
           />
           <MetricCard
-            label="Points issued"
-            value={d.pointsIssued.current.toLocaleString()}
-            delta={d.pointsIssued.deltaFraction}
-            series={d.pointsIssued.series}
-            seriesLabels={d.seriesLabels}
-          />
-          <MetricCard
-            label="Points redeemed"
-            value={d.pointsRedeemed.current.toLocaleString()}
-            delta={d.pointsRedeemed.deltaFraction}
-            series={d.pointsRedeemed.series}
-            seriesLabels={d.seriesLabels}
-          />
-          <MetricCard
             label="Earners"
             value={d.earners.current.toLocaleString()}
             delta={d.earners.deltaFraction}
@@ -384,6 +370,21 @@ export default function Home() {
             delta={d.redeemers.deltaFraction}
             series={d.redeemers.series}
             seriesLabels={d.seriesLabels}
+          />
+          <MetricCard
+            label="Rewards claimed"
+            value={d.rewardsClaimed.current.toLocaleString()}
+            delta={d.rewardsClaimed.deltaFraction}
+            series={d.rewardsClaimed.series}
+            seriesLabels={d.seriesLabels}
+          />
+          <MetricCard
+            label="Redemption rate"
+            value={`${(d.redemptionRate.current * 100).toFixed(0)}%`}
+            delta={d.redemptionRate.deltaFraction}
+            series={d.redemptionRate.series}
+            seriesLabels={d.seriesLabels}
+            formatTooltipValue={(v) => `${v.toLocaleString()} redemptions`}
           />
         </div>
       </s-section>
@@ -919,62 +920,108 @@ function RecentActivityCard({
     date: string;
   }>;
 }) {
+  const nav = useAppNavigate();
   return (
     <s-box padding="base" borderWidth="base" borderRadius="base">
       <s-stack direction="block" gap="base">
-        <s-text fontWeight="bold">Recent activity</s-text>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+          }}
+        >
+          <s-text fontWeight="bold">Recent activity</s-text>
+          {rows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => nav("/app/members")}
+              style={linkButtonStyle}
+            >
+              View all →
+            </button>
+          )}
+        </div>
         {rows.length === 0 ? (
           <s-text tone="subdued">
             No activity yet. Customer earn / redeem / referral events will appear here as they happen.
           </s-text>
         ) : (
           <s-stack direction="block" gap="small-200">
-            {rows.map((r) => (
-              <div
-                key={r.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "6px 0",
-                  borderBottom: "1px solid #f1f2f3",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 500 }}>
-                    {r.memberName || r.memberEmail || "Anonymous member"}
+            {rows.map((r) => {
+              const memberQuery = r.memberEmail
+                ? `?q=${encodeURIComponent(r.memberEmail)}`
+                : "";
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => nav(`/app/members${memberQuery}`)}
+                  style={rowButtonStyle}
+                >
+                  <div style={{ minWidth: 0, textAlign: "left" }}>
+                    <div style={{ fontWeight: 500 }}>
+                      {r.memberName || r.memberEmail || "Anonymous member"}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#6d7175",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {r.reason}
+                    </div>
                   </div>
                   <div
                     style={{
-                      fontSize: 12,
-                      color: "#6d7175",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      fontWeight: 600,
+                      color: r.points >= 0 ? "#0e8a3e" : "#d72c0d",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {r.reason}
+                    {r.points >= 0 ? "+" : ""}
+                    {r.points}
                   </div>
-                </div>
-                <div
-                  style={{
-                    fontWeight: 600,
-                    color: r.points >= 0 ? "#0e8a3e" : "#d72c0d",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {r.points >= 0 ? "+" : ""}
-                  {r.points}
-                </div>
-              </div>
-            ))}
+                </button>
+              );
+            })}
           </s-stack>
         )}
       </s-stack>
     </s-box>
   );
 }
+
+const linkButtonStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  color: "#2c6ecb",
+  fontSize: 13,
+  fontWeight: 500,
+  cursor: "pointer",
+  padding: 0,
+};
+
+const rowButtonStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "6px 0",
+  borderBottom: "1px solid #f1f2f3",
+  background: "transparent",
+  border: "none",
+  borderBottomStyle: "solid",
+  borderBottomWidth: 1,
+  borderBottomColor: "#f1f2f3",
+  width: "100%",
+  cursor: "pointer",
+  font: "inherit",
+  color: "inherit",
+};
 
 function TopMembersCard({
   rows,
@@ -986,40 +1033,57 @@ function TopMembersCard({
     totalEarned: number;
   }>;
 }) {
+  const nav = useAppNavigate();
   return (
     <s-box padding="base" borderWidth="base" borderRadius="base">
       <s-stack direction="block" gap="base">
-        <s-text fontWeight="bold">Most active members</s-text>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+          }}
+        >
+          <s-text fontWeight="bold">Most active members</s-text>
+          {rows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => nav("/app/members")}
+              style={linkButtonStyle}
+            >
+              View all →
+            </button>
+          )}
+        </div>
         {rows.length === 0 ? (
           <s-text tone="subdued">
             Your top members by lifetime points earned will appear here once orders start awarding.
           </s-text>
         ) : (
           <s-stack direction="block" gap="small-200">
-            {rows.map((r) => (
-              <div
-                key={r.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "6px 0",
-                  borderBottom: "1px solid #f1f2f3",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 500 }}>
-                    {r.name || r.email || "Anonymous member"}
+            {rows.map((r) => {
+              const memberQuery = r.email ? `?q=${encodeURIComponent(r.email)}` : "";
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => nav(`/app/members${memberQuery}`)}
+                  style={rowButtonStyle}
+                >
+                  <div style={{ minWidth: 0, textAlign: "left" }}>
+                    <div style={{ fontWeight: 500 }}>
+                      {r.name || r.email || "Anonymous member"}
+                    </div>
+                    {r.email && r.name && (
+                      <div style={{ fontSize: 12, color: "#6d7175" }}>{r.email}</div>
+                    )}
                   </div>
-                  {r.email && r.name && (
-                    <div style={{ fontSize: 12, color: "#6d7175" }}>{r.email}</div>
-                  )}
-                </div>
-                <div style={{ fontWeight: 600 }}>
-                  {r.totalEarned.toLocaleString()} pts
-                </div>
-              </div>
-            ))}
+                  <div style={{ fontWeight: 600 }}>
+                    {r.totalEarned.toLocaleString()} pts
+                  </div>
+                </button>
+              );
+            })}
           </s-stack>
         )}
       </s-stack>
