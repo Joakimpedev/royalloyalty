@@ -11,7 +11,6 @@ import {
   useActionData,
   useNavigation,
   useSubmit,
-  useBlocker,
   useRouteError,
 } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -125,17 +124,7 @@ export default function TiersPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const saving = nav.state === "submitting";
 
-  const blocker = useBlocker(
-    useCallback(
-      ({ currentLocation, nextLocation }) =>
-        dirty && currentLocation.pathname !== nextLocation.pathname,
-      [dirty],
-    ),
-  );
-
-  useEffect(() => {
-    if (blocker.state === "blocked" && !dirty) blocker.reset?.();
-  }, [blocker, dirty]);
+  // Native <ui-save-bar> handles unsaved-changes nav warnings.
 
   useEffect(() => {
     const el = saveBarRef.current as
@@ -352,20 +341,6 @@ export default function TiersPage() {
         )}
       </s-section>
 
-      {blocker.state === "blocked" && (
-        <s-section>
-          <s-banner tone="warning" heading="You have unsaved changes">
-            <s-stack direction="inline" gap="base">
-              <s-button variant="primary" onClick={() => blocker.proceed?.()}>
-                Leave without saving
-              </s-button>
-              <s-button onClick={() => blocker.reset?.()}>
-                Stay on page
-              </s-button>
-            </s-stack>
-          </s-banner>
-        </s-section>
-      )}
     </s-page>
   );
 }

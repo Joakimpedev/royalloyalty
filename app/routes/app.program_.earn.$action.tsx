@@ -40,7 +40,6 @@ import {
   useLoaderData,
   useNavigation,
   useSubmit,
-  useBlocker,
   useRouteError,
 } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -520,16 +519,9 @@ export default function EarnRuleEditor() {
     JSON.stringify(platforms) !== JSON.stringify(rule.platforms);
   const saving = nav.state === "submitting";
 
-  const blocker = useBlocker(
-    useCallback(
-      ({ currentLocation, nextLocation }: any) =>
-        dirty && currentLocation.pathname !== nextLocation.pathname,
-      [dirty],
-    ),
-  );
-  useEffect(() => {
-    if (blocker.state === "blocked" && !dirty) blocker.reset?.();
-  }, [blocker, dirty]);
+  // Note: native <ui-save-bar> (App Bridge) intercepts in-app navigation
+  // with unsaved changes and shows its own confirmation modal — no need
+  // for a useBlocker-driven body banner.
 
   useEffect(() => {
     const el = saveBarRef.current as
@@ -769,20 +761,6 @@ export default function EarnRuleEditor() {
         </s-unordered-list>
       </s-section>
 
-      {blocker.state === "blocked" && (
-        <s-section>
-          <s-banner tone="warning" heading="You have unsaved changes">
-            <s-stack direction="inline" gap="base">
-              <s-button variant="primary" onClick={() => blocker.proceed?.()}>
-                Leave without saving
-              </s-button>
-              <s-button onClick={() => blocker.reset?.()}>
-                Stay on page
-              </s-button>
-            </s-stack>
-          </s-banner>
-        </s-section>
-      )}
     </s-page>
   );
 }

@@ -15,7 +15,6 @@ import {
   useNavigation,
   useSearchParams,
   useSubmit,
-  useBlocker,
   useRouteError,
 } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -468,17 +467,8 @@ export default function BrandingPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const saving = nav.state === "submitting";
 
-  const blocker = useBlocker(
-    useCallback(
-      ({ currentLocation, nextLocation }) =>
-        dirty && currentLocation.pathname !== nextLocation.pathname,
-      [dirty],
-    ),
-  );
-
-  useEffect(() => {
-    if (blocker.state === "blocked" && !dirty) blocker.reset?.();
-  }, [blocker, dirty]);
+  // Note: native <ui-save-bar> (App Bridge) handles unsaved-changes nav
+  // warnings — no useBlocker-driven body banner needed.
 
   useEffect(() => {
     const el = saveBarRef.current as
@@ -966,20 +956,6 @@ export default function BrandingPage() {
         </s-stack>
       </s-section>
 
-      {blocker.state === "blocked" && (
-        <s-section>
-          <s-banner tone="warning" heading="You have unsaved changes">
-            <s-stack direction="inline" gap="base">
-              <s-button variant="primary" onClick={() => blocker.proceed?.()}>
-                Leave without saving
-              </s-button>
-              <s-button onClick={() => blocker.reset?.()}>
-                Stay on page
-              </s-button>
-            </s-stack>
-          </s-banner>
-        </s-section>
-      )}
     </s-page>
   );
 }
