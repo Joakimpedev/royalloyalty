@@ -48,7 +48,7 @@ import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { formatMoney } from "../lib/use-money";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
-import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle } from "../lib/polaris-bindings";
 
 const ACTIONS = [
   "purchase",
@@ -521,7 +521,6 @@ export default function EarnRuleEditor() {
 
   // Native <ui-save-bar> drives the unsaved-changes warning; useSaveBar
   // also hides the bar on unmount so it doesn't linger after a back nav.
-  useSaveBar(saveBarRef, dirty);
 
   const save = useCallback(() => {
     const fd = new FormData();
@@ -611,7 +610,7 @@ export default function EarnRuleEditor() {
       />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
-      <ui-save-bar id="earn-rule-save-bar" ref={saveBarRef}>
+      <ui-save-bar id="earn-rule-save-bar" open={dirty ? true : undefined}>
         <button
           variant="primary"
           onClick={save}

@@ -83,25 +83,42 @@ export function ChoiceList({
  * The button's onClick goes through useAppNavigate so the iframe and the
  * embedded session stay alive (App Bridge-aware client-side nav).
  */
-// Drives the App Bridge <ui-save-bar> for a page: shows it whenever the
-// page is dirty, hides it when clean, AND ensures it is hidden on
-// unmount so the bar doesn't linger on the next page with dead buttons.
-// Pass the same ref you set on <ui-save-bar id="..." ref={ref}>.
-export function useSaveBar(
-  ref: React.MutableRefObject<HTMLElement | null>,
-  dirty: boolean,
-) {
-  useEffect(() => {
-    const el = ref.current as
-      | (HTMLElement & { show?: () => void; hide?: () => void })
-      | null;
-    if (!el) return;
-    if (dirty) el.show?.();
-    else el.hide?.();
-    return () => {
-      el.hide?.();
-    };
-  }, [ref, dirty]);
+// Nudge any currently-open App Bridge <ui-save-bar> in the page by adding
+// a brief shake animation. Called from the PageTitle back arrow when the
+// page is dirty: instead of letting the user navigate away (or blocking
+// with a confirm modal), we draw attention to the save bar so they know
+// to Save or Discard explicitly.
+// Injected once: the keyframe + class used by nudgeSaveBar().
+const SHAKE_STYLE_ID = "royal-save-shake-style";
+function ensureShakeStyle() {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(SHAKE_STYLE_ID)) return;
+  const s = document.createElement("style");
+  s.id = SHAKE_STYLE_ID;
+  s.textContent = `
+    @keyframes royal-save-shake-keyframes {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .royal-save-shake {
+      animation: royal-save-shake-keyframes 0.45s ease-in-out;
+    }
+  `;
+  document.head.appendChild(s);
+}
+
+export function nudgeSaveBar(): void {
+  if (typeof document === "undefined") return;
+  ensureShakeStyle();
+  document.querySelectorAll("ui-save-bar").forEach((el) => {
+    (el as HTMLElement).classList.add("royal-save-shake");
+    window.setTimeout(() => {
+      (el as HTMLElement).classList.remove("royal-save-shake");
+    }, 500);
+  });
 }
 
 export function PageTitle({
@@ -121,13 +138,10 @@ export function PageTitle({
   const nav = useAppNavigate();
   const handleBack = () => {
     if (!backHref) return;
-    if (
-      dirty &&
-      typeof window !== "undefined" &&
-      !window.confirm(
-        "You have unsaved changes. Leave without saving?",
-      )
-    ) {
+    // Don't navigate while there are unsaved changes — instead, draw
+    // attention to the save bar so the user explicitly Saves or Discards.
+    if (dirty) {
+      nudgeSaveBar();
       return;
     }
     nav(backHref);

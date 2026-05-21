@@ -18,7 +18,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
-import { PageTitle, useSaveBar } from "../lib/polaris-bindings";
+import { PageTitle } from "../lib/polaris-bindings";
 
 const REWARD_TYPES = [
   "amount_off",
@@ -147,7 +147,6 @@ export default function RewardsPage() {
   const saving = nav.state === "submitting";
 
   // Native <ui-save-bar> drives unsaved-changes UI + unmount cleanup.
-  useSaveBar(saveBarRef, dirty);
 
   useEffect(() => {
     if (actionData?.ok) {
@@ -189,7 +188,7 @@ export default function RewardsPage() {
       />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
-      <ui-save-bar id="rewards-save-bar" ref={saveBarRef}>
+      <ui-save-bar id="rewards-save-bar" open={dirty ? true : undefined}>
         <button
           variant="primary"
           onClick={save}

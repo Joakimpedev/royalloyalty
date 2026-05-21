@@ -23,7 +23,6 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { useSaveBar } from "../lib/polaris-bindings";
 import {
   PLANS,
   PLAN_ORDER,
@@ -222,7 +221,6 @@ export default function SettingsPage() {
     }
   }, [actionData]);
 
-  useSaveBar(saveBarRef, dirty);
 
   const saveContact = useCallback(() => {
     submit(
@@ -241,7 +239,7 @@ export default function SettingsPage() {
     <s-page heading="Settings">
 
       {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
-      <ui-save-bar id="settings-save-bar" ref={saveBarRef}>
+      <ui-save-bar id="settings-save-bar" open={dirty ? true : undefined}>
         <button
           variant="primary"
           onClick={saveContact}
