@@ -21,7 +21,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { isAppEmbedEnabled } from "../lib/theme-embed.server";
+import { checkAppEmbedEnabled } from "../lib/theme-embed.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
@@ -118,9 +118,6 @@ function LockedHint() {
   );
 }
 
-// Section heading with a small App-embed status pill aligned to the right
-// of the title text. `enabled` null = unknown (e.g. GraphQL failure); we
-// hide the pill in that case rather than show a misleading state.
 function SectionHeader({
   title,
   embedEnabled,
@@ -128,6 +125,22 @@ function SectionHeader({
   title: string;
   embedEnabled: boolean | null;
 }) {
+  // s-badge tone="success" = green, tone="critical" = red. When the check
+  // is inconclusive (enabled === null) we render a neutral warning badge so
+  // we always see *something* — that signals "lookup failed" instead of
+  // silently hiding.
+  const tone: "success" | "critical" | "warning" =
+    embedEnabled === true
+      ? "success"
+      : embedEnabled === false
+        ? "critical"
+        : "warning";
+  const label =
+    embedEnabled === true
+      ? "App embed enabled"
+      : embedEnabled === false
+        ? "App embed disabled"
+        : "App embed status unknown";
   return (
     <div
       style={{
@@ -140,12 +153,7 @@ function SectionHeader({
       <span style={{ fontSize: 14, fontWeight: 600, color: "#202223" }}>
         {title}
       </span>
-      {embedEnabled === true && (
-        <s-badge tone="success">App embed enabled</s-badge>
-      )}
-      {embedEnabled === false && (
-        <s-badge tone="critical">App embed disabled</s-badge>
-      )}
+      <s-badge tone={tone}>{label}</s-badge>
     </div>
   );
 }
@@ -297,11 +305,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
   const paid = shop.plan !== "FREE";
-  const embedEnabled = await isAppEmbedEnabled(admin);
+  const embed = await checkAppEmbedEnabled(admin);
   return {
     branding: readBranding(shop.aiConfigSnapshot),
     paid,
-    embedEnabled,
+    embed,
   };
 };
 
@@ -356,7 +364,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function BrandingPage() {
-  const { branding, paid, embedEnabled } = useLoaderData<typeof loader>();
+  const { branding, paid, embed } = useLoaderData<typeof loader>();
+  const embedEnabled = embed.enabled;
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const submit = useSubmit();
@@ -460,6 +469,17 @@ export default function BrandingPage() {
         <s-section>
           <s-banner tone="success">
             <s-paragraph>{actionData.message}</s-paragraph>
+          </s-banner>
+        </s-section>
+      )}
+
+      {embed.enabled === null && (
+        <s-section>
+          <s-banner tone="warning" heading="App embed status check failed">
+            <s-paragraph>
+              We couldn't determine whether the Royal Loyalty app embed is
+              enabled on your live theme. Diagnostic: {embed.debug}
+            </s-paragraph>
           </s-banner>
         </s-section>
       )}

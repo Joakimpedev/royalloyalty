@@ -40,15 +40,23 @@ interface AdminLike {
   graphql: (query: string) => Promise<Response>;
 }
 
-export async function isAppEmbedEnabled(
+export interface EmbedCheck {
+  enabled: boolean | null;
+  /** Human-readable diagnostic, surfaced in the admin when enabled === null
+   *  so we can debug "why doesn't the badge render" without server logs. */
+  debug: string;
+}
+
+export async function checkAppEmbedEnabled(
   admin: AdminLike,
-): Promise<boolean | null> {
+): Promise<EmbedCheck> {
   try {
     const res = await admin.graphql(QUERY);
     const json = (await res.json()) as {
       data?: {
         themes?: {
           nodes?: Array<{
+            id?: string;
             role?: string;
             files?: {
               nodes?: Array<{ body?: { content?: string } }>;
@@ -58,47 +66,90 @@ export async function isAppEmbedEnabled(
       };
       errors?: Array<{ message?: string }>;
     };
+
     if (json.errors?.length) {
-      console.warn(
-        "[theme-embed] graphql errors:",
-        json.errors.map((e) => e.message).join("; "),
-      );
-      return null;
+      const msg = json.errors.map((e) => e.message).join("; ");
+      return { enabled: null, debug: `graphql errors: ${msg}` };
     }
-    const mainTheme = json.data?.themes?.nodes?.find(
+
+    const themes = json.data?.themes?.nodes ?? [];
+    if (!themes.length) {
+      return { enabled: null, debug: "no themes returned by Admin API" };
+    }
+
+    const mainTheme = themes.find(
       (t) => (t.role ?? "").toUpperCase() === "MAIN",
     );
-    const content = mainTheme?.files?.nodes?.[0]?.body?.content;
-    if (!content) return null;
+    if (!mainTheme) {
+      const roles = themes.map((t) => t.role ?? "?").join(",");
+      return { enabled: null, debug: `no MAIN theme (roles: ${roles})` };
+    }
 
-    const settings = JSON.parse(content) as {
+    const content = mainTheme.files?.nodes?.[0]?.body?.content;
+    if (!content) {
+      return {
+        enabled: null,
+        debug: "MAIN theme returned no settings_data.json content",
+      };
+    }
+
+    let settings: {
       current?:
         | string
         | {
             blocks?: Record<string, { type?: string; disabled?: boolean }>;
           };
     };
-    // `current` is either a preset name (string) referring to `presets[name]`,
-    // or an inline preset object with its own blocks. We only check the
-    // inline form — that's the standard shape once a merchant edits theme
-    // settings, which they will have done if they enabled an app embed.
-    if (!settings.current || typeof settings.current === "string") return false;
+    try {
+      settings = JSON.parse(content);
+    } catch (e) {
+      return {
+        enabled: null,
+        debug: `settings_data.json parse failed: ${(e as Error).message}`,
+      };
+    }
+
+    if (!settings.current) {
+      return { enabled: null, debug: "settings_data.json has no `current`" };
+    }
+    if (typeof settings.current === "string") {
+      // Theme is using a preset name reference rather than inline blocks.
+      // We don't follow the preset lookup yet — treat as disabled but
+      // surface this so we can prioritize handling it if it's common.
+      return {
+        enabled: false,
+        debug: `current is preset reference "${settings.current}" (inline blocks not present)`,
+      };
+    }
 
     const blocks = settings.current.blocks ?? {};
-    for (const key of Object.keys(blocks)) {
+    const blockKeys = Object.keys(blocks);
+    for (const key of blockKeys) {
       const block = blocks[key];
       if (!block?.type) continue;
       // App embed block types look like:
       //   shopify://apps/{api_client_id}/blocks/{handle}/{extension_uid}
-      // Matching on the extension UID is stable across app handle / client
-      // changes and unambiguous.
       if (block.type.includes(EXTENSION_UID)) {
-        return !block.disabled;
+        return {
+          enabled: !block.disabled,
+          debug: `matched block ${key} (type=${block.type}, disabled=${!!block.disabled})`,
+        };
       }
     }
-    return false;
+
+    // None of the current blocks reference our extension UID.
+    const sample = blockKeys
+      .slice(0, 3)
+      .map((k) => blocks[k]?.type ?? "?")
+      .join(" | ");
+    return {
+      enabled: false,
+      debug: `extension uid not in current.blocks (${blockKeys.length} block(s); sample types: ${sample || "none"})`,
+    };
   } catch (err) {
-    console.warn("[theme-embed] check failed:", err);
-    return null;
+    return {
+      enabled: null,
+      debug: `exception: ${(err as Error).message}`,
+    };
   }
 }
