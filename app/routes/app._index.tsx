@@ -45,6 +45,60 @@ function parseRange(
   return from <= to ? { from, to } : def;
 }
 
+// Shopify customer counts for the dashboard headlines. customersCount
+// is a fast count-only query (no pagination, no Protected Customer Data),
+// so we can run three of them in parallel: total lifetime, current
+// window, and the prior window for delta computation. Returns null on
+// failure so the loader degrades to the existing DB-based numbers.
+async function fetchShopifyCustomerCounts(
+  admin: { graphql: (...args: any[]) => Promise<{ json: () => Promise<any> }> },
+  sinceDate: Date,
+  untilDate: Date,
+): Promise<{
+  total: number;
+  currentWindow: number;
+  priorWindow: number;
+} | null> {
+  const windowMs = untilDate.getTime() - sinceDate.getTime();
+  const priorSince = new Date(sinceDate.getTime() - windowMs);
+  const sinceStr = sinceDate.toISOString().slice(0, 10);
+  const untilStr = untilDate.toISOString().slice(0, 10);
+  const priorSinceStr = priorSince.toISOString().slice(0, 10);
+  const query = `#graphql
+    query RoyalDashboardCustomerCounts(
+      $current: String!
+      $prior: String!
+    ) {
+      total: customersCount { count }
+      currentWindow: customersCount(query: $current) { count }
+      priorWindow: customersCount(query: $prior) { count }
+    }
+  `;
+  try {
+    const res = await admin.graphql(query, {
+      variables: {
+        current: `created_at:>=${sinceStr} created_at:<${untilStr}`,
+        prior: `created_at:>=${priorSinceStr} created_at:<${sinceStr}`,
+      },
+    });
+    const json = (await res.json()) as {
+      data?: {
+        total?: { count?: number };
+        currentWindow?: { count?: number };
+        priorWindow?: { count?: number };
+      };
+    };
+    if (!json.data) return null;
+    return {
+      total: json.data.total?.count ?? 0,
+      currentWindow: json.data.currentWindow?.count ?? 0,
+      priorWindow: json.data.priorWindow?.count ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Mirror the defaults declared in app/routes/app.program.tsx so the home
 // page counts an unsaved-but-default-enabled earn rule the same way the
 // program editor displays it. Otherwise the home tile reports "0
@@ -80,7 +134,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     create: { shopDomain: session.shop },
   });
 
-  const [dashboard, earnRuleRows, rewardCount, embed] =
+  const [dashboard, earnRuleRows, rewardCount, embed, shopifyCustomers] =
     await Promise.all([
       getDashboardMetrics(shop.id, sinceDate, untilDate),
       prisma.earnRule.findMany({
@@ -88,16 +142,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         select: { action: true, enabled: true },
       }),
       prisma.reward.count({ where: { shopId: shop.id, enabled: true } }),
-      // Pass the session so checkAppEmbedEnabled uses the raw-fetch path,
-      // which tolerates partial graphql errors (demo themes refuse the
-      // files field). Without this, the SDK wrapper throws on the first
-      // per-field 'Access denied' and the whole check returns null —
-      // exactly the bug the merchant kept hitting on the home page.
       checkAppEmbedEnabled(admin, {
         shop: session.shop,
         accessToken: session.accessToken,
       }),
+      fetchShopifyCustomerCounts(admin, sinceDate, untilDate),
     ]);
+
+  // Override the Member.enrolledAt-based "Members added" headline with
+  // Shopify's customer count for the same window. Our Member rows only
+  // get created on the first triggering event (order, customers/create
+  // webhook), so pre-existing customers don't show up there — using
+  // Shopify as source of truth removes the "0 members but I see 4
+  // customers" disconnect the merchant kept hitting. Sparkline still
+  // reflects Member.enrolledAt because per-day customer-listing would
+  // be expensive; the headline value is what matters most here.
+  if (shopifyCustomers) {
+    dashboard.membersAdded = {
+      ...dashboard.membersAdded,
+      current: shopifyCustomers.currentWindow,
+      previous: shopifyCustomers.priorWindow,
+      deltaFraction:
+        shopifyCustomers.priorWindow === 0
+          ? null
+          : (shopifyCustomers.currentWindow - shopifyCustomers.priorWindow) /
+            shopifyCustomers.priorWindow,
+    };
+  }
 
   // Effective earn count = explicit DB rows where enabled=true PLUS the
   // default-enabled actions (purchase, signup) that don't have a DB row
@@ -351,7 +422,7 @@ export default function Home() {
             />
           )}
           <MetricCard
-            label="Members added"
+            label="New customers"
             value={d.membersAdded.current.toLocaleString()}
             delta={d.membersAdded.deltaFraction}
             series={d.membersAdded.series}
