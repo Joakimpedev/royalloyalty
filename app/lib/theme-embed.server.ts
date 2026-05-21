@@ -14,11 +14,16 @@
 
 const EXTENSION_UID = "63dc22e1-27da-358d-1f2a-1e6d9b60e4b66a03a917";
 
+// Query all themes (typically <5 per shop) and find the MAIN one client-side
+// — `roles:` argument support has flip-flopped across API versions, so this
+// is the version-safe path. The `OnlineStoreThemeFileBodyText` inline
+// fragment carries the JSON contents as a plain string.
 const QUERY = `#graphql
-  query MainThemeSettings {
-    themes(first: 1, roles: [MAIN]) {
+  query AllThemes {
+    themes(first: 20) {
       nodes {
         id
+        role
         files(filenames: ["config/settings_data.json"]) {
           nodes {
             body {
@@ -44,15 +49,26 @@ export async function isAppEmbedEnabled(
       data?: {
         themes?: {
           nodes?: Array<{
+            role?: string;
             files?: {
               nodes?: Array<{ body?: { content?: string } }>;
             };
           }>;
         };
       };
+      errors?: Array<{ message?: string }>;
     };
-    const content =
-      json.data?.themes?.nodes?.[0]?.files?.nodes?.[0]?.body?.content;
+    if (json.errors?.length) {
+      console.warn(
+        "[theme-embed] graphql errors:",
+        json.errors.map((e) => e.message).join("; "),
+      );
+      return null;
+    }
+    const mainTheme = json.data?.themes?.nodes?.find(
+      (t) => (t.role ?? "").toUpperCase() === "MAIN",
+    );
+    const content = mainTheme?.files?.nodes?.[0]?.body?.content;
     if (!content) return null;
 
     const settings = JSON.parse(content) as {
@@ -81,7 +97,8 @@ export async function isAppEmbedEnabled(
       }
     }
     return false;
-  } catch {
+  } catch (err) {
+    console.warn("[theme-embed] check failed:", err);
     return null;
   }
 }

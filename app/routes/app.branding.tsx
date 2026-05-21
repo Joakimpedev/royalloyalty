@@ -137,7 +137,7 @@ function SectionHeader({
         marginBottom: 12,
       }}
     >
-      <span style={{ fontSize: 16, fontWeight: 600, color: "#202223" }}>
+      <span style={{ fontSize: 14, fontWeight: 600, color: "#202223" }}>
         {title}
       </span>
       {embedEnabled === true && (
@@ -676,7 +676,7 @@ export default function BrandingPage() {
           embedEnabled={embedEnabled}
         />
         <s-stack direction="block" gap="base">
-          <div style={{ fontStyle: "italic", color: "#6d7175", fontSize: 13 }}>
+          <div style={{ color: "#6d7175", fontSize: 13 }}>
             Shows above the add-to-cart button.
           </div>
           <s-checkbox
@@ -771,7 +771,7 @@ export default function BrandingPage() {
       <s-section>
         <SectionHeader title="Cart widget" embedEnabled={embedEnabled} />
         <s-stack direction="block" gap="base">
-          <div style={{ fontStyle: "italic", color: "#6d7175", fontSize: 13 }}>
+          <div style={{ color: "#6d7175", fontSize: 13 }}>
             Shows inside the cart drawer and cart page.
           </div>
           <s-checkbox
