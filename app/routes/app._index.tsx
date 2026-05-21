@@ -871,25 +871,61 @@ function Sparkline({
     const y = h - ((v - min) / range) * (h - 8) - 4;
     return { x, y };
   });
-  // Catmull-Rom-to-Bezier smoothing — soft Polaris-style curves between
-  // points instead of hard polyline kinks. Tension 0.5 gives a subtle
-  // bend without overshooting; equivalent to what Shopify's own
-  // analytics charts use.
+  // Monotone cubic interpolation (Fritsch-Carlson). Produces a smooth
+  // curve through every point WITHOUT overshooting — tangents are
+  // clamped to zero at local minima/maxima so a value at 0 never dips
+  // below 0 on the chart. Same algorithm d3's d3.curveMonotoneX uses.
   const curvePath = (() => {
     if (pts.length === 1) {
       return `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
     }
+    const n = pts.length;
+    // Per-segment slope (Δy / Δx) — x is monotonic so Δx > 0.
+    const dx: number[] = new Array(n - 1);
+    const delta: number[] = new Array(n - 1);
+    for (let i = 0; i < n - 1; i++) {
+      dx[i] = pts[i + 1].x - pts[i].x;
+      delta[i] = (pts[i + 1].y - pts[i].y) / dx[i];
+    }
+    // Tangent at each point (m[i]). Endpoints take the adjacent slope;
+    // interior points average the two neighboring slopes UNLESS they
+    // differ in sign (= local extremum), in which case clamp to 0.
+    const m: number[] = new Array(n);
+    m[0] = delta[0];
+    m[n - 1] = delta[n - 2];
+    for (let i = 1; i < n - 1; i++) {
+      if (delta[i - 1] * delta[i] <= 0) {
+        m[i] = 0;
+      } else {
+        m[i] = (delta[i - 1] + delta[i]) / 2;
+      }
+    }
+    // Fritsch-Carlson tangent adjustment — keeps the cubic monotonic
+    // on every segment, eliminating any residual overshoot.
+    for (let i = 0; i < n - 1; i++) {
+      if (delta[i] === 0) {
+        m[i] = 0;
+        m[i + 1] = 0;
+        continue;
+      }
+      const alpha = m[i] / delta[i];
+      const beta = m[i + 1] / delta[i];
+      const sumSq = alpha * alpha + beta * beta;
+      if (sumSq > 9) {
+        const tau = 3 / Math.sqrt(sumSq);
+        m[i] = tau * alpha * delta[i];
+        m[i + 1] = tau * beta * delta[i];
+      }
+    }
+    // Build the path: convert each tangent pair into cubic Bezier
+    // control points (1/3 of the segment width along the tangent).
     let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] ?? pts[i];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2] ?? pts[i + 1];
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
-      d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+    for (let i = 0; i < n - 1; i++) {
+      const cp1x = pts[i].x + dx[i] / 3;
+      const cp1y = pts[i].y + (m[i] * dx[i]) / 3;
+      const cp2x = pts[i + 1].x - dx[i] / 3;
+      const cp2y = pts[i + 1].y - (m[i + 1] * dx[i]) / 3;
+      d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${pts[i + 1].x.toFixed(2)},${pts[i + 1].y.toFixed(2)}`;
     }
     return d;
   })();
