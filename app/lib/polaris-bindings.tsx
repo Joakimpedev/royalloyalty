@@ -114,7 +114,38 @@ export function useSaveBar(
   }, [ref, dirty]);
 }
 
-// Injected once: the keyframe + class used by nudgeSaveBar().
+// Nudge the user when they try to leave with unsaved changes. The
+// <ui-save-bar> visible UI lives in App Bridge's parent admin shell
+// (outside our iframe), so we can't directly animate it. Instead:
+//   1. Pop an App Bridge toast (`shopify.toast.show`) — guaranteed to
+//      show across the entire admin frame.
+//   2. Best-effort: also add a shake class to the in-DOM element in
+//      case a future Polaris release renders the bar locally.
+export function nudgeSaveBar(): void {
+  if (typeof document === "undefined") return;
+
+  // Toast — primary feedback.
+  try {
+    const sh = (window as unknown as {
+      shopify?: { toast?: { show?: (msg: string, opts?: object) => void } };
+    }).shopify;
+    sh?.toast?.show?.("You have unsaved changes — save or discard first.", {
+      duration: 3000,
+    });
+  } catch {
+    /* App Bridge not available — skip */
+  }
+
+  // Best-effort visual shake (no-op when the element is just a portal).
+  ensureShakeStyle();
+  document.querySelectorAll("ui-save-bar").forEach((el) => {
+    (el as HTMLElement).classList.add("royal-save-shake");
+    window.setTimeout(() => {
+      (el as HTMLElement).classList.remove("royal-save-shake");
+    }, 500);
+  });
+}
+
 const SHAKE_STYLE_ID = "royal-save-shake-style";
 function ensureShakeStyle() {
   if (typeof document === "undefined") return;
@@ -134,17 +165,6 @@ function ensureShakeStyle() {
     }
   `;
   document.head.appendChild(s);
-}
-
-export function nudgeSaveBar(): void {
-  if (typeof document === "undefined") return;
-  ensureShakeStyle();
-  document.querySelectorAll("ui-save-bar").forEach((el) => {
-    (el as HTMLElement).classList.add("royal-save-shake");
-    window.setTimeout(() => {
-      (el as HTMLElement).classList.remove("royal-save-shake");
-    }, 500);
-  });
 }
 
 export function PageTitle({
