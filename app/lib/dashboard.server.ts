@@ -15,6 +15,10 @@ export interface DashboardMetric {
   previous: number;
   /** Signed change as a fraction (0.1 = +10%). Null if previous was 0. */
   deltaFraction: number | null;
+  /** One bucketed value per day in the window, oldest -> newest. Drives
+   *  the per-card sparkline. Length matches seriesLabels in the parent
+   *  DashboardMetrics. */
+  series: number[];
 }
 
 export interface DashboardActivity {
@@ -35,6 +39,8 @@ export interface DashboardTopMember {
 }
 
 export interface DashboardMetrics {
+  /** One label per bucket — "MMM D" formatted, oldest -> newest. */
+  seriesLabels: string[];
   /** Sum of order totals for orders that earned loyalty points in the
    *  window, ESTIMATED by reversing the active purchase rule. Honest:
    *  shows null when no purchase rule is configured so we don't lie. */
@@ -59,16 +65,36 @@ export interface DashboardMetrics {
 
 export async function getDashboardMetrics(
   shopId: string,
-  windowMs: number,
+  since: Date,
+  until: Date,
 ): Promise<DashboardMetrics> {
-  const now = new Date();
-  const since = new Date(now.getTime() - windowMs);
-  const priorSince = new Date(now.getTime() - 2 * windowMs);
+  const windowMs = until.getTime() - since.getTime();
+  const priorSince = new Date(since.getTime() - windowMs);
+
+  // Daily bucket list, inclusive of both endpoints (UTC).
+  const dayKeys: string[] = [];
+  const seriesLabels: string[] = [];
+  {
+    const cursor = startOfDayUtc(since);
+    const endDay = startOfDayUtc(until);
+    while (cursor <= endDay) {
+      dayKeys.push(cursor.toISOString().slice(0, 10));
+      seriesLabels.push(
+        cursor.toLocaleDateString(undefined, {
+          timeZone: "UTC",
+          month: "short",
+          day: "numeric",
+        }),
+      );
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
 
   const [
     purchaseRule,
     cur,
     prev,
+    series,
     recentRows,
     topRows,
   ] = await Promise.all([
@@ -76,8 +102,9 @@ export async function getDashboardMetrics(
       where: { shopId, action: "purchase", enabled: true },
       select: { points: true, perDollar: true, config: true },
     }),
-    aggregatesFor(shopId, since, now),
+    aggregatesFor(shopId, since, until),
     aggregatesFor(shopId, priorSince, since),
+    buildSeriesFor(shopId, since, until, dayKeys),
     prisma.pointTransaction.findMany({
       where: { shopId },
       orderBy: { createdAt: "desc" },
@@ -109,28 +136,33 @@ export async function getDashboardMetrics(
   // JSON blob (e.g. {perAmount: 5} means "rule.points per 5 currency").
   let revenueCur: number | null = null;
   let revenuePrev: number | null = null;
+  let revenueSeries: number[] | null = null;
   if (purchaseRule?.perDollar && purchaseRule.points > 0) {
     const cfg = (purchaseRule.config ?? null) as { perAmount?: number } | null;
     const perAmount = Math.max(1, cfg?.perAmount ?? 1);
     const ratio = perAmount / purchaseRule.points;
     revenueCur = cur.earnPurchasePoints * ratio;
     revenuePrev = prev.earnPurchasePoints * ratio;
+    revenueSeries = series.earnPurchasePointsByDay.map((p) => p * ratio);
   }
 
   return {
-    loyaltyDrivenRevenueEstimated: revenueCur !== null
-      ? {
-          current: revenueCur,
-          previous: revenuePrev ?? 0,
-          deltaFraction: fractionDelta(revenueCur, revenuePrev ?? 0),
-        }
-      : null,
-    membersAdded: metric(cur.membersAdded, prev.membersAdded),
-    earners: metric(cur.earners, prev.earners),
-    redeemers: metric(cur.redeemers, prev.redeemers),
-    pointsIssued: metric(cur.pointsIssued, prev.pointsIssued),
-    pointsRedeemed: metric(cur.pointsRedeemed, prev.pointsRedeemed),
-    referralOrders: metric(cur.referralOrders, prev.referralOrders),
+    seriesLabels,
+    loyaltyDrivenRevenueEstimated:
+      revenueCur !== null
+        ? {
+            current: revenueCur,
+            previous: revenuePrev ?? 0,
+            deltaFraction: fractionDelta(revenueCur, revenuePrev ?? 0),
+            series: revenueSeries ?? [],
+          }
+        : null,
+    membersAdded: metric(cur.membersAdded, prev.membersAdded, series.membersAddedByDay),
+    earners: metric(cur.earners, prev.earners, series.earnEventsByDay),
+    redeemers: metric(cur.redeemers, prev.redeemers, series.redeemEventsByDay),
+    pointsIssued: metric(cur.pointsIssued, prev.pointsIssued, series.pointsIssuedByDay),
+    pointsRedeemed: metric(cur.pointsRedeemed, prev.pointsRedeemed, series.pointsRedeemedByDay),
+    referralOrders: metric(cur.referralOrders, prev.referralOrders, series.referralOrdersByDay),
     recentActivity: recentRows.map((r) => ({
       id: r.id,
       memberName: r.member.name ?? null,
@@ -150,6 +182,82 @@ export async function getDashboardMetrics(
       };
     }),
   };
+}
+
+function startOfDayUtc(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+interface SeriesBundle {
+  pointsIssuedByDay: number[];
+  pointsRedeemedByDay: number[];
+  earnPurchasePointsByDay: number[];
+  earnEventsByDay: number[];
+  redeemEventsByDay: number[];
+  membersAddedByDay: number[];
+  referralOrdersByDay: number[];
+}
+
+async function buildSeriesFor(
+  shopId: string,
+  since: Date,
+  until: Date,
+  dayKeys: string[],
+): Promise<SeriesBundle> {
+  // Pull only the columns we need to bucket — avoid loading entire rows.
+  const [txns, members, referrals] = await Promise.all([
+    prisma.pointTransaction.findMany({
+      where: { shopId, createdAt: { gte: since, lt: until } },
+      select: { type: true, points: true, orderId: true, createdAt: true },
+    }),
+    prisma.member.findMany({
+      where: { shopId, enrolledAt: { gte: since, lt: until } },
+      select: { enrolledAt: true },
+    }),
+    prisma.referral.findMany({
+      where: {
+        shopId,
+        status: "COMPLETED",
+        createdAt: { gte: since, lt: until },
+      },
+      select: { createdAt: true },
+    }),
+  ]);
+
+  const idx = new Map(dayKeys.map((k, i) => [k, i]));
+  const zeros = () => Array(dayKeys.length).fill(0);
+  const out: SeriesBundle = {
+    pointsIssuedByDay: zeros(),
+    pointsRedeemedByDay: zeros(),
+    earnPurchasePointsByDay: zeros(),
+    earnEventsByDay: zeros(),
+    redeemEventsByDay: zeros(),
+    membersAddedByDay: zeros(),
+    referralOrdersByDay: zeros(),
+  };
+
+  for (const t of txns) {
+    const i = idx.get(t.createdAt.toISOString().slice(0, 10));
+    if (i === undefined) continue;
+    if (t.points > 0) out.pointsIssuedByDay[i] += t.points;
+    if (t.type === "REDEEM") {
+      out.pointsRedeemedByDay[i] += Math.abs(t.points);
+      out.redeemEventsByDay[i] += 1;
+    }
+    if (t.type === "EARN") {
+      out.earnEventsByDay[i] += 1;
+      if (t.orderId) out.earnPurchasePointsByDay[i] += t.points;
+    }
+  }
+  for (const m of members) {
+    const i = idx.get(m.enrolledAt.toISOString().slice(0, 10));
+    if (i !== undefined) out.membersAddedByDay[i] += 1;
+  }
+  for (const r of referrals) {
+    const i = idx.get(r.createdAt.toISOString().slice(0, 10));
+    if (i !== undefined) out.referralOrdersByDay[i] += 1;
+  }
+  return out;
 }
 
 interface PeriodAggregates {
@@ -235,8 +343,17 @@ async function aggregatesFor(
   };
 }
 
-function metric(current: number, previous: number): DashboardMetric {
-  return { current, previous, deltaFraction: fractionDelta(current, previous) };
+function metric(
+  current: number,
+  previous: number,
+  series: number[],
+): DashboardMetric {
+  return {
+    current,
+    previous,
+    deltaFraction: fractionDelta(current, previous),
+    series,
+  };
 }
 
 function fractionDelta(current: number, previous: number): number | null {

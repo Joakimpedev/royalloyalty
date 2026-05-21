@@ -7,6 +7,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
+import { useEffect, useState } from "react";
 import {
   useFetcher,
   useLoaderData,
@@ -20,14 +21,28 @@ import prisma from "../db.server";
 import { checkAppEmbedEnabled } from "../lib/theme-embed.server";
 import { getDashboardMetrics } from "../lib/dashboard.server";
 
-const RANGES = {
-  "30d": { label: "Last 30 days", days: 30 },
-  "90d": { label: "Last 90 days", days: 90 },
-  ytd: { label: "Year to date", days: 365 }, // approx, fine for v1
-} as const;
-type RangeKey = keyof typeof RANGES;
-function asRange(v: string | null): RangeKey {
-  return v === "90d" || v === "ytd" ? v : "30d";
+// Date range is YYYY-MM-DD inclusive on both ends. Default: last 30 days
+// (today inclusive). Parsed defensively so a malformed URL falls back to
+// the default range instead of crashing the loader.
+function defaultRange(): { from: string; to: string } {
+  const to = new Date();
+  to.setUTCHours(0, 0, 0, 0);
+  const from = new Date(to);
+  from.setUTCDate(from.getUTCDate() - 29);
+  return { from: ymd(from), to: ymd(to) };
+}
+function ymd(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+function parseRange(
+  fromRaw: string | null,
+  toRaw: string | null,
+): { from: string; to: string } {
+  const def = defaultRange();
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const from = fromRaw && re.test(fromRaw) ? fromRaw : def.from;
+  const to = toRaw && re.test(toRaw) ? toRaw : def.to;
+  return from <= to ? { from, to } : def;
 }
 
 // Mirror the defaults declared in app/routes/app.program.tsx so the home
@@ -47,8 +62,14 @@ const EARN_ACTION_DEFAULTS: Record<string, boolean> = {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
-  const range = asRange(url.searchParams.get("range"));
-  const windowMs = RANGES[range].days * 24 * 60 * 60 * 1000;
+  const range = parseRange(
+    url.searchParams.get("from"),
+    url.searchParams.get("to"),
+  );
+  // Treat the to date as inclusive: query up to start-of-day(to + 1).
+  const sinceDate = new Date(range.from + "T00:00:00.000Z");
+  const untilDate = new Date(range.to + "T00:00:00.000Z");
+  untilDate.setUTCDate(untilDate.getUTCDate() + 1);
 
   // Upsert (not findUnique): a freshly installed store has no Shop row yet and
   // nothing else bootstraps it on the home page, so reading-only dead-ended on
@@ -61,7 +82,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const [dashboard, earnRuleRows, rewardCount, embed] =
     await Promise.all([
-      getDashboardMetrics(shop.id, windowMs),
+      getDashboardMetrics(shop.id, sinceDate, untilDate),
       prisma.earnRule.findMany({
         where: { shopId: shop.id },
         select: { action: true, enabled: true },
@@ -142,6 +163,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shopMissing: false as const,
     range,
     steps,
+    // (rangeLabels available on dashboard.seriesLabels for tooltips)
     dashboard,
     programActivated: Boolean(shop.programActivatedAt),
     embedEnabled: embed.enabled,
@@ -265,30 +287,31 @@ export default function Home() {
         </s-section>
       )}
 
-      {/* Performance metrics — Essent / Smile pattern. Date range selector
-          sits in the section heading row, not as its own page-level row. */}
-      <s-section>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-            marginBottom: 12,
-          }}
-        >
-          <s-text fontWeight="bold">Performance</s-text>
-          <DateRangeSelect value={data.range} />
-        </div>
+      {/* Date range picker — its own row above the Performance grid so
+          shoppers know it scopes the metrics below. */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          margin: "0 0 8px",
+        }}
+      >
+        <DateRangePicker value={data.range} />
+      </div>
+
+      {/* Performance — 2 rows × 3 sparkline KPI cards. Loyalty-driven
+          revenue takes slot 1 when a purchase rule is configured;
+          otherwise it's replaced by Referral orders so the grid still
+          shows 6 distinct metrics. */}
+      <s-section heading="Performance">
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
             gap: 12,
           }}
         >
-          {d.loyaltyDrivenRevenueEstimated && (
+          {d.loyaltyDrivenRevenueEstimated ? (
             <MetricCard
               label="Loyalty-driven revenue"
               value={formatCurrency(
@@ -298,6 +321,16 @@ export default function Home() {
               delta={d.loyaltyDrivenRevenueEstimated.deltaFraction}
               emptyHint="Order revenue from members earning points — appears once orders ship."
               isEmpty={d.loyaltyDrivenRevenueEstimated.current === 0}
+              series={d.loyaltyDrivenRevenueEstimated.series}
+            />
+          ) : (
+            <MetricCard
+              label="Referral orders"
+              value={d.referralOrders.current.toLocaleString()}
+              delta={d.referralOrders.deltaFraction}
+              emptyHint="Orders attributed to a referral link in this period."
+              isEmpty={d.referralOrders.current === 0}
+              series={d.referralOrders.series}
             />
           )}
           <MetricCard
@@ -306,20 +339,7 @@ export default function Home() {
             delta={d.membersAdded.deltaFraction}
             emptyHint="New customers enrolled in the program."
             isEmpty={d.membersAdded.current === 0}
-          />
-          <MetricCard
-            label="Earners"
-            value={d.earners.current.toLocaleString()}
-            delta={d.earners.deltaFraction}
-            emptyHint="Members who earned points in this period."
-            isEmpty={d.earners.current === 0}
-          />
-          <MetricCard
-            label="Redeemers"
-            value={d.redeemers.current.toLocaleString()}
-            delta={d.redeemers.deltaFraction}
-            emptyHint="Members who spent points in this period."
-            isEmpty={d.redeemers.current === 0}
+            series={d.membersAdded.series}
           />
           <MetricCard
             label="Points issued"
@@ -327,6 +347,7 @@ export default function Home() {
             delta={d.pointsIssued.deltaFraction}
             emptyHint="Total points awarded across all activity."
             isEmpty={d.pointsIssued.current === 0}
+            series={d.pointsIssued.series}
           />
           <MetricCard
             label="Points redeemed"
@@ -334,13 +355,23 @@ export default function Home() {
             delta={d.pointsRedeemed.deltaFraction}
             emptyHint="Total points spent on rewards."
             isEmpty={d.pointsRedeemed.current === 0}
+            series={d.pointsRedeemed.series}
           />
           <MetricCard
-            label="Referral orders"
-            value={d.referralOrders.current.toLocaleString()}
-            delta={d.referralOrders.deltaFraction}
-            emptyHint="Orders attributed to a referral link in this period."
-            isEmpty={d.referralOrders.current === 0}
+            label="Earners"
+            value={d.earners.current.toLocaleString()}
+            delta={d.earners.deltaFraction}
+            emptyHint="Members who earned points in this period."
+            isEmpty={d.earners.current === 0}
+            series={d.earners.series}
+          />
+          <MetricCard
+            label="Redeemers"
+            value={d.redeemers.current.toLocaleString()}
+            delta={d.redeemers.deltaFraction}
+            emptyHint="Members who spent points in this period."
+            isEmpty={d.redeemers.current === 0}
+            series={d.redeemers.series}
           />
         </div>
       </s-section>
@@ -418,28 +449,282 @@ function StatusChip({
   );
 }
 
-function DateRangeSelect({ value }: { value: RangeKey }) {
+// Polaris-native date range picker. Uses <s-popover> + <s-date-picker
+// type="range"> so we get Shopify's first-party calendar overlay,
+// keyboard handling and focus trap. Ports the pattern from sibling app
+// stitch-bundles. Presets on the left, calendar on the right.
+const RANGE_POPOVER_ID = "royal-date-range-popover";
+type DateRange = { from: string; to: string };
+type Preset = { id: string; label: string; resolve: () => DateRange };
+function fmtDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+function todayUtcDate(): Date {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+const RANGE_PRESETS: Preset[] = [
+  {
+    id: "last7",
+    label: "Last 7 days",
+    resolve: () => {
+      const t = todayUtcDate();
+      const f = new Date(t);
+      f.setUTCDate(f.getUTCDate() - 6);
+      return { from: fmtDate(f), to: fmtDate(t) };
+    },
+  },
+  {
+    id: "last30",
+    label: "Last 30 days",
+    resolve: () => {
+      const t = todayUtcDate();
+      const f = new Date(t);
+      f.setUTCDate(f.getUTCDate() - 29);
+      return { from: fmtDate(f), to: fmtDate(t) };
+    },
+  },
+  {
+    id: "last90",
+    label: "Last 90 days",
+    resolve: () => {
+      const t = todayUtcDate();
+      const f = new Date(t);
+      f.setUTCDate(f.getUTCDate() - 89);
+      return { from: fmtDate(f), to: fmtDate(t) };
+    },
+  },
+  {
+    id: "thisMonth",
+    label: "This month",
+    resolve: () => {
+      const t = todayUtcDate();
+      return {
+        from: fmtDate(new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1))),
+        to: fmtDate(t),
+      };
+    },
+  },
+  {
+    id: "lastMonth",
+    label: "Last month",
+    resolve: () => {
+      const t = todayUtcDate();
+      const start = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - 1, 1));
+      const end = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 0));
+      return { from: fmtDate(start), to: fmtDate(end) };
+    },
+  },
+];
+function detectActivePreset(range: DateRange): string | null {
+  for (const p of RANGE_PRESETS) {
+    const r = p.resolve();
+    if (r.from === range.from && r.to === range.to) return p.id;
+  }
+  return null;
+}
+function displayRange(from: string, to: string): string {
+  const f = new Date(from + "T00:00:00Z");
+  const t = new Date(to + "T00:00:00Z");
+  const sameYear = f.getUTCFullYear() === t.getUTCFullYear();
+  const part = (d: Date, year: boolean) =>
+    d.toLocaleDateString(undefined, {
+      timeZone: "UTC",
+      month: "short",
+      day: "numeric",
+      ...(year ? { year: "numeric" } : {}),
+    });
+  if (from === to) return part(f, true);
+  return `${part(f, !sameYear)} – ${part(t, true)}`;
+}
+
+function DateRangePicker({ value }: { value: DateRange }) {
   const [params, setParams] = useSearchParams();
+  const [draft, setDraft] = useState<DateRange>(value);
+  const [pickerKey, setPickerKey] = useState(0);
+  // Sync the draft when the canonical value changes (e.g. external nav).
+  useEffect(() => {
+    setDraft(value);
+    setPickerKey((k) => k + 1);
+  }, [value.from, value.to]);
+  const applyRange = (next: DateRange) => {
+    const params2 = new URLSearchParams(params);
+    params2.set("from", next.from);
+    params2.set("to", next.to);
+    setParams(params2);
+  };
+  const attachPicker = (el: HTMLElement | null) => {
+    if (!el) return;
+    const marked = el as HTMLElement & { __royalAttached?: boolean };
+    if (marked.__royalAttached) return;
+    marked.__royalAttached = true;
+    const read = (e: Event) => {
+      const t = e.currentTarget as HTMLElement & { value?: string };
+      const v = t.value ?? "";
+      const [f, ts] = v.split("--");
+      if (!f) return;
+      const a = f;
+      const b = ts || f;
+      const [lo, hi] = a <= b ? [a, b] : [b, a];
+      setDraft({ from: lo, to: hi });
+    };
+    el.addEventListener("input", read);
+    el.addEventListener("change", read);
+  };
+  const activeId = detectActivePreset(value);
   return (
-    // @ts-expect-error - s-select custom element JSX types
-    <s-select
-      label="Date range"
-      labelHidden
-      value={value}
-      onChange={(e: { target: { value: string } }) => {
-        const next = new URLSearchParams(params);
-        next.set("range", e.target.value);
-        setParams(next);
+    <>
+      {/* @ts-expect-error - s-button custom element */}
+      <s-button
+        commandFor={RANGE_POPOVER_ID}
+        icon="calendar"
+        onClick={() => {
+          setDraft(value);
+          setPickerKey((k) => k + 1);
+        }}
+      >
+        {displayRange(value.from, value.to)}
+        {/* @ts-expect-error - s-button custom element */}
+      </s-button>
+      {/* @ts-expect-error - s-popover custom element */}
+      <s-popover id={RANGE_POPOVER_ID} inlineSize="600px">
+        {/* @ts-expect-error - s-box custom element */}
+        <s-box padding="base">
+          {/* @ts-expect-error - s-stack custom element */}
+          <s-stack direction="inline" gap="base">
+            {/* @ts-expect-error - s-stack custom element */}
+            <s-stack direction="block" gap="small-200">
+              {RANGE_PRESETS.map((p) => (
+                // @ts-expect-error - s-button custom element
+                <s-button
+                  key={p.id}
+                  variant={activeId === p.id ? "primary" : "tertiary"}
+                  commandFor={RANGE_POPOVER_ID}
+                  command="--hide"
+                  onClick={() => applyRange(p.resolve())}
+                >
+                  {p.label}
+                  {/* @ts-expect-error - s-button custom element */}
+                </s-button>
+              ))}
+              {/* @ts-expect-error - s-stack custom element */}
+            </s-stack>
+            {/* @ts-expect-error - s-stack custom element */}
+            <s-stack direction="block" gap="base">
+              {/* @ts-expect-error - s-date-picker custom element */}
+              <s-date-picker
+                key={pickerKey}
+                ref={attachPicker}
+                type="range"
+                defaultValue={`${value.from}--${value.to}`}
+                view={value.from.slice(0, 7)}
+              />
+              {/* @ts-expect-error - s-stack custom element */}
+              <s-stack direction="inline" gap="small" justifyContent="end">
+                {/* @ts-expect-error - s-button custom element */}
+                <s-button commandFor={RANGE_POPOVER_ID} command="--hide">
+                  Cancel
+                  {/* @ts-expect-error - s-button custom element */}
+                </s-button>
+                {/* @ts-expect-error - s-button custom element */}
+                <s-button
+                  variant="primary"
+                  commandFor={RANGE_POPOVER_ID}
+                  command="--hide"
+                  onClick={() => applyRange(draft)}
+                >
+                  Apply
+                  {/* @ts-expect-error - s-button custom element */}
+                </s-button>
+                {/* @ts-expect-error - s-stack custom element */}
+              </s-stack>
+              {/* @ts-expect-error - s-stack custom element */}
+            </s-stack>
+            {/* @ts-expect-error - s-stack custom element */}
+          </s-stack>
+          {/* @ts-expect-error - s-box custom element */}
+        </s-box>
+        {/* @ts-expect-error - s-popover custom element */}
+      </s-popover>
+    </>
+  );
+}
+
+// Polaris-flavoured sparkline. Pure SVG, no chart lib. Dark line, subtle
+// area fill, no axes, no decorations. Matches the rest of the admin UI
+// instead of bringing in recharts just for one line per card.
+function Sparkline({
+  values,
+  height = 36,
+}: {
+  values: number[];
+  height?: number;
+}) {
+  if (!values.length) return null;
+  const w = 100;
+  const h = height;
+  const max = Math.max(...values, 0);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const stepX = w / (values.length - 1 || 1);
+  const points = values.map((v, i) => {
+    const x = i * stepX;
+    const y = h - ((v - min) / range) * (h - 6) - 3;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+  const polyline = points.join(" ");
+  const areaPath =
+    `M0,${h} L` +
+    points.join(" L") +
+    ` L${w.toFixed(2)},${h} Z`;
+  const allZero = values.every((v) => v === 0);
+  const stroke = "#202223";
+  const fill = "#e1e3e5";
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label="trend"
+      style={{
+        width: "100%",
+        height,
+        display: "block",
+        marginTop: 6,
       }}
     >
-      {(Object.keys(RANGES) as RangeKey[]).map((k) => (
-        // @ts-expect-error - s-option custom element JSX types
-        <s-option key={k} value={k}>
-          {RANGES[k].label}
-        </s-option>
-      ))}
-      {/* @ts-expect-error - s-select custom element JSX types */}
-    </s-select>
+      {allZero ? (
+        <line
+          x1={0}
+          x2={w}
+          y1={h - 3}
+          y2={h - 3}
+          stroke={stroke}
+          strokeOpacity={0.25}
+          strokeWidth={1.5}
+          vectorEffect="non-scaling-stroke"
+        />
+      ) : (
+        <>
+          <path
+            d={areaPath}
+            fill={fill}
+            opacity={0.5}
+            vectorEffect="non-scaling-stroke"
+          />
+          <polyline
+            points={polyline}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </>
+      )}
+    </svg>
   );
 }
 
@@ -449,27 +734,27 @@ function MetricCard({
   delta,
   emptyHint,
   isEmpty,
+  series,
 }: {
   label: string;
   value: string;
   delta: number | null;
   emptyHint: string;
   isEmpty: boolean;
+  series: number[];
 }) {
   return (
     <s-box padding="base" borderWidth="base" borderRadius="base">
       <s-stack direction="block" gap="small-200">
         <s-text tone="subdued">{label}</s-text>
+        <s-stack direction="inline" gap="small-200" alignItems="baseline">
+          <s-heading>{value}</s-heading>
+          {!isEmpty && delta !== null && <DeltaPill fraction={delta} />}
+        </s-stack>
         {isEmpty ? (
-          <>
-            <s-heading>{value}</s-heading>
-            <s-text tone="subdued">{emptyHint}</s-text>
-          </>
+          <s-text tone="subdued">{emptyHint}</s-text>
         ) : (
-          <s-stack direction="inline" gap="small-200" alignItems="baseline">
-            <s-heading>{value}</s-heading>
-            {delta !== null && <DeltaPill fraction={delta} />}
-          </s-stack>
+          <Sparkline values={series} />
         )}
       </s-stack>
     </s-box>
