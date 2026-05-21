@@ -133,13 +133,16 @@ export async function checkAppEmbedEnabled(
 
     dump.graphql_errors = json.errors ?? null;
 
-    if (json.errors?.length) {
+    // IMPORTANT: graphql can return partial data + per-field errors. Demo /
+    // theme-store themes deny `files` access while the MAIN theme returns
+    // fine, so we MUST process `data.themes.nodes` even when `errors` is
+    // populated. Only bail if there's no data at all.
+    const themes = json.data?.themes?.nodes ?? [];
+    if (!themes.length && json.errors?.length) {
       const msg = json.errors.map((e) => e.message).join("; ");
-      const debug = `graphql errors: ${msg}`;
+      const debug = `graphql errors with no data: ${msg}`;
       return { enabled: null, debug, dump };
     }
-
-    const themes = json.data?.themes?.nodes ?? [];
     dump.themes_summary = themes.map((t) => ({
       id: t.id,
       role: t.role,
