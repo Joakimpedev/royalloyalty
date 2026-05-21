@@ -88,6 +88,32 @@ export function ChoiceList({
 // page is dirty: instead of letting the user navigate away (or blocking
 // with a confirm modal), we draw attention to the save bar so they know
 // to Save or Discard explicitly.
+// Drive App Bridge <ui-save-bar> imperatively (show/hide via ref). The
+// declarative `open=` attribute renders the element but App Bridge does
+// not register slotted buttons reliably across page mounts, so we keep
+// the imperative pattern. The cleanup callback fires `.hide()` whenever
+// dirty flips to false AND on unmount, so the bar doesn't linger.
+export function useSaveBar(
+  ref: React.MutableRefObject<HTMLElement | null>,
+  dirty: boolean,
+) {
+  useEffect(() => {
+    const el = ref.current as
+      | (HTMLElement & { show?: () => void; hide?: () => void })
+      | null;
+    if (!el) return;
+    if (dirty) el.show?.();
+    else el.hide?.();
+    return () => {
+      try {
+        el.hide?.();
+      } catch {
+        /* element already gone */
+      }
+    };
+  }, [ref, dirty]);
+}
+
 // Injected once: the keyframe + class used by nudgeSaveBar().
 const SHAKE_STYLE_ID = "royal-save-shake-style";
 function ensureShakeStyle() {

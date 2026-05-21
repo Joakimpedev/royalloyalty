@@ -18,7 +18,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
-import { ChoiceList, PageTitle } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
 import {
   getCashbackSettings,
   saveCashbackSettings,
@@ -106,6 +106,7 @@ export default function StoreCreditPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const saving = nav.state === "submitting";
 
+  useSaveBar(saveBarRef, dirty);
 
   useEffect(() => {
     if (actionData?.ok) setBaseline(form);
@@ -130,17 +131,15 @@ export default function StoreCreditPage() {
       />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
-      <ui-save-bar id="storecredit-save-bar" open={dirty ? true : undefined}>
+      <ui-save-bar id="storecredit-save-bar" ref={saveBarRef}>
         <button
-          slot="save"
+          variant="primary"
           onClick={save}
           {...(saving ? { loading: "" } : {})}
         >
           Save
         </button>
-        <button slot="discard" onClick={() => setForm(baseline)}>
-          Discard
-        </button>
+        <button onClick={() => setForm(baseline)}>Discard</button>
         {/* @ts-expect-error - ui-save-bar custom element */}
       </ui-save-bar>
 

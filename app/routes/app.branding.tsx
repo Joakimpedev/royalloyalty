@@ -4,6 +4,7 @@
 // plan §3d). Save bar + useBlocker(). Branding is stored on
 // Shop.aiConfigSnapshot.branding (schema is owned by another agent / locked).
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useSaveBar } from "../lib/polaris-bindings";
 import type {
   ActionFunctionArgs,
   HeadersFunction,
@@ -467,9 +468,7 @@ export default function BrandingPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const saving = nav.state === "submitting";
 
-  // Note: native <ui-save-bar> (App Bridge) handles unsaved-changes nav
-  // warnings — no useBlocker-driven body banner needed.
-
+  useSaveBar(saveBarRef, dirty);
 
   useEffect(() => {
     if (actionData?.ok) setBaseline(form);
@@ -521,17 +520,15 @@ export default function BrandingPage() {
       )}
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
-      <ui-save-bar id="branding-save-bar" open={dirty ? true : undefined}>
+      <ui-save-bar id="branding-save-bar" ref={saveBarRef}>
         <button
-          slot="save"
+          variant="primary"
           onClick={save}
           {...(saving ? { loading: "" } : {})}
         >
           Save
         </button>
-        <button slot="discard" onClick={() => setForm(baseline)}>
-          Discard
-        </button>
+        <button onClick={() => setForm(baseline)}>Discard</button>
         {/* @ts-expect-error - ui-save-bar custom element */}
       </ui-save-bar>
 

@@ -23,6 +23,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { useSaveBar } from "../lib/polaris-bindings";
 import {
   PLANS,
   PLAN_ORDER,
@@ -176,6 +177,7 @@ export default function SettingsPage() {
   );
   const dirty = contactEmail !== String(data.contactEmail ?? "");
   const busy = nav.state === "submitting";
+  useSaveBar(saveBarRef, dirty);
 
   // Client-side redirect to Shopify-hosted confirmation / managed pricing.
   //
@@ -239,18 +241,15 @@ export default function SettingsPage() {
     <s-page heading="Settings">
 
       {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
-      <ui-save-bar id="settings-save-bar" open={dirty ? true : undefined}>
+      <ui-save-bar id="settings-save-bar" ref={saveBarRef}>
         <button
-          slot="save"
+          variant="primary"
           onClick={saveContact}
           {...(busy ? { loading: "" } : {})}
         >
           Save
         </button>
-        <button
-          slot="discard"
-          onClick={() => setContactEmail(String(data.contactEmail ?? ""))}
-        >
+        <button onClick={() => setContactEmail(String(data.contactEmail ?? ""))}>
           Discard
         </button>
         {/* @ts-expect-error - ui-save-bar custom element */}

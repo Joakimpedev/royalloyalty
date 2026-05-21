@@ -8,7 +8,7 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { useAppNavigate } from "../lib/app-navigate";
-import { ChoiceList, PageTitle } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
 import {
   useLoaderData,
   useActionData,
@@ -143,6 +143,7 @@ export default function ReferralsPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const saving = nav.state === "submitting";
 
+  useSaveBar(saveBarRef, dirty);
 
   useEffect(() => {
     if (actionData?.ok) setBaseline(form);
@@ -171,17 +172,15 @@ export default function ReferralsPage() {
       />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
-      <ui-save-bar id="referrals-save-bar" open={dirty ? true : undefined}>
+      <ui-save-bar id="referrals-save-bar" ref={saveBarRef}>
         <button
-          slot="save"
+          variant="primary"
           onClick={save}
           {...(saving ? { loading: "" } : {})}
         >
           Save
         </button>
-        <button slot="discard" onClick={() => setForm(baseline)}>
-          Discard
-        </button>
+        <button onClick={() => setForm(baseline)}>Discard</button>
         {/* @ts-expect-error - ui-save-bar custom element */}
       </ui-save-bar>
 
