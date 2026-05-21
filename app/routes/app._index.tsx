@@ -88,7 +88,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         select: { action: true, enabled: true },
       }),
       prisma.reward.count({ where: { shopId: shop.id, enabled: true } }),
-      checkAppEmbedEnabled(admin),
+      // Pass the session so checkAppEmbedEnabled uses the raw-fetch path,
+      // which tolerates partial graphql errors (demo themes refuse the
+      // files field). Without this, the SDK wrapper throws on the first
+      // per-field 'Access denied' and the whole check returns null —
+      // exactly the bug the merchant kept hitting on the home page.
+      checkAppEmbedEnabled(admin, {
+        shop: session.shop,
+        accessToken: session.accessToken,
+      }),
     ]);
 
   // Effective earn count = explicit DB rows where enabled=true PLUS the
