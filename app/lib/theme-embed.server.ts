@@ -12,7 +12,19 @@
 // The extension UID must match the `uid` field in
 // extensions/loyalty-widget/shopify.extension.toml.
 
-const EXTENSION_UID = "63dc22e1-27da-358d-1f2a-1e6d9b60e4b66a03a917";
+// Match block types by the app+block handle path, NOT by the local toml
+// uid. Shopify assigns a deployed extension UUID (visible only in the
+// merchant's settings_data.json — example:
+//   shopify://apps/royal-loyalty/blocks/launcher/019e3a1f-...
+// ) that differs from the local CLI uid. The handle path is stable across
+// deploys, so we look for any block whose `type` starts with this prefix
+// and isn't `disabled: true`.
+const APP_HANDLE = "royal-loyalty";
+const BLOCK_HANDLE = "launcher";
+const BLOCK_TYPE_PREFIX = `shopify://apps/${APP_HANDLE}/blocks/${BLOCK_HANDLE}/`;
+// Kept only so the diagnostic dump shows the local CLI uid alongside the
+// deployed UUIDs Shopify actually stores — useful for debugging mismatches.
+const LOCAL_TOML_UID = "63dc22e1-27da-358d-1f2a-1e6d9b60e4b66a03a917";
 
 // Query all themes (typically <5 per shop) and find the MAIN one client-side
 // — `roles:` argument support has flip-flopped across API versions, so this
@@ -72,7 +84,8 @@ export async function checkAppEmbedEnabled(
   session?: RawSession,
 ): Promise<EmbedCheck> {
   const dump: Record<string, unknown> = {
-    extension_uid: EXTENSION_UID,
+    block_type_prefix: BLOCK_TYPE_PREFIX,
+    local_toml_uid: LOCAL_TOML_UID,
     query: QUERY,
     api_version: API_VERSION,
     timestamp: new Date().toISOString(),
@@ -243,8 +256,10 @@ export async function checkAppEmbedEnabled(
       const block = blocks[key];
       if (!block?.type) continue;
       // App embed block types look like:
-      //   shopify://apps/{api_client_id}/blocks/{handle}/{extension_uid}
-      if (block.type.includes(EXTENSION_UID)) {
+      //   shopify://apps/{app_handle}/blocks/{block_handle}/{deployed_uuid}
+      // We match by the handle prefix because the deployed UUID is assigned
+      // by Shopify at publish time and differs from the local CLI uid.
+      if (block.type.startsWith(BLOCK_TYPE_PREFIX)) {
         const debug = `matched block ${key} (type=${block.type}, disabled=${!!block.disabled})`;
         return { enabled: !block.disabled, debug, dump };
       }
@@ -254,7 +269,7 @@ export async function checkAppEmbedEnabled(
       .slice(0, 3)
       .map((k) => blocks[k]?.type ?? "?")
       .join(" | ");
-    const debug = `extension uid not in ${blocksSource} blocks (${blockKeys.length} block(s); sample types: ${sample || "none"})`;
+    const debug = `no block with prefix ${BLOCK_TYPE_PREFIX} in ${blocksSource} blocks (${blockKeys.length} block(s); sample types: ${sample || "none"})`;
     return { enabled: false, debug, dump };
   } catch (err) {
     const debug = `exception: ${(err as Error).message}`;
