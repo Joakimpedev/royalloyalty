@@ -11,6 +11,7 @@ Every scope in `shopify.app.toml` and its exact GraphQL usage. Provided to Shopi
 | `read_products` | no | Free-product rewards, product/collection-scoped earn rules, AI setup catalog read | `products` query | Phase 2/3 |
 | `read_store_credit_account_transactions` | no | Display member store-credit balance/history | `Customer.storeCreditAccounts` connection | Phase 4 |
 | `write_store_credit_account_transactions` | **yes** | Credit store credit for cashback earn + store-credit reward redemption; debit on clawback. Uses Shopify-native store credit (Shopify holds the financial primitive). | `storeCreditAccountCredit`, `storeCreditAccountDebit` | Phase 4 |
+| `read_themes` | no | Detect whether the Royal Loyalty theme app embed is enabled on the live theme, so the Branding admin can surface a green/red status pill next to the Product/Cart widget sections. Read-only inspection of `config/settings_data.json` on the MAIN theme only. | `themes` → `files(filenames:["config/settings_data.json"])` | Phase 7 |
 
 **`read_all_orders` is deliberately NOT requested** — no historical backfill beyond the standard 60-day window; forward awarding via webhook only.
 
