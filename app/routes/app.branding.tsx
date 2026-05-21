@@ -380,6 +380,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shop = await requireShop(session.shop);
   const paid = shop.plan !== "FREE";
   const embed = await checkAppEmbedEnabled(admin);
+  // Surface the session's actual granted scopes in the diagnostic. If
+  // `read_themes` isn't in here, the OAuth re-grant didn't take and the
+  // merchant needs to reinstall / re-auth the app explicitly.
+  if (embed.dump && typeof embed.dump === "object") {
+    (embed.dump as Record<string, unknown>).session_scope = session.scope;
+    (embed.dump as Record<string, unknown>).session_shop = session.shop;
+    (embed.dump as Record<string, unknown>).session_is_online = session.isOnline;
+    (embed.dump as Record<string, unknown>).session_expires =
+      session.expires?.toISOString() ?? null;
+  }
   return {
     branding: readBranding(shop.aiConfigSnapshot),
     paid,
