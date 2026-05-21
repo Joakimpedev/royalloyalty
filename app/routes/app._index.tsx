@@ -1012,6 +1012,7 @@ function PlanSummarySection({
         style={{
           display: "flex",
           alignItems: "center",
+          justifyContent: "space-between",
           gap: 12,
           flexWrap: "wrap",
         }}
@@ -1033,42 +1034,25 @@ function PlanSummarySection({
         >
           {plan} plan
         </span>
-        <span
-          style={{
-            fontSize: 13,
-            color: "rgba(255,255,255,0.85)",
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          {cap
-            ? `${ordersUsed.toLocaleString()} of ${cap.toLocaleString()} loyalty orders this month`
-            : `${ordersUsed.toLocaleString()} loyalty orders this month — unlimited`}
-        </span>
         {plan !== "PRO" && (
-          <button
-            type="button"
-            onClick={() => nav("/app/settings")}
-            style={{
-              background: "#fff",
-              color: "#0f172a",
-              border: "none",
-              borderRadius: 6,
-              padding: "6px 14px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Upgrade plan
-          </button>
+          <s-button onClick={() => nav("/app/settings")}>Upgrade plan</s-button>
         )}
+      </div>
+      <div
+        style={{
+          marginTop: 8,
+          fontSize: 13,
+          color: "rgba(255,255,255,0.85)",
+        }}
+      >
+        {cap
+          ? `${ordersUsed.toLocaleString()} of ${cap.toLocaleString()} loyalty orders this month`
+          : `${ordersUsed.toLocaleString()} loyalty orders this month — unlimited`}
       </div>
       {cap && (
         <div
           style={{
-            marginTop: 10,
+            marginTop: 8,
             height: 4,
             borderRadius: 999,
             background: "rgba(255,255,255,0.12)",
