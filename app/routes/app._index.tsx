@@ -167,6 +167,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     dashboard,
     programActivated: Boolean(shop.programActivatedAt),
     embedEnabled: embed.enabled,
+    embedDebug: embed.debug,
+    embedDump: embed.dump,
     plan: shop.plan ?? "FREE",
     monthlyLoyaltyOrderCount: shop.monthlyLoyaltyOrderCount ?? 0,
     currencyCode: shop.currencyCode ?? "USD",
@@ -246,6 +248,7 @@ export default function Home() {
       <div
         style={{
           display: "flex",
+          alignItems: "center",
           gap: 8,
           flexWrap: "wrap",
           margin: "0 0 16px",
@@ -260,7 +263,15 @@ export default function Home() {
                 ? "App embed disabled"
                 : "App embed status unknown"
           }
+          title={
+            data.embedEnabled === null && data.embedDebug
+              ? data.embedDebug
+              : undefined
+          }
         />
+        {data.embedEnabled === null && (
+          <CopyDiagnosticPill dump={data.embedDump} />
+        )}
         <StatusChip
           tone={data.programActivated ? "success" : "neutral"}
           label={data.programActivated ? "Loyalty live" : "Loyalty inactive"}
@@ -402,9 +413,11 @@ function formatCurrency(amount: number, currencyCode: string): string {
 function StatusChip({
   tone,
   label,
+  title,
 }: {
   tone: "success" | "neutral" | "critical";
   label: string;
+  title?: string;
 }) {
   const palette =
     tone === "success"
@@ -414,6 +427,7 @@ function StatusChip({
         : { bg: "#f1f2f3", fg: "#4a4f55", dot: "#8c9196" };
   return (
     <span
+      title={title}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -440,6 +454,53 @@ function StatusChip({
       />
       {label}
     </span>
+  );
+}
+
+// Small copy-diagnostic pill mirrored from app.branding. Surfaces the
+// full diagnostic JSON without rendering it, so the merchant can paste
+// it to support when the embed check returns null on the home page even
+// though branding shows it correctly.
+function CopyDiagnosticPill({ dump }: { dump: Record<string, unknown> }) {
+  const [copied, setCopied] = useState(false);
+  const text = JSON.stringify(dump, null, 2);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* give up */
+      }
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      style={{
+        background: "transparent",
+        color: "#202223",
+        border: "1px solid #c9cccf",
+        padding: "2px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 500,
+        cursor: "pointer",
+        lineHeight: 1.6,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {copied ? "Copied!" : "Copy diagnostics"}
+    </button>
   );
 }
 
