@@ -315,23 +315,12 @@ export default function RewardsPage() {
 
       <s-section heading="Reward catalog">
         {rewards.length === 0 ? (
-          <s-stack direction="block" gap="base">
-            <s-heading>Your reward catalog is empty</s-heading>
-            <s-paragraph>
-              Rewards are what customers spend points on. Add a discount, free
-              shipping, free product or store credit reward to give points a
-              destination.
-            </s-paragraph>
-            <s-button
-              variant="primary"
-              onClick={() => {
-                setForm(EMPTY_FORM);
-                setBaseline(EMPTY_FORM);
-              }}
-            >
-              Add your first reward
-            </s-button>
-          </s-stack>
+          <s-paragraph>
+            <s-text tone="subdued">
+              No rewards yet — fill out the form above and click{" "}
+              <strong>Create reward</strong> to add your first one.
+            </s-text>
+          </s-paragraph>
         ) : (
           <s-table>
             <s-table-header-row>
