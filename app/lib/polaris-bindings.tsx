@@ -93,29 +93,85 @@ export function PageTitle({
   backHref?: string;
 }) {
   const nav = useAppNavigate();
+  // The wrapper sets gridColumn 1/-1 so when this title sits inside an
+  // <s-page> with a main + aside column layout, the title spans BOTH
+  // columns and the aside content (e.g. Status card) drops below it
+  // instead of floating up next to the heading. Without this, the right
+  // rail's first card aligns to the same y as the title which makes it
+  // look like the right rail outranks the title hierarchically — the
+  // opposite of what we want. (Reference: Essent place-an-order layout.)
+  //
+  // Inside the wrapper:
+  //   - back arrow + title on one row
+  //   - subtitle below, *indented* to line up with the title text so it
+  //     doesn't slip back under the arrow
+  const titleIndent = backHref ? 36 : 0;
   return (
-    // @ts-expect-error - s-stack custom element JSX types
-    <s-stack direction="block" gap="small-200">
-      {/* @ts-expect-error - s-stack custom element JSX types */}
-      <s-stack direction="inline" gap="small-300" alignItems="center">
+    <div
+      style={{
+        gridColumn: "1 / -1",
+        marginBottom: 16,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
         {backHref && (
-          // @ts-expect-error - s-button custom element JSX types
-          <s-button
-            variant="tertiary"
-            icon="arrow-left"
+          <button
+            type="button"
             onClick={() => nav(backHref)}
-            accessibilityLabel="Back"
-          ></s-button>
+            aria-label="Back"
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 4,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              color: "#202223",
+              borderRadius: 6,
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M12.78 4.22a.75.75 0 0 1 0 1.06L8.06 10l4.72 4.72a.75.75 0 1 1-1.06 1.06l-5.25-5.25a.75.75 0 0 1 0-1.06l5.25-5.25a.75.75 0 0 1 1.06 0Z" />
+            </svg>
+          </button>
         )}
-        {/* @ts-expect-error - s-heading custom element JSX types */}
-        <s-heading>{title}</s-heading>
-        {/* @ts-expect-error - s-stack custom element JSX types */}
-      </s-stack>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 20,
+            fontWeight: 600,
+            lineHeight: 1.2,
+            color: "#202223",
+          }}
+        >
+          {title}
+        </h1>
+      </div>
       {subtitle && (
-        // @ts-expect-error - s-paragraph custom element JSX types
-        <s-paragraph>{subtitle}</s-paragraph>
+        <div
+          style={{
+            marginTop: 4,
+            marginLeft: titleIndent,
+            fontSize: 13,
+            color: "#6d7175",
+            lineHeight: 1.4,
+          }}
+        >
+          {subtitle}
+        </div>
       )}
-      {/* @ts-expect-error - s-stack custom element JSX types */}
-    </s-stack>
+    </div>
   );
 }
