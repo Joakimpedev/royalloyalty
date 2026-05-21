@@ -3,11 +3,17 @@
 // suggestion generation and the activation flow; this page already renders
 // whatever rows exist so the slots are real, not shells.
 import type {
+  ActionFunctionArgs,
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useLoaderData, useRouteError, useSearchParams } from "react-router";
-import { AppLink, useAppNavigate } from "../lib/app-navigate";
+import {
+  useFetcher,
+  useLoaderData,
+  useRouteError,
+  useSearchParams,
+} from "react-router";
+import { useAppNavigate } from "../lib/app-navigate";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -71,64 +77,106 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     0,
   );
 
-  const checklist = [
+  // Manual "I've done this" overrides stored on the Shop row's JSON snapshot.
+  // Lets the merchant mark a step done when our auto-detection can't see it
+  // (e.g. embed enabled on a theme our scope doesn't read), and survives
+  // across loads.
+  const snap = (shop.aiConfigSnapshot ?? null) as Record<string, unknown> | null;
+  const manuallyDone = Array.isArray(snap?.setupManualDone)
+    ? (snap.setupManualDone as string[])
+    : [];
+
+  // Order matters — activation is the LAST step so the merchant gets earn
+  // rules + rewards + storefront in place before flipping the program on.
+  const steps = [
     {
       id: "earn",
       label: "Set up earn rules",
       detail:
         "Decide how many points customers get for placing an order, signing up and other actions. You can tune the numbers any time.",
       cta: "Open earn rules",
-      done: earnRuleCount > 0,
+      autoDone: earnRuleCount > 0,
       href: "/app/program",
     },
     {
       id: "rewards",
       label: "Add rewards to the catalog",
       detail:
-        "Pick what customers can redeem points for — discount codes, free shipping or free products.",
+        "Pick what customers can redeem points for — discount codes, free shipping, free products or store credit.",
       cta: "Open rewards",
-      done: rewardCount > 0,
+      autoDone: rewardCount > 0,
       href: "/app/rewards",
-    },
-    // Tiers step intentionally hidden — feature exists in the backend but is
-    // not yet user-facing. Re-enable when tier UX is complete.
-    {
-      id: "activate",
-      label: "Activate the program",
-      detail:
-        "Flip the program on so new orders start awarding points to your customers.",
-      cta: "Activate program",
-      done: Boolean(shop.programActivatedAt),
-      href: "/app/program",
     },
     {
       id: "embed",
       label: "Enable the storefront widget",
       detail:
-        "In Shopify admin go to Sales channels > Online store > Themes, then Edit theme > App embeds, and turn on the Royal Loyalty widget so shoppers can see it.",
+        "Turn on the Royal Loyalty app embed in your theme editor so shoppers can see the floating launcher, cart redeem widget and loyalty page.",
       cta: "Open theme editor",
-      done: embed.enabled === true,
+      autoDone: embed.enabled === true,
       href: "shopify:admin/themes/current/editor?context=apps",
     },
-  ];
+    {
+      id: "activate",
+      label: "Activate the program",
+      detail:
+        "Flip the program on so new orders start awarding points and cashback to your customers.",
+      cta: shop.programActivatedAt ? "Open program" : "Activate program",
+      autoDone: Boolean(shop.programActivatedAt),
+      href: "/app/program",
+    },
+  ].map((s) => ({
+    ...s,
+    manuallyDone: manuallyDone.includes(s.id),
+    done: s.autoDone || manuallyDone.includes(s.id),
+  }));
 
   return {
     shopMissing: false as const,
     metrics,
-    checklist,
-    checklistCounts: {
-      earn: earnRuleCount,
-      tiers: tierCount,
-      rewards: rewardCount,
-    },
+    steps,
     suggestions: suggestions.map((s) => ({
       id: s.id,
       title: s.title,
       body: s.body,
     })),
-    programActivated: Boolean(shop.programActivatedAt),
-    embedEnabled: embed.enabled,
+    tierCount,
   };
+};
+
+// Toggle the manual "I've done this" override for a setup step. Posted by
+// the small fetcher form on each step card; the loader re-reads on the
+// resulting revalidate so the UI reflects the toggle without a full nav.
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const form = await request.formData();
+  if (form.get("_intent") !== "toggle_setup_step") {
+    return { ok: false } as const;
+  }
+  const stepId = String(form.get("stepId") ?? "").trim();
+  if (!stepId) return { ok: false } as const;
+
+  const shop = await prisma.shop.findUnique({
+    where: { shopDomain: session.shop },
+    select: { id: true, aiConfigSnapshot: true },
+  });
+  if (!shop) return { ok: false } as const;
+
+  const base =
+    shop.aiConfigSnapshot && typeof shop.aiConfigSnapshot === "object"
+      ? (shop.aiConfigSnapshot as Record<string, unknown>)
+      : {};
+  const current = Array.isArray(base.setupManualDone)
+    ? (base.setupManualDone as string[])
+    : [];
+  const next = current.includes(stepId)
+    ? current.filter((s) => s !== stepId)
+    : [...current, stepId];
+  await prisma.shop.update({
+    where: { id: shop.id },
+    data: { aiConfigSnapshot: { ...base, setupManualDone: next } },
+  });
+  return { ok: true } as const;
 };
 
 export default function Home() {
@@ -148,8 +196,8 @@ export default function Home() {
   }
 
   const m = data.metrics!;
-  const remaining = data.checklist.filter((c) => !c.done);
-  const activeStep = remaining[0];
+  const remaining = data.steps.filter((s) => !s.done);
+  const allDone = remaining.length === 0;
   const nav = useAppNavigate();
 
   return (
@@ -163,116 +211,26 @@ export default function Home() {
 
       <WelcomeCard />
 
-      {/* Setup guide first — the merchant should see "what to do next"
-          above analytics. One active step is expanded with detail + CTA;
-          every other step collapses to a one-line row with a status badge. */}
-      <s-section heading="Setup guide">
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            <s-text tone="subdued">
-              {remaining.length === 0
-                ? "Setup complete — your loyalty program is fully configured."
-                : `${data.checklist.length - remaining.length} of ${data.checklist.length} steps complete`}
-            </s-text>
-          </s-paragraph>
-          {activeStep && (
-            <s-box padding="base" borderWidth="base" borderRadius="base">
-              <s-stack direction="block" gap="base">
-                <s-text fontWeight="bold">{activeStep.label}</s-text>
-                <s-paragraph>{activeStep.detail}</s-paragraph>
-                <div>
-                  <s-button
-                    onClick={() => nav(activeStep.href)}
-                    variant="primary"
-                  >
-                    {activeStep.cta}
-                  </s-button>
-                </div>
-              </s-stack>
-            </s-box>
-          )}
-          {data.checklist.filter((c) => c.id !== activeStep?.id).length > 0 && (
-            <s-stack direction="block" gap="small-200">
-              {data.checklist
-                .filter((c) => c.id !== activeStep?.id)
-                .map((c) => (
-                  <s-stack
-                    key={c.id}
-                    direction="inline"
-                    gap="base"
-                    alignItems="center"
-                  >
-                    <s-badge tone={c.done ? "success" : "neutral"}>
-                      {c.done ? "Done" : "To do"}
-                    </s-badge>
-                    {c.done ? (
-                      <s-text>{c.label}</s-text>
-                    ) : (
-                      <AppLink href={c.href}>{c.label}</AppLink>
-                    )}
-                  </s-stack>
-                ))}
+      {/* Setup guide. Each step renders as a card with full detail + CTA
+          and a top-right "Mark as done" / "Done" pill. The whole section
+          disappears once every step (auto OR manual) is marked done — the
+          dashboard then becomes a normal analytics view. */}
+      {!allDone && (
+        <s-section heading="Setup guide">
+          <s-stack direction="block" gap="base">
+            <s-paragraph>
+              <s-text tone="subdued">
+                {data.steps.length - remaining.length} of {data.steps.length} steps complete
+              </s-text>
+            </s-paragraph>
+            <s-stack direction="block" gap="base">
+              {data.steps.map((s) => (
+                <SetupStepCard key={s.id} step={s} onCta={() => nav(s.href)} />
+              ))}
             </s-stack>
-          )}
-        </s-stack>
-      </s-section>
-
-      {/* Program-status audit card (BON pattern): three concrete signals so the
-          merchant can tell at a glance whether the program is actually visible
-          to shoppers, with a one-click remediation button on each. */}
-      <s-section heading="Program status">
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 12,
-          }}
-        >
-          <StatusTile
-            label="Program activation"
-            active={data.programActivated}
-            activeText="Active"
-            inactiveText="Inactive"
-            body={
-              data.programActivated
-                ? "Orders are awarding points to customers."
-                : "Activate the program so new orders start awarding points."
-            }
-            ctaHref="/app/program"
-            ctaLabel={data.programActivated ? "Open program" : "Activate program"}
-          />
-          <StatusTile
-            label="Storefront widget"
-            active={data.embedEnabled}
-            activeText="App embed enabled"
-            inactiveText="App embed disabled"
-            body={
-              data.embedEnabled === true
-                ? "Royal Loyalty is active on your live theme."
-                : data.embedEnabled === false
-                  ? "The Royal Loyalty app embed is off. Enable it in the theme editor so shoppers can see the widget."
-                  : "We couldn't confirm whether the Royal Loyalty app embed is on. Open the theme editor to check."
-            }
-            ctaHref="shopify:admin/themes/current/editor?context=apps"
-            ctaLabel={
-              data.embedEnabled === true ? "Open theme editor" : "Enable embed"
-            }
-          />
-          <StatusTile
-            label="Earn rules"
-            active={null}
-            activeText={`${data.checklistCounts.earn} configured`}
-            inactiveText={`${data.checklistCounts.earn} configured`}
-            body={
-              data.checklistCounts.earn > 0
-                ? "Earn rules are configured. Tune values or add more on the Program page."
-                : "No earn rules yet. Customers won't accumulate points until at least one is enabled."
-            }
-            ctaHref="/app/program"
-            ctaLabel="Open earn rules"
-          />
-        </div>
-      </s-section>
+          </s-stack>
+        </s-section>
+      )}
 
       <s-section heading="Program health">
         {m.hasActivity ? (
@@ -344,40 +302,82 @@ export default function Home() {
   );
 }
 
-// Three-tile audit card on the home page. `active=true` shows a green badge,
-// `false` shows a neutral "Inactive" badge, `null` shows an informational
-// neutral badge with the activeText label (used when we can't introspect the
-// status server-side without a Shopify Admin GraphQL call).
-function StatusTile({
-  label,
-  active,
-  activeText,
-  inactiveText,
-  body,
-  ctaHref,
-  ctaLabel,
+// One row in the Setup guide. Renders title + detail + primary CTA, plus
+// a "Mark as done" / "Done" toggle in the top-right. Done state is the OR
+// of auto-detection (e.g. embed enabled, rewards exist) and the merchant's
+// manual override stored on Shop.aiConfigSnapshot.setupManualDone.
+function SetupStepCard({
+  step,
+  onCta,
 }: {
-  label: string;
-  active: boolean | null;
-  activeText: string;
-  inactiveText: string;
-  body: string;
-  ctaHref: string;
-  ctaLabel: string;
+  step: {
+    id: string;
+    label: string;
+    detail: string;
+    cta: string;
+    autoDone: boolean;
+    manuallyDone: boolean;
+    done: boolean;
+  };
+  onCta: () => void;
 }) {
-  const badgeTone: "success" | "neutral" | "critical" =
-    active === true ? "success" : active === false ? "critical" : "neutral";
-  const badgeText = active === false ? inactiveText : activeText;
-  const nav = useAppNavigate();
+  const fetcher = useFetcher();
+  const submitting = fetcher.state !== "idle";
+  const toggleManual = () => {
+    const fd = new FormData();
+    fd.set("_intent", "toggle_setup_step");
+    fd.set("stepId", step.id);
+    fetcher.submit(fd, { method: "POST", action: "/app" });
+  };
   return (
     <s-box padding="base" borderWidth="base" borderRadius="base">
       <s-stack direction="block" gap="base">
-        <s-stack direction="inline" gap="base">
-          <s-text fontWeight="bold">{label}</s-text>
-          <s-badge tone={badgeTone}>{badgeText}</s-badge>
-        </s-stack>
-        <s-paragraph>{body}</s-paragraph>
-        <s-button onClick={() => nav(ctaHref)}>{ctaLabel}</s-button>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <s-stack direction="inline" gap="base" alignItems="center">
+            <s-badge tone={step.done ? "success" : "neutral"}>
+              {step.done ? "Done" : "To do"}
+            </s-badge>
+            <s-text fontWeight="bold">{step.label}</s-text>
+          </s-stack>
+          {/* Manual override toggle. Auto-done steps don't show this — the
+              source of truth is the live check (e.g. embed status). Only
+              show the toggle for steps that aren't auto-detected as done,
+              OR are currently in the manual-done set (so the merchant can
+              un-mark a step they marked done by mistake). */}
+          {(!step.autoDone || step.manuallyDone) && (
+            <button
+              type="button"
+              onClick={toggleManual}
+              disabled={submitting}
+              style={{
+                background: "transparent",
+                border: "1px solid #c9cccf",
+                borderRadius: 999,
+                padding: "4px 12px",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: submitting ? "default" : "pointer",
+                color: "#202223",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {step.manuallyDone ? "Unmark" : "I've done this"}
+            </button>
+          )}
+        </div>
+        <s-paragraph>{step.detail}</s-paragraph>
+        <div>
+          <s-button onClick={onCta} variant={step.done ? undefined : "primary"}>
+            {step.cta}
+          </s-button>
+        </div>
       </s-stack>
     </s-box>
   );
