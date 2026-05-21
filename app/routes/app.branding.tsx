@@ -21,6 +21,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { isAppEmbedEnabled } from "../lib/theme-embed.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
@@ -114,6 +115,38 @@ function LockedHint() {
         />
       </span>
     </span>
+  );
+}
+
+// Section heading with a small App-embed status pill aligned to the right
+// of the title text. `enabled` null = unknown (e.g. GraphQL failure); we
+// hide the pill in that case rather than show a misleading state.
+function SectionHeader({
+  title,
+  embedEnabled,
+}: {
+  title: string;
+  embedEnabled: boolean | null;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        marginBottom: 12,
+      }}
+    >
+      <span style={{ fontSize: 16, fontWeight: 600, color: "#202223" }}>
+        {title}
+      </span>
+      {embedEnabled === true && (
+        <s-badge tone="success">App embed enabled</s-badge>
+      )}
+      {embedEnabled === false && (
+        <s-badge tone="critical">App embed disabled</s-badge>
+      )}
+    </div>
   );
 }
 
@@ -261,10 +294,15 @@ async function requireShop(shopDomain: string) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
   const paid = shop.plan !== "FREE";
-  return { branding: readBranding(shop.aiConfigSnapshot), paid };
+  const embedEnabled = await isAppEmbedEnabled(admin);
+  return {
+    branding: readBranding(shop.aiConfigSnapshot),
+    paid,
+    embedEnabled,
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -318,7 +356,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function BrandingPage() {
-  const { branding, paid } = useLoaderData<typeof loader>();
+  const { branding, paid, embedEnabled } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const submit = useSubmit();
@@ -632,15 +670,15 @@ export default function BrandingPage() {
       </s-section>
 
       {/* ---- Product page widget ---- */}
-      <s-section heading="Product page widget">
+      <s-section>
+        <SectionHeader
+          title="Product page widget"
+          embedEnabled={embedEnabled}
+        />
         <s-stack direction="block" gap="base">
-          <s-paragraph>
-            <s-text tone="subdued">
-              Shows above the add-to-cart button so shoppers see how many
-              points they'll earn. Requires the Royal Loyalty app embed to be
-              enabled in your theme — once on, this toggle controls visibility.
-            </s-text>
-          </s-paragraph>
+          <div style={{ fontStyle: "italic", color: "#6d7175", fontSize: 13 }}>
+            Shows above the add-to-cart button.
+          </div>
           <s-checkbox
             label="Show on product pages"
             checked={form.product.enabled ? true : undefined}
@@ -730,15 +768,12 @@ export default function BrandingPage() {
       </s-section>
 
       {/* ---- Cart widget ---- */}
-      <s-section heading="Cart widget">
+      <s-section>
+        <SectionHeader title="Cart widget" embedEnabled={embedEnabled} />
         <s-stack direction="block" gap="base">
-          <s-paragraph>
-            <s-text tone="subdued">
-              Shows inside the cart drawer and cart page so shoppers can pick a
-              reward to apply to their order. Requires the Royal Loyalty app
-              embed to be enabled in your theme.
-            </s-text>
-          </s-paragraph>
+          <div style={{ fontStyle: "italic", color: "#6d7175", fontSize: 13 }}>
+            Shows inside the cart drawer and cart page.
+          </div>
           <s-checkbox
             label="Show in cart"
             checked={form.cart.enabled ? true : undefined}
