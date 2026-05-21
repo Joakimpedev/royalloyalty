@@ -17,8 +17,18 @@ import { useAppNavigate } from "../lib/app-navigate";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { getProgramMetrics } from "../lib/analytics.server";
 import { checkAppEmbedEnabled } from "../lib/theme-embed.server";
+import { getDashboardMetrics } from "../lib/dashboard.server";
+
+const RANGES = {
+  "30d": { label: "Last 30 days", days: 30 },
+  "90d": { label: "Last 90 days", days: 90 },
+  ytd: { label: "Year to date", days: 365 }, // approx, fine for v1
+} as const;
+type RangeKey = keyof typeof RANGES;
+function asRange(v: string | null): RangeKey {
+  return v === "90d" || v === "ytd" ? v : "30d";
+}
 
 // Mirror the defaults declared in app/routes/app.program.tsx so the home
 // page counts an unsaved-but-default-enabled earn rule the same way the
@@ -36,6 +46,9 @@ const EARN_ACTION_DEFAULTS: Record<string, boolean> = {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const range = asRange(url.searchParams.get("range"));
+  const windowMs = RANGES[range].days * 24 * 60 * 60 * 1000;
 
   // Upsert (not findUnique): a freshly installed store has no Shop row yet and
   // nothing else bootstraps it on the home page, so reading-only dead-ended on
@@ -46,19 +59,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     create: { shopDomain: session.shop },
   });
 
-  const [metrics, suggestions, earnRuleRows, tierCount, rewardCount, embed] =
+  const [dashboard, earnRuleRows, rewardCount, embed] =
     await Promise.all([
-      getProgramMetrics(shop.id),
-      prisma.aiSuggestion.findMany({
-        where: { shopId: shop.id, status: "open" },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }),
+      getDashboardMetrics(shop.id, windowMs),
       prisma.earnRule.findMany({
         where: { shopId: shop.id },
         select: { action: true, enabled: true },
       }),
-      prisma.tier.count({ where: { shopId: shop.id } }),
       prisma.reward.count({ where: { shopId: shop.id, enabled: true } }),
       checkAppEmbedEnabled(admin),
     ]);
@@ -133,14 +140,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     shopMissing: false as const,
-    metrics,
+    range,
     steps,
-    suggestions: suggestions.map((s) => ({
-      id: s.id,
-      title: s.title,
-      body: s.body,
-    })),
-    tierCount,
+    dashboard,
+    programActivated: Boolean(shop.programActivatedAt),
+    embedEnabled: embed.enabled,
+    plan: shop.plan ?? "FREE",
+    monthlyLoyaltyOrderCount: shop.monthlyLoyaltyOrderCount ?? 0,
+    currencyCode: shop.currencyCode ?? "USD",
+    shopDomain: shop.shopDomain,
   };
 };
 
@@ -195,10 +203,10 @@ export default function Home() {
     );
   }
 
-  const m = data.metrics!;
   const remaining = data.steps.filter((s) => !s.done);
   const allDone = remaining.length === 0;
   const nav = useAppNavigate();
+  const d = data.dashboard;
 
   return (
     <s-page heading="Royal Loyalty">
@@ -211,10 +219,39 @@ export default function Home() {
 
       <WelcomeCard />
 
-      {/* Setup guide. Each step renders as a card with full detail + CTA
-          and a top-right "Mark as done" / "Done" pill. The whole section
-          disappears once every step (auto OR manual) is marked done — the
-          dashboard then becomes a normal analytics view. */}
+      {/* Header strip — status chips + date range selector */}
+      <s-section>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <s-stack direction="inline" gap="base" alignItems="center">
+            <StatusChip
+              tone={data.embedEnabled === true ? "success" : "neutral"}
+              label={
+                data.embedEnabled === true
+                  ? "App embed enabled"
+                  : data.embedEnabled === false
+                    ? "App embed disabled"
+                    : "App embed status unknown"
+              }
+            />
+            <StatusChip
+              tone={data.programActivated ? "success" : "neutral"}
+              label={data.programActivated ? "Loyalty live" : "Loyalty inactive"}
+            />
+            <StatusChip tone="neutral" label={`${data.plan} plan`} />
+          </s-stack>
+          <DateRangeSelect value={data.range} />
+        </div>
+      </s-section>
+
+      {/* Setup guide — disappears entirely when all steps done */}
       {!allDone && (
         <s-section heading="Setup guide">
           <s-stack direction="block" gap="base">
@@ -232,73 +269,412 @@ export default function Home() {
         </s-section>
       )}
 
-      <s-section heading="Program health">
-        {m.hasActivity ? (
-          <s-stack direction="block" gap="base">
-            <s-stack direction="inline" gap="large">
-              <s-stack direction="block" gap="none">
-                <s-text tone="subdued">Members</s-text>
-                <s-heading>{m.members.total.toLocaleString()}</s-heading>
-              </s-stack>
-              <s-stack direction="block" gap="none">
-                <s-text tone="subdued">Points issued</s-text>
-                <s-heading>{m.points.issued.toLocaleString()}</s-heading>
-              </s-stack>
-              <s-stack direction="block" gap="none">
-                <s-text tone="subdued">Points redeemed</s-text>
-                <s-heading>{m.points.redeemed.toLocaleString()}</s-heading>
-              </s-stack>
-              <s-stack direction="block" gap="none">
-                <s-text tone="subdued">Redemption rate</s-text>
-                <s-heading>
-                  {(m.redemption.rate * 100).toFixed(1)}%
-                </s-heading>
-              </s-stack>
-            </s-stack>
-          </s-stack>
-        ) : (
-          <s-stack direction="block" gap="base">
-            <s-heading>No program activity yet</s-heading>
-            <s-paragraph>
-              Once customers start earning and redeeming, their points,
-              redemption rate and revenue impact appear here.
-            </s-paragraph>
-            <s-button
-              onClick={() => nav("/app/program")}
-              variant="primary"
-            >
-              Set up earn rules
-            </s-button>
-          </s-stack>
-        )}
+      {/* Performance metrics — Essent / Smile pattern, 2 rows × 3 cards.
+          Empty-state copy on each so the page never looks dead pre-activity. */}
+      <s-section heading="Performance">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 12,
+          }}
+        >
+          {d.loyaltyDrivenRevenueEstimated && (
+            <MetricCard
+              label="Loyalty-driven revenue"
+              value={formatCurrency(
+                d.loyaltyDrivenRevenueEstimated.current,
+                data.currencyCode,
+              )}
+              delta={d.loyaltyDrivenRevenueEstimated.deltaFraction}
+              emptyHint="Order revenue from members earning points — appears once orders ship."
+              isEmpty={d.loyaltyDrivenRevenueEstimated.current === 0}
+            />
+          )}
+          <MetricCard
+            label="Members added"
+            value={d.membersAdded.current.toLocaleString()}
+            delta={d.membersAdded.deltaFraction}
+            emptyHint="New customers enrolled in the program."
+            isEmpty={d.membersAdded.current === 0}
+          />
+          <MetricCard
+            label="Earners"
+            value={d.earners.current.toLocaleString()}
+            delta={d.earners.deltaFraction}
+            emptyHint="Members who earned points in this period."
+            isEmpty={d.earners.current === 0}
+          />
+          <MetricCard
+            label="Redeemers"
+            value={d.redeemers.current.toLocaleString()}
+            delta={d.redeemers.deltaFraction}
+            emptyHint="Members who spent points in this period."
+            isEmpty={d.redeemers.current === 0}
+          />
+          <MetricCard
+            label="Points issued"
+            value={d.pointsIssued.current.toLocaleString()}
+            delta={d.pointsIssued.deltaFraction}
+            emptyHint="Total points awarded across all activity."
+            isEmpty={d.pointsIssued.current === 0}
+          />
+          <MetricCard
+            label="Points redeemed"
+            value={d.pointsRedeemed.current.toLocaleString()}
+            delta={d.pointsRedeemed.deltaFraction}
+            emptyHint="Total points spent on rewards."
+            isEmpty={d.pointsRedeemed.current === 0}
+          />
+          <MetricCard
+            label="Referral orders"
+            value={d.referralOrders.current.toLocaleString()}
+            delta={d.referralOrders.deltaFraction}
+            emptyHint="Orders attributed to a referral link in this period."
+            isEmpty={d.referralOrders.current === 0}
+          />
+        </div>
       </s-section>
 
-      <s-section slot="aside" heading="AI suggestions">
-        {data.suggestions.length === 0 ? (
-          <s-paragraph>
-            No suggestions right now. Royal reviews your program data
-            periodically and surfaces improvement ideas here — you decide
-            whether to apply them.
-          </s-paragraph>
+      {/* Activity tables side by side */}
+      <s-section heading="Activity">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: 12,
+          }}
+        >
+          <RecentActivityCard rows={d.recentActivity} />
+          <TopMembersCard rows={d.topMembers} />
+        </div>
+      </s-section>
+
+      {/* Plan summary */}
+      <PlanSummarySection
+        plan={data.plan}
+        ordersUsed={data.monthlyLoyaltyOrderCount}
+      />
+
+    </s-page>
+  );
+}
+
+function formatCurrency(amount: number, currencyCode: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currencyCode || "USD",
+    }).format(amount);
+  } catch {
+    return amount.toFixed(2) + " " + currencyCode;
+  }
+}
+
+function StatusChip({
+  tone,
+  label,
+}: {
+  tone: "success" | "neutral" | "critical";
+  label: string;
+}) {
+  const palette =
+    tone === "success"
+      ? { bg: "#e3f4e1", fg: "#0d6c2e", dot: "#0e8a3e" }
+      : tone === "critical"
+        ? { bg: "#fde7e9", fg: "#a51b29", dot: "#d72c0d" }
+        : { bg: "#f1f2f3", fg: "#4a4f55", dot: "#8c9196" };
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        background: palette.bg,
+        color: palette.fg,
+        padding: "2px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 500,
+        lineHeight: 1.6,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: palette.dot,
+          flexShrink: 0,
+        }}
+      />
+      {label}
+    </span>
+  );
+}
+
+function DateRangeSelect({ value }: { value: RangeKey }) {
+  const [params, setParams] = useSearchParams();
+  return (
+    // @ts-expect-error - s-select custom element JSX types
+    <s-select
+      label="Date range"
+      labelHidden
+      value={value}
+      onChange={(e: { target: { value: string } }) => {
+        const next = new URLSearchParams(params);
+        next.set("range", e.target.value);
+        setParams(next);
+      }}
+    >
+      {(Object.keys(RANGES) as RangeKey[]).map((k) => (
+        // @ts-expect-error - s-option custom element JSX types
+        <s-option key={k} value={k}>
+          {RANGES[k].label}
+        </s-option>
+      ))}
+      {/* @ts-expect-error - s-select custom element JSX types */}
+    </s-select>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  delta,
+  emptyHint,
+  isEmpty,
+}: {
+  label: string;
+  value: string;
+  delta: number | null;
+  emptyHint: string;
+  isEmpty: boolean;
+}) {
+  return (
+    <s-box padding="base" borderWidth="base" borderRadius="base">
+      <s-stack direction="block" gap="small-200">
+        <s-text tone="subdued">{label}</s-text>
+        {isEmpty ? (
+          <>
+            <s-heading>{value}</s-heading>
+            <s-text tone="subdued">{emptyHint}</s-text>
+          </>
         ) : (
-          <s-stack direction="block" gap="base">
-            {data.suggestions.map((s) => (
-              <s-box
-                key={s.id}
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
+          <s-stack direction="inline" gap="small-200" alignItems="baseline">
+            <s-heading>{value}</s-heading>
+            {delta !== null && <DeltaPill fraction={delta} />}
+          </s-stack>
+        )}
+      </s-stack>
+    </s-box>
+  );
+}
+
+function DeltaPill({ fraction }: { fraction: number }) {
+  const positive = fraction >= 0;
+  const pct = Math.abs(fraction * 100).toFixed(0);
+  return (
+    <span
+      style={{
+        fontSize: 13,
+        fontWeight: 600,
+        color: positive ? "#0e8a3e" : "#d72c0d",
+      }}
+    >
+      {positive ? "+" : "−"}
+      {pct}%
+    </span>
+  );
+}
+
+function RecentActivityCard({
+  rows,
+}: {
+  rows: Array<{
+    id: string;
+    memberName: string | null;
+    memberEmail: string | null;
+    type: string;
+    reason: string;
+    points: number;
+    date: string;
+  }>;
+}) {
+  return (
+    <s-box padding="base" borderWidth="base" borderRadius="base">
+      <s-stack direction="block" gap="base">
+        <s-text fontWeight="bold">Recent activity</s-text>
+        {rows.length === 0 ? (
+          <s-text tone="subdued">
+            No activity yet. Customer earn / redeem / referral events will appear here as they happen.
+          </s-text>
+        ) : (
+          <s-stack direction="block" gap="small-200">
+            {rows.map((r) => (
+              <div
+                key={r.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "6px 0",
+                  borderBottom: "1px solid #f1f2f3",
+                }}
               >
-                <s-stack direction="block" gap="none">
-                  <s-text fontWeight="bold">{s.title}</s-text>
-                  <s-text tone="subdued">{s.body}</s-text>
-                </s-stack>
-              </s-box>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 500 }}>
+                    {r.memberName || r.memberEmail || "Anonymous member"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#6d7175",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {r.reason}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    color: r.points >= 0 ? "#0e8a3e" : "#d72c0d",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {r.points >= 0 ? "+" : ""}
+                  {r.points}
+                </div>
+              </div>
             ))}
           </s-stack>
         )}
-      </s-section>
-    </s-page>
+      </s-stack>
+    </s-box>
+  );
+}
+
+function TopMembersCard({
+  rows,
+}: {
+  rows: Array<{
+    id: string;
+    name: string | null;
+    email: string | null;
+    totalEarned: number;
+  }>;
+}) {
+  return (
+    <s-box padding="base" borderWidth="base" borderRadius="base">
+      <s-stack direction="block" gap="base">
+        <s-text fontWeight="bold">Most active members</s-text>
+        {rows.length === 0 ? (
+          <s-text tone="subdued">
+            Your top members by lifetime points earned will appear here once orders start awarding.
+          </s-text>
+        ) : (
+          <s-stack direction="block" gap="small-200">
+            {rows.map((r) => (
+              <div
+                key={r.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "6px 0",
+                  borderBottom: "1px solid #f1f2f3",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 500 }}>
+                    {r.name || r.email || "Anonymous member"}
+                  </div>
+                  {r.email && r.name && (
+                    <div style={{ fontSize: 12, color: "#6d7175" }}>{r.email}</div>
+                  )}
+                </div>
+                <div style={{ fontWeight: 600 }}>
+                  {r.totalEarned.toLocaleString()} pts
+                </div>
+              </div>
+            ))}
+          </s-stack>
+        )}
+      </s-stack>
+    </s-box>
+  );
+}
+
+function PlanSummarySection({
+  plan,
+  ordersUsed,
+}: {
+  plan: string;
+  ordersUsed: number;
+}) {
+  // Plan caps copied from app/lib/billing.server.ts PLANS table. Hardcoding
+  // them here would couple us to that file; instead the merchant-visible
+  // cap is shown as "Unlimited" for Pro.
+  const CAPS: Record<string, number | null> = {
+    FREE: 250,
+    STARTER: 500,
+    GROWTH: 2000,
+    PRO: null,
+  };
+  const cap = CAPS[plan] ?? 250;
+  const percent = cap ? Math.min(100, (ordersUsed / cap) * 100) : 0;
+  const nav = useAppNavigate();
+  return (
+    <s-section heading="Plan">
+      <s-stack direction="block" gap="base">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <s-stack direction="block" gap="none">
+            <s-text fontWeight="bold">{plan} plan</s-text>
+            <s-text tone="subdued">
+              {cap
+                ? `${ordersUsed.toLocaleString()} of ${cap.toLocaleString()} loyalty orders this month`
+                : `${ordersUsed.toLocaleString()} loyalty orders this month — unlimited`}
+            </s-text>
+          </s-stack>
+          {plan !== "PRO" && (
+            <s-button onClick={() => nav("/app/settings")}>Upgrade plan</s-button>
+          )}
+        </div>
+        {cap && (
+          <div
+            style={{
+              height: 6,
+              borderRadius: 999,
+              background: "#f1f2f3",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${percent}%`,
+                height: "100%",
+                background: percent >= 90 ? "#d72c0d" : "#0e8a3e",
+                transition: "width 200ms ease",
+              }}
+            />
+          </div>
+        )}
+      </s-stack>
+    </s-section>
   );
 }
 
