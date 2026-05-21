@@ -45,7 +45,7 @@ async function getActiveShop(shopDomain: string) {
 
 /** Upsert a Member by (shopId, shopifyCustomerId). Never overwrites PII with
  *  empty values; never un-redacts a redacted member. */
-async function upsertMember(params: {
+export async function upsertMember(params: {
   shopId: string;
   shopifyCustomerId: string;
   email?: string | null;

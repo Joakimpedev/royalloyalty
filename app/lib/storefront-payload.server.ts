@@ -67,6 +67,14 @@ export interface StorefrontActivity {
   date: string;
 }
 
+export interface StorefrontSocialPlatform {
+  id: "instagram" | "tiktok" | "x" | "facebook" | "youtube";
+  handle: string;
+  label: string;
+  points: number;
+  url: string;
+}
+
 export interface StorefrontActiveCode {
   id: string;
   code: string;
@@ -92,6 +100,11 @@ export interface StorefrontPayload {
    *  an email channel today, so this is how customers re-find a code
    *  after closing the tab. Limited to the last 90 days. */
   activeCodes: StorefrontActiveCode[];
+  /** Social platforms configured on the `social` earn rule (when enabled).
+   *  Each item maps to a "Follow" card on the storefront; clicking opens
+   *  the platform URL in a new tab AND POSTs to the proxy to award points
+   *  (gated once per platform per member). */
+  socialPlatforms: StorefrontSocialPlatform[];
   branding: StorefrontBranding;
 }
 
@@ -200,6 +213,48 @@ export async function buildStorefrontLoyaltyPayload(params: {
     }),
   ]);
 
+  // Build the social platforms list off the social earn rule's config blob.
+  // Each entry becomes a Follow button on the storefront — server-side
+  // computes the canonical platform URL so the client can be dumb.
+  const socialRule = earnRulesRows.find((r) => r.action === "social");
+  const socialPlatforms: StorefrontSocialPlatform[] = (() => {
+    if (!socialRule) return [];
+    const cfg = socialRule.config as
+      | { platforms?: Array<Record<string, unknown>> }
+      | null;
+    const PLATFORM_URLS: Record<
+      StorefrontSocialPlatform["id"],
+      (handle: string) => string
+    > = {
+      instagram: (h) => `https://instagram.com/${h.replace(/^@/, "")}`,
+      tiktok: (h) => `https://tiktok.com/@${h.replace(/^@/, "")}`,
+      x: (h) => `https://x.com/${h.replace(/^@/, "")}`,
+      facebook: (h) => `https://facebook.com/${h.replace(/^@/, "")}`,
+      youtube: (h) =>
+        `https://youtube.com/${h.startsWith("@") ? h : `@${h}`}`,
+    };
+    return (cfg?.platforms ?? [])
+      .filter(
+        (p) =>
+          p &&
+          typeof p === "object" &&
+          (p as { enabled?: boolean }).enabled &&
+          typeof (p as { handle?: string }).handle === "string" &&
+          (p as { handle: string }).handle.trim(),
+      )
+      .map((p) => {
+        const id = (p as { id: StorefrontSocialPlatform["id"] }).id;
+        const handle = (p as { handle: string }).handle.trim();
+        return {
+          id,
+          handle,
+          label: (p as { label?: string }).label || "Follow",
+          points: Number((p as { points?: number }).points) || 0,
+          url: PLATFORM_URLS[id](handle),
+        };
+      });
+  })();
+
   const branding = readBranding(shop.aiConfigSnapshot);
 
   const earnRules: StorefrontEarnRule[] = earnRulesRows.map((r) => {
@@ -240,6 +295,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       referralLink: null,
       activity: [],
       activeCodes: [],
+      socialPlatforms,
       branding,
     };
   }
@@ -267,6 +323,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       referralLink: null,
       activity: [],
       activeCodes: [],
+      socialPlatforms,
       branding,
     };
   }
@@ -314,6 +371,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       ? referralLink(shopDomain, referralCode)
       : null,
     activeCodes: await buildActiveCodes(activeRedemptions),
+    socialPlatforms,
     activity: activityRows.map((a) => ({
       type: a.type,
       reason: a.reason,

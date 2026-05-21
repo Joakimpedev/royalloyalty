@@ -521,7 +521,88 @@
     pointsForAmount: pointsForAmount,
     renderActiveCodes: renderActiveCodes,
     copyText: copyText,
+    claimSocial: claimSocial,
+    renderSocial: renderSocial,
   };
+
+  /* POST the social claim to the proxy. Used by renderSocial below. */
+  function claimSocial(cfg, platform) {
+    return api(cfg.proxy, "/loyalty/claim-social", {
+      method: "POST",
+      body: JSON.stringify({ platform: platform }),
+    });
+  }
+
+  /* Render a list of Follow cards inside `container`. Each card: handle
+   * + label + points; clicking opens the platform URL in a new tab and
+   * fires a claim. Once claimed, the card shows "Awarded" and disables. */
+  function renderSocial(container, platforms, cfg, statusEl) {
+    if (!container) return;
+    if (!platforms || !platforms.length) {
+      container.innerHTML = "";
+      return;
+    }
+    container.innerHTML = "";
+    platforms.forEach(function (p) {
+      var card = document.createElement("div");
+      card.className = "royal-card royal-social-card";
+      var line = document.createElement("div");
+      line.innerHTML =
+        "<strong>" +
+        ({
+          instagram: "Instagram",
+          tiktok: "TikTok",
+          x: "X",
+          facebook: "Facebook",
+          youtube: "YouTube",
+        }[p.id] || p.id) +
+        "</strong>" +
+        ' <span class="royal-muted">— ' +
+        p.points +
+        " pts</span>";
+      var handle = document.createElement("div");
+      handle.className = "royal-muted";
+      handle.style.fontSize = "13px";
+      handle.textContent = p.handle;
+      var btn = document.createElement("a");
+      btn.className = "royal-btn";
+      btn.href = p.url;
+      btn.target = "_blank";
+      btn.rel = "noopener noreferrer";
+      btn.style.display = "inline-block";
+      btn.style.marginTop = "8px";
+      btn.style.textDecoration = "none";
+      btn.textContent = p.label;
+      btn.addEventListener("click", function () {
+        if (!cfg || !cfg.loggedIn) return;
+        // Fire-and-await; the click already opened the URL, so any UI
+        // update happens after the network round-trip.
+        claimSocial(cfg, p.id)
+          .then(function (res) {
+            if (res && res.outcome === "awarded") {
+              btn.textContent = "Awarded +" + (res.points || p.points);
+              btn.classList.add("royal-btn--ghost");
+              if (statusEl)
+                setStatus(
+                  statusEl,
+                  "success",
+                  "Awarded " + (res.points || p.points) + " points.",
+                );
+            } else if (res && res.outcome === "duplicate") {
+              btn.textContent = "Already claimed";
+              btn.classList.add("royal-btn--ghost");
+            }
+          })
+          .catch(function () {
+            /* non-fatal — user already opened the social page */
+          });
+      });
+      card.appendChild(line);
+      card.appendChild(handle);
+      card.appendChild(btn);
+      container.appendChild(card);
+    });
+  }
 
   document.addEventListener("DOMContentLoaded", captureReferral);
 })();

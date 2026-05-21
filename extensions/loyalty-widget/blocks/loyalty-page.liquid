@@ -48,6 +48,11 @@
     <div id="royal-page-rewards"><p class="royal-muted">Loading…</p></div>
   {%- endif -%}
 
+  <div id="royal-page-social-wrap" hidden style="margin-top: 24px;">
+    <h2>Follow us</h2>
+    <div id="royal-page-social"></div>
+  </div>
+
   {%- if block.settings.show_referral and customer -%}
     <h2>Refer a friend</h2>
     <p>Share your link — you both get rewarded.</p>
@@ -94,6 +99,15 @@
           document.getElementById('royal-page-active-codes'),
           d.activeCodes
         );
+
+        var socialWrap = document.getElementById('royal-page-social-wrap');
+        var socialList = document.getElementById('royal-page-social');
+        if (d.socialPlatforms && d.socialPlatforms.length) {
+          if (socialWrap) socialWrap.hidden = false;
+          R.renderSocial(socialList, d.socialPlatforms, cfg, status);
+        } else if (socialWrap) {
+          socialWrap.hidden = true;
+        }
 
         var earn = document.getElementById('royal-page-earn');
         if (earn) {

@@ -122,6 +122,55 @@ type ConfigBlob = {
   completionLimit?: number | null; // null = unlimited
   /** "X points per Y currency units"; 1 = points-per-1-unit. */
   perAmount?: number;
+  /** Only used when action === "social". Each entry becomes a "Follow"
+   *  button on the storefront with its own handle / label / points. */
+  platforms?: SocialPlatform[];
+};
+
+export type SocialPlatformId =
+  | "instagram"
+  | "tiktok"
+  | "x"
+  | "facebook"
+  | "youtube";
+
+export interface SocialPlatform {
+  id: SocialPlatformId;
+  handle: string;
+  label: string;
+  points: number;
+  enabled: boolean;
+}
+
+export const SOCIAL_PLATFORM_META: Record<
+  SocialPlatformId,
+  { name: string; handlePrefix: string; urlFor: (handle: string) => string }
+> = {
+  instagram: {
+    name: "Instagram",
+    handlePrefix: "@",
+    urlFor: (h) => `https://instagram.com/${h.replace(/^@/, "")}`,
+  },
+  tiktok: {
+    name: "TikTok",
+    handlePrefix: "@",
+    urlFor: (h) => `https://tiktok.com/@${h.replace(/^@/, "")}`,
+  },
+  x: {
+    name: "X (Twitter)",
+    handlePrefix: "@",
+    urlFor: (h) => `https://x.com/${h.replace(/^@/, "")}`,
+  },
+  facebook: {
+    name: "Facebook",
+    handlePrefix: "",
+    urlFor: (h) => `https://facebook.com/${h.replace(/^@/, "")}`,
+  },
+  youtube: {
+    name: "YouTube",
+    handlePrefix: "@",
+    urlFor: (h) => `https://youtube.com/${h.startsWith("@") ? h : `@${h}`}`,
+  },
 };
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
@@ -156,6 +205,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       completionLimit:
         config?.completionLimit === undefined ? null : config.completionLimit,
       perAmount: Math.max(1, config?.perAmount ?? 1),
+      platforms: config?.platforms ?? [],
     },
   };
 };
@@ -199,6 +249,40 @@ export const action = async ({
 
   const config: ConfigBlob = { title, completionLimit, perAmount };
 
+  // Social rule carries a JSON list of platforms (handle / label / points
+  // / enabled) instead of using `points` on the row itself. We parse and
+  // sanitize the payload here so the storefront and proxy can trust the
+  // shape they read back.
+  if (a === "social") {
+    const raw = String(form.get("platforms") ?? "[]");
+    try {
+      const parsed = JSON.parse(raw) as Array<Partial<SocialPlatform>>;
+      const allowed: SocialPlatformId[] = [
+        "instagram",
+        "tiktok",
+        "x",
+        "facebook",
+        "youtube",
+      ];
+      config.platforms = parsed
+        .filter(
+          (p): p is SocialPlatform =>
+            !!p &&
+            typeof p === "object" &&
+            allowed.includes(p.id as SocialPlatformId),
+        )
+        .map((p) => ({
+          id: p.id as SocialPlatformId,
+          handle: String(p.handle ?? "").slice(0, 60).trim(),
+          label: String(p.label ?? "Follow").slice(0, 30).trim() || "Follow",
+          points: Math.max(0, Number(p.points) || 0),
+          enabled: !!p.enabled,
+        }));
+    } catch {
+      config.platforms = [];
+    }
+  }
+
   const existing = await prisma.earnRule.findFirst({
     where: { shopId: shop.id, action: a },
   });
@@ -227,6 +311,167 @@ export const action = async ({
     redirectTo: inChain ? "/app/program?onboarding=1" : "/app/program",
   };
 };
+
+function SocialPlatformsEditor({
+  value,
+  onChange,
+}: {
+  value: SocialPlatform[];
+  onChange: (next: SocialPlatform[]) => void;
+}) {
+  const PLATFORM_IDS: SocialPlatformId[] = [
+    "instagram",
+    "tiktok",
+    "x",
+    "facebook",
+    "youtube",
+  ];
+  const used = new Set(value.map((p) => p.id));
+  const addable = PLATFORM_IDS.filter((id) => !used.has(id));
+
+  const add = (id: SocialPlatformId) =>
+    onChange([
+      ...value,
+      { id, handle: "", label: "Follow", points: 125, enabled: true },
+    ]);
+  const update = (id: SocialPlatformId, patch: Partial<SocialPlatform>) =>
+    onChange(value.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  const remove = (id: SocialPlatformId) =>
+    onChange(value.filter((p) => p.id !== id));
+
+  return (
+    // @ts-expect-error - s-stack custom element JSX types
+    <s-stack direction="block" gap="base">
+      {value.length === 0 && (
+        // @ts-expect-error - s-paragraph custom element JSX types
+        <s-paragraph>
+          {/* @ts-expect-error - s-text custom element JSX types */}
+          <s-text tone="subdued">
+            No social platforms yet. Pick one below to start awarding points
+            when customers follow you.
+          </s-text>
+          {/* @ts-expect-error - s-paragraph custom element JSX types */}
+        </s-paragraph>
+      )}
+
+      {value.map((p) => {
+        const meta = SOCIAL_PLATFORM_META[p.id];
+        return (
+          <div
+            key={p.id}
+            style={{
+              border: "1px solid #e1e3e5",
+              borderRadius: 8,
+              padding: 12,
+              background: "#fff",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <strong>{meta.name}</strong>
+              <button
+                type="button"
+                onClick={() => remove(p.id)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#6d7175",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  textDecoration: "underline",
+                }}
+              >
+                Remove
+              </button>
+            </div>
+            {/* @ts-expect-error - s-stack custom element JSX types */}
+            <s-stack direction="block" gap="small-200">
+              {/* @ts-expect-error - s-text-field custom element JSX types */}
+              <s-text-field
+                label={`${meta.name} handle`}
+                value={p.handle}
+                placeholder={meta.handlePrefix + "yourbrand"}
+                onChange={(e: any) =>
+                  update(p.id, { handle: String(e.target.value ?? "") })
+                }
+              />
+              {/* @ts-expect-error - s-text-field custom element JSX types */}
+              <s-text-field
+                label="Link label"
+                value={p.label}
+                onChange={(e: any) =>
+                  update(p.id, { label: String(e.target.value ?? "") })
+                }
+              />
+              <div style={{ maxWidth: 280, width: "100%" }}>
+                {/* @ts-expect-error - s-number-field custom element JSX types */}
+                <s-number-field
+                  label="Points earned"
+                  suffix="points"
+                  min={0}
+                  value={String(p.points)}
+                  onChange={(e: any) =>
+                    update(p.id, {
+                      points: Math.max(
+                        0,
+                        Number.parseInt(String(e.target.value), 10) || 0,
+                      ),
+                    })
+                  }
+                />
+              </div>
+              {/* @ts-expect-error - s-stack custom element JSX types */}
+              <s-checkbox
+                label="Enabled"
+                checked={p.enabled ? true : undefined}
+                onChange={(e: any) =>
+                  update(p.id, { enabled: !!e.target.checked })
+                }
+              />
+              {/* @ts-expect-error - s-stack custom element JSX types */}
+            </s-stack>
+          </div>
+        );
+      })}
+
+      {addable.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            marginTop: 4,
+          }}
+        >
+          {addable.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => add(id)}
+              style={{
+                background: "transparent",
+                border: "1px solid #c9cccf",
+                borderRadius: 999,
+                padding: "4px 12px",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              + {SOCIAL_PLATFORM_META[id].name}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* @ts-expect-error - s-stack custom element JSX types */}
+    </s-stack>
+  );
+}
 
 export default function EarnRuleEditor() {
   const { action: actionName, rule, money: moneyCtx } =
@@ -261,6 +506,9 @@ export default function EarnRuleEditor() {
     rule.completionLimit,
   );
   const [perAmount, setPerAmount] = useState(rule.perAmount);
+  const [platforms, setPlatforms] = useState<SocialPlatform[]>(rule.platforms);
+
+  const isSocial = actionName === "social";
 
   const dirty =
     title !== rule.title ||
@@ -268,7 +516,8 @@ export default function EarnRuleEditor() {
     perDollar !== rule.perDollar ||
     enabled !== rule.enabled ||
     completionLimit !== rule.completionLimit ||
-    perAmount !== rule.perAmount;
+    perAmount !== rule.perAmount ||
+    JSON.stringify(platforms) !== JSON.stringify(rule.platforms);
   const saving = nav.state === "submitting";
 
   const blocker = useBlocker(
@@ -302,8 +551,19 @@ export default function EarnRuleEditor() {
       completionLimit === null ? "unlimited" : String(completionLimit),
     );
     fd.set("perAmount", String(perAmount));
+    if (isSocial) fd.set("platforms", JSON.stringify(platforms));
     submit(fd, { method: "POST" });
-  }, [title, points, perDollar, enabled, completionLimit, perAmount, submit]);
+  }, [
+    title,
+    points,
+    perDollar,
+    enabled,
+    completionLimit,
+    perAmount,
+    isSocial,
+    platforms,
+    submit,
+  ]);
 
   const discard = useCallback(() => {
     setTitle(rule.title);
@@ -312,6 +572,7 @@ export default function EarnRuleEditor() {
     setEnabled(rule.enabled);
     setCompletionLimit(rule.completionLimit);
     setPerAmount(rule.perAmount);
+    setPlatforms(rule.platforms);
   }, [rule]);
 
   // Summary bullets — currency-aware, mirrors Essent's right-column summary.
@@ -320,6 +581,17 @@ export default function EarnRuleEditor() {
     summaryBullets.push(
       "This rule is currently inactive — no points awarded.",
     );
+  } else if (isSocial) {
+    const activePlats = platforms.filter((p) => p.enabled && p.handle.trim());
+    if (activePlats.length === 0) {
+      summaryBullets.push("No active social platforms configured yet.");
+    } else {
+      activePlats.forEach((p) => {
+        summaryBullets.push(
+          `Customer earns ${p.points} point${p.points === 1 ? "" : "s"} for following you on ${SOCIAL_PLATFORM_META[p.id].name}`,
+        );
+      });
+    }
   } else if (isPurchase && perDollar) {
     summaryBullets.push(
       `Customer earns ${points} point${points === 1 ? "" : "s"} for every ${money(perAmount)} spent`,
@@ -385,7 +657,12 @@ export default function EarnRuleEditor() {
         />
       </s-section>
 
-      <s-section heading={isPurchase ? "Earning method" : "Points awarded"}>
+      {isSocial ? (
+        <s-section heading="Social platforms">
+          <SocialPlatformsEditor value={platforms} onChange={setPlatforms} />
+        </s-section>
+      ) : (
+        <s-section heading={isPurchase ? "Earning method" : "Points awarded"}>
         <s-stack direction="block" gap="base">
           {isPurchase && (
             <ChoiceList
@@ -469,6 +746,7 @@ export default function EarnRuleEditor() {
           )}
         </s-stack>
       </s-section>
+      )}
 
       {/* ───── Right rail (Polaris page aside) ───── */}
 

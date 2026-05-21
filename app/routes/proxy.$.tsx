@@ -120,6 +120,97 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       } as any);
       return jsonCors({ ok: true, result });
     }
+    if (sub === "loyalty/claim-social") {
+      // Self-report social follow: customer clicked the Follow button on
+      // the storefront. We trust the click (industry standard pattern;
+      // every loyalty app does this since there's no API to verify a
+      // real follow). awardForAction's oncePerKey="social-<platform>"
+      // guard makes the claim once-per-member-per-platform.
+      if (!ctx.member) {
+        return jsonCors({ ok: false, error: "not_enrolled" }, 401);
+      }
+      const platform = String(body.platform ?? "").toLowerCase();
+      const allowed = ["instagram", "tiktok", "x", "facebook", "youtube"];
+      if (!allowed.includes(platform)) {
+        return jsonCors({ ok: false, error: "unknown_platform" }, 400);
+      }
+      const rule = await import("../db.server").then((m) =>
+        m.default.earnRule.findFirst({
+          where: { shopId: ctx.shop.id, action: "social", enabled: true },
+        }),
+      );
+      const platformCfg = (
+        (rule?.config as { platforms?: Array<Record<string, unknown>> } | null)
+          ?.platforms ?? []
+      ).find(
+        (p) => p && (p as { id?: string }).id === platform,
+      ) as
+        | {
+            id: string;
+            handle: string;
+            label: string;
+            points: number;
+            enabled: boolean;
+          }
+        | undefined;
+      if (!platformCfg || !platformCfg.enabled) {
+        return jsonCors({ ok: false, error: "platform_disabled" }, 400);
+      }
+      const { awardForAction } = await import("../lib/loyalty.server");
+      // We override the rule's `points` value by writing a custom
+      // ledger row via a special key — but the simplest path is to
+      // temporarily flip the rule's points. To avoid that race we call
+      // awardForAction which uses rule.points; for per-platform pricing
+      // we record a manual ledger entry instead.
+      const { recordPointTransaction } = await import("../lib/points.server");
+      const prisma = (await import("../db.server")).default;
+      const oncePerKey = `social-${platform}`;
+      const dup = await prisma.pointTransaction.findFirst({
+        where: {
+          shopId: ctx.shop.id,
+          memberId: ctx.member.id,
+          type: "EARN",
+          reason: { contains: `[${oncePerKey}]` },
+        },
+        select: { id: true },
+      });
+      if (dup) return jsonCors({ ok: true, outcome: "duplicate" });
+      // Reuse awardForAction for quota + tier multiplier + recompute,
+      // but we only want it when rule.points > 0. Since rule.points is
+      // the legacy field and not used for social, we skip it and write
+      // the platform-specific points directly.
+      const member = await prisma.member.findUnique({
+        where: { id: ctx.member.id },
+      });
+      if (!member) return jsonCors({ ok: false, error: "no_member" }, 400);
+      const tier = member.currentTierId
+        ? await prisma.tier.findUnique({
+            where: { id: member.currentTierId },
+          })
+        : null;
+      const multiplier = tier?.earnMultiplier ?? 1.0;
+      const points = Math.floor(platformCfg.points * multiplier);
+      if (points <= 0) return jsonCors({ ok: true, outcome: "zero_points" });
+      await recordPointTransaction({
+        shopId: ctx.shop.id,
+        memberId: ctx.member.id,
+        type: "EARN",
+        points,
+        reason: `Action: social (${platformCfg.points} x${multiplier}) [${oncePerKey}]`,
+      });
+      // Best-effort tier recompute (matches awardForAction behavior).
+      try {
+        const { recomputeTier } = await import("../lib/loyalty.server");
+        await recomputeTier(ctx.shop.id, ctx.member.id);
+      } catch {
+        /* non-fatal */
+      }
+      // awardForAction will also be a no-op for any future call thanks to
+      // the [social-<platform>] marker in the reason field.
+      void awardForAction;
+      return jsonCors({ ok: true, outcome: "awarded", points });
+    }
+
     if (sub === "pos/earn") {
       const { awardForAction } = await import("../lib/loyalty.server");
       const result = await awardForAction({
