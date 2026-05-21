@@ -1182,7 +1182,9 @@ function StepCircle({ done }: { done: boolean }) {
         minWidth: 20,
         borderRadius: "50%",
         border: done ? "none" : "1.5px solid #c9cccf",
-        background: done ? "#0e8a3e" : "transparent",
+        background: done
+          ? "linear-gradient(135deg, #0f172a 0%, #1f2937 100%)"
+          : "transparent",
         color: "#fff",
         display: "inline-flex",
         alignItems: "center",
