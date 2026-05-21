@@ -48,7 +48,7 @@ import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { formatMoney } from "../lib/use-money";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
-import { ChoiceList, PageTitle } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
 
 const ACTIONS = [
   "purchase",
@@ -519,18 +519,9 @@ export default function EarnRuleEditor() {
     JSON.stringify(platforms) !== JSON.stringify(rule.platforms);
   const saving = nav.state === "submitting";
 
-  // Note: native <ui-save-bar> (App Bridge) intercepts in-app navigation
-  // with unsaved changes and shows its own confirmation modal — no need
-  // for a useBlocker-driven body banner.
-
-  useEffect(() => {
-    const el = saveBarRef.current as
-      | (HTMLElement & { show?: () => void; hide?: () => void })
-      | null;
-    if (!el) return;
-    if (dirty) el.show?.();
-    else el.hide?.();
-  }, [dirty]);
+  // Native <ui-save-bar> drives the unsaved-changes warning; useSaveBar
+  // also hides the bar on unmount so it doesn't linger after a back nav.
+  useSaveBar(saveBarRef, dirty);
 
   const save = useCallback(() => {
     const fd = new FormData();
@@ -616,6 +607,7 @@ export default function EarnRuleEditor() {
         title={meta.title}
         subtitle={meta.description}
         backHref="/app/program"
+        dirty={dirty}
       />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}

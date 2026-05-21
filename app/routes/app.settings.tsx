@@ -23,6 +23,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { useSaveBar } from "../lib/polaris-bindings";
 import {
   PLANS,
   PLAN_ORDER,
@@ -221,15 +222,7 @@ export default function SettingsPage() {
     }
   }, [actionData]);
 
-  // Native <ui-save-bar> handles unsaved-changes nav warnings.
-  useEffect(() => {
-    const el = saveBarRef.current as
-      | (HTMLElement & { show?: () => void; hide?: () => void })
-      | null;
-    if (!el) return;
-    if (dirty) el.show?.();
-    else el.hide?.();
-  }, [dirty]);
+  useSaveBar(saveBarRef, dirty);
 
   const saveContact = useCallback(() => {
     submit(

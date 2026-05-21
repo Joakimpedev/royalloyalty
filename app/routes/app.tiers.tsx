@@ -18,7 +18,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
-import { PageTitle } from "../lib/polaris-bindings";
+import { PageTitle, useSaveBar } from "../lib/polaris-bindings";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -124,16 +124,7 @@ export default function TiersPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const saving = nav.state === "submitting";
 
-  // Native <ui-save-bar> handles unsaved-changes nav warnings.
-
-  useEffect(() => {
-    const el = saveBarRef.current as
-      | (HTMLElement & { show?: () => void; hide?: () => void })
-      | null;
-    if (!el) return;
-    if (dirty) el.show?.();
-    else el.hide?.();
-  }, [dirty]);
+  useSaveBar(saveBarRef, dirty);
 
   // Reset the form once a successful save completes.
   useEffect(() => {
@@ -174,6 +165,7 @@ export default function TiersPage() {
         title="VIP Tiers"
         subtitle="Reward your best customers with status tiers and earn multipliers"
         backHref="/app/program"
+        dirty={dirty}
       />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}

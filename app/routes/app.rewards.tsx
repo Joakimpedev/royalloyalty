@@ -18,7 +18,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
-import { PageTitle } from "../lib/polaris-bindings";
+import { PageTitle, useSaveBar } from "../lib/polaris-bindings";
 
 const REWARD_TYPES = [
   "amount_off",
@@ -146,16 +146,8 @@ export default function RewardsPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const saving = nav.state === "submitting";
 
-  // Native <ui-save-bar> handles unsaved-changes nav warnings.
-
-  useEffect(() => {
-    const el = saveBarRef.current as
-      | (HTMLElement & { show?: () => void; hide?: () => void })
-      | null;
-    if (!el) return;
-    if (dirty) el.show?.();
-    else el.hide?.();
-  }, [dirty]);
+  // Native <ui-save-bar> drives unsaved-changes UI + unmount cleanup.
+  useSaveBar(saveBarRef, dirty);
 
   useEffect(() => {
     if (actionData?.ok) {
@@ -193,6 +185,7 @@ export default function RewardsPage() {
         title="Rewards"
         subtitle="What customers can redeem points for"
         backHref="/app/program"
+        dirty={dirty}
       />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}

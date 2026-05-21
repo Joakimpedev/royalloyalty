@@ -83,16 +83,55 @@ export function ChoiceList({
  * The button's onClick goes through useAppNavigate so the iframe and the
  * embedded session stay alive (App Bridge-aware client-side nav).
  */
+// Drives the App Bridge <ui-save-bar> for a page: shows it whenever the
+// page is dirty, hides it when clean, AND ensures it is hidden on
+// unmount so the bar doesn't linger on the next page with dead buttons.
+// Pass the same ref you set on <ui-save-bar id="..." ref={ref}>.
+export function useSaveBar(
+  ref: React.MutableRefObject<HTMLElement | null>,
+  dirty: boolean,
+) {
+  useEffect(() => {
+    const el = ref.current as
+      | (HTMLElement & { show?: () => void; hide?: () => void })
+      | null;
+    if (!el) return;
+    if (dirty) el.show?.();
+    else el.hide?.();
+    return () => {
+      el.hide?.();
+    };
+  }, [ref, dirty]);
+}
+
 export function PageTitle({
   title,
   subtitle,
   backHref,
+  dirty,
 }: {
   title: string;
   subtitle?: string;
   backHref?: string;
+  /** When true, clicking the back arrow pops a native confirm so the user
+   *  doesn't lose unsaved changes by accidentally navigating away.
+   *  Pages with a <ui-save-bar> should pass their dirty state here. */
+  dirty?: boolean;
 }) {
   const nav = useAppNavigate();
+  const handleBack = () => {
+    if (!backHref) return;
+    if (
+      dirty &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "You have unsaved changes. Leave without saving?",
+      )
+    ) {
+      return;
+    }
+    nav(backHref);
+  };
   // The wrapper sets gridColumn 1/-1 so when this title sits inside an
   // <s-page> with a main + aside column layout, the title spans BOTH
   // columns and the aside content (e.g. Status card) drops below it
@@ -125,7 +164,7 @@ export function PageTitle({
           <s-button
             variant="tertiary"
             icon="arrow-left"
-            onClick={() => nav(backHref)}
+            onClick={handleBack}
             accessibilityLabel="Back"
           ></s-button>
         )}

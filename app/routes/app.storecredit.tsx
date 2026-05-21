@@ -18,7 +18,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
-import { ChoiceList, PageTitle } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
 import {
   getCashbackSettings,
   saveCashbackSettings,
@@ -106,16 +106,7 @@ export default function StoreCreditPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const saving = nav.state === "submitting";
 
-  // Native <ui-save-bar> handles unsaved-changes nav warnings.
-
-  useEffect(() => {
-    const el = saveBarRef.current as
-      | (HTMLElement & { show?: () => void; hide?: () => void })
-      | null;
-    if (!el) return;
-    if (dirty) el.show?.();
-    else el.hide?.();
-  }, [dirty]);
+  useSaveBar(saveBarRef, dirty);
 
   useEffect(() => {
     if (actionData?.ok) setBaseline(form);
@@ -136,6 +127,7 @@ export default function StoreCreditPage() {
         title="Store Credit"
         subtitle="Native Shopify store credit issued from the loyalty ledger"
         backHref="/app/program"
+        dirty={dirty}
       />
 
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
