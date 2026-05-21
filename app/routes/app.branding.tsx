@@ -192,14 +192,17 @@ function EmbedDiagnostic({ dump }: { dump: Record<string, unknown> }) {
   );
 }
 
-// Deep link to the theme editor's app-embed sidebar with our extension
-// pre-activated. The merchant lands on the editor with the launcher toggle
-// already flipped on — they just hit Save. Format documented at:
-//   shopify:admin/themes/current/editor?context=apps&activateAppId={uid}/{handle}
+// Deep link to the theme editor's App embeds panel. Earlier we tried
+// `activateAppId={uid}/launcher` to auto-flip the toggle, but that filter
+// uses Shopify's *deployed* extension UUID — which differs from the local
+// shopify.extension.toml `uid` — so the panel rendered empty ("you don't
+// have any apps with embeds installed") even when the merchant clearly
+// had other apps' embeds. Dropping activateAppId opens the full panel so
+// the merchant can scroll to "Royal Loyalty" and toggle it themselves.
+//
 // (See feedback_iframe_auth_bug — must be a shopify: URL with a plain
 // anchor; never target=_top.)
-const EMBED_UID = "63dc22e1-27da-358d-1f2a-1e6d9b60e4b66a03a917";
-const ENABLE_EMBED_HREF = `shopify:admin/themes/current/editor?context=apps&activateAppId=${EMBED_UID}/launcher`;
+const ENABLE_EMBED_HREF = "shopify:admin/themes/current/editor?context=apps";
 
 function SectionHeader({
   title,
@@ -222,7 +225,7 @@ function SectionHeader({
     embedEnabled === true
       ? "App embed enabled"
       : embedEnabled === false
-        ? "App embed disabled — click to enable"
+        ? "App embed disabled — open theme editor"
         : "App embed status unknown";
   const badge = <s-badge tone={tone}>{label}</s-badge>;
   return (
@@ -241,7 +244,7 @@ function SectionHeader({
         <a
           href={ENABLE_EMBED_HREF}
           style={{ textDecoration: "none", cursor: "pointer" }}
-          title="Open the theme editor with the Royal Loyalty embed pre-activated"
+          title='Open the App embeds panel — scroll to "Royal Loyalty" and toggle it on, then click Save'
         >
           {badge}
         </a>
