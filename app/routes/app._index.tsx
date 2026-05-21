@@ -54,24 +54,35 @@ async function fetchShopifyCustomerCounts(
   admin: { graphql: (...args: any[]) => Promise<{ json: () => Promise<any> }> },
   sinceDate: Date,
   untilDate: Date,
+  dayKeys: string[],
 ): Promise<{
   total: number;
   currentWindow: number;
   priorWindow: number;
+  /** One bucket per day in the window, aligned with dayKeys. */
+  seriesByDay: number[];
 } | null> {
   const windowMs = untilDate.getTime() - sinceDate.getTime();
   const priorSince = new Date(sinceDate.getTime() - windowMs);
   const sinceStr = sinceDate.toISOString().slice(0, 10);
   const untilStr = untilDate.toISOString().slice(0, 10);
   const priorSinceStr = priorSince.toISOString().slice(0, 10);
+  // Counts (fast, single query) + the list of createdAt timestamps for
+  // the current window (so we can bucket per day for the sparkline).
+  // 250 entries is plenty for most merchants' month-scale windows; on
+  // an unusually busy shop we'll undercount the sparkline buckets only,
+  // not the headline count.
   const query = `#graphql
-    query RoyalDashboardCustomerCounts(
+    query RoyalDashboardCustomerData(
       $current: String!
       $prior: String!
     ) {
       total: customersCount { count }
       currentWindow: customersCount(query: $current) { count }
       priorWindow: customersCount(query: $prior) { count }
+      customers(first: 250, query: $current, sortKey: CREATED_AT) {
+        nodes { createdAt }
+      }
     }
   `;
   try {
@@ -86,13 +97,22 @@ async function fetchShopifyCustomerCounts(
         total?: { count?: number };
         currentWindow?: { count?: number };
         priorWindow?: { count?: number };
+        customers?: { nodes?: Array<{ createdAt: string }> };
       };
     };
     if (!json.data) return null;
+    const seriesByDay = new Array(dayKeys.length).fill(0);
+    const idx = new Map(dayKeys.map((k, i) => [k, i]));
+    for (const node of json.data.customers?.nodes ?? []) {
+      const day = node.createdAt.slice(0, 10);
+      const i = idx.get(day);
+      if (i !== undefined) seriesByDay[i] += 1;
+    }
     return {
       total: json.data.total?.count ?? 0,
       currentWindow: json.data.currentWindow?.count ?? 0,
       priorWindow: json.data.priorWindow?.count ?? 0,
+      seriesByDay,
     };
   } catch {
     return null;
@@ -134,7 +154,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     create: { shopDomain: session.shop },
   });
 
-  const [dashboard, earnRuleRows, rewardCount, embed, shopifyCustomers] =
+  const [dashboard, earnRuleRows, rewardCount, embed] =
     await Promise.all([
       getDashboardMetrics(shop.id, sinceDate, untilDate),
       prisma.earnRule.findMany({
@@ -146,8 +166,43 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shop: session.shop,
         accessToken: session.accessToken,
       }),
-      fetchShopifyCustomerCounts(admin, sinceDate, untilDate),
     ]);
+
+  // Build day-key list from the dashboard's already-computed labels.
+  // dashboard.seriesLabels are "MMM D" formatted; we need "YYYY-MM-DD"
+  // strings to bucket Shopify customer createdAt timestamps. Easier to
+  // recompute from sinceDate/untilDate than parse those back.
+  const dayKeys: string[] = [];
+  {
+    const cursor = new Date(
+      Date.UTC(
+        sinceDate.getUTCFullYear(),
+        sinceDate.getUTCMonth(),
+        sinceDate.getUTCDate(),
+      ),
+    );
+    const endDay = new Date(
+      Date.UTC(
+        untilDate.getUTCFullYear(),
+        untilDate.getUTCMonth(),
+        untilDate.getUTCDate(),
+      ),
+    );
+    // until is exclusive (start-of-day after the picked "to"), so stop
+    // one day before to keep dayKeys aligned with dashboard.seriesLabels.
+    endDay.setUTCDate(endDay.getUTCDate() - 1);
+    while (cursor <= endDay) {
+      dayKeys.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+
+  const shopifyCustomers = await fetchShopifyCustomerCounts(
+    admin,
+    sinceDate,
+    untilDate,
+    dayKeys,
+  );
 
   // Override the Member.enrolledAt-based "Members added" headline with
   // Shopify's customer count for the same window. Our Member rows only
@@ -159,7 +214,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // be expensive; the headline value is what matters most here.
   if (shopifyCustomers) {
     dashboard.membersAdded = {
-      ...dashboard.membersAdded,
       current: shopifyCustomers.currentWindow,
       previous: shopifyCustomers.priorWindow,
       deltaFraction:
@@ -167,6 +221,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           ? null
           : (shopifyCustomers.currentWindow - shopifyCustomers.priorWindow) /
             shopifyCustomers.priorWindow,
+      series: shopifyCustomers.seriesByDay,
     };
   }
 
