@@ -983,9 +983,7 @@ function PlanSummarySection({
   plan: string;
   ordersUsed: number;
 }) {
-  // Plan caps copied from app/lib/billing.server.ts PLANS table. Hardcoding
-  // them here would couple us to that file; instead the merchant-visible
-  // cap is shown as "Unlimited" for Pro.
+  // Plan caps copied from app/lib/billing.server.ts PLANS table.
   const CAPS: Record<string, number | null> = {
     FREE: 250,
     STARTER: 500,
@@ -995,51 +993,104 @@ function PlanSummarySection({
   const cap = CAPS[plan] ?? 250;
   const percent = cap ? Math.min(100, (ordersUsed / cap) * 100) : 0;
   const nav = useAppNavigate();
+  // Compact one-row dark strip with a slight slate gradient (similar to
+  // Presail's brand panel, neutralised to match Polaris admin chrome).
+  // Plan name lives as a pill on the left; usage line sits to its right.
+  // Upgrade button right-aligned. Progress bar underneath, thin (4px).
   return (
-    <s-section heading="Plan">
-      <s-stack direction="block" gap="base">
-        <div
+    <div
+      style={{
+        background: "linear-gradient(135deg, #0f172a 0%, #1f2937 100%)",
+        color: "#fff",
+        borderRadius: 10,
+        padding: "12px 16px",
+        margin: "0 0 16px",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <span
           style={{
-            display: "flex",
-            justifyContent: "space-between",
+            display: "inline-flex",
             alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
+            gap: 6,
+            background: "rgba(255,255,255,0.12)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            color: "#fff",
+            padding: "3px 10px",
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
           }}
         >
-          <s-stack direction="block" gap="none">
-            <s-text fontWeight="bold">{plan} plan</s-text>
-            <s-text tone="subdued">
-              {cap
-                ? `${ordersUsed.toLocaleString()} of ${cap.toLocaleString()} loyalty orders this month`
-                : `${ordersUsed.toLocaleString()} loyalty orders this month — unlimited`}
-            </s-text>
-          </s-stack>
-          {plan !== "PRO" && (
-            <s-button onClick={() => nav("/app/settings")}>Upgrade plan</s-button>
-          )}
-        </div>
-        {cap && (
-          <div
+          {plan} plan
+        </span>
+        <span
+          style={{
+            fontSize: 13,
+            color: "rgba(255,255,255,0.85)",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {cap
+            ? `${ordersUsed.toLocaleString()} of ${cap.toLocaleString()} loyalty orders this month`
+            : `${ordersUsed.toLocaleString()} loyalty orders this month — unlimited`}
+        </span>
+        {plan !== "PRO" && (
+          <button
+            type="button"
+            onClick={() => nav("/app/settings")}
             style={{
-              height: 6,
-              borderRadius: 999,
-              background: "#f1f2f3",
-              overflow: "hidden",
+              background: "#fff",
+              color: "#0f172a",
+              border: "none",
+              borderRadius: 6,
+              padding: "6px 14px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
             }}
           >
-            <div
-              style={{
-                width: `${percent}%`,
-                height: "100%",
-                background: percent >= 90 ? "#d72c0d" : "#0e8a3e",
-                transition: "width 200ms ease",
-              }}
-            />
-          </div>
+            Upgrade plan
+          </button>
         )}
-      </s-stack>
-    </s-section>
+      </div>
+      {cap && (
+        <div
+          style={{
+            marginTop: 10,
+            height: 4,
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.12)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${percent}%`,
+              height: "100%",
+              background:
+                percent >= 90
+                  ? "#fca5a5"
+                  : percent >= 70
+                    ? "#fcd34d"
+                    : "rgba(255,255,255,0.85)",
+              transition: "width 200ms ease",
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
