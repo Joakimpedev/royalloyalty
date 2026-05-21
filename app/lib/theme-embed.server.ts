@@ -173,6 +173,12 @@ export async function checkAppEmbedEnabled(
     dump.settings_data_size = content.length;
     dump.settings_data_first_2kb = truncate(content, 2000);
 
+    // Shopify wraps settings_data.json with a /* ... */ header comment
+    // explaining it's auto-generated. JSON.parse can't handle it, so strip
+    // any leading block comment(s) before parsing.
+    const stripped = content.replace(/^\s*(\/\*[\s\S]*?\*\/\s*)+/, "");
+    dump.stripped_leading_chars = content.length - stripped.length;
+
     let settings: {
       current?:
         | string
@@ -185,7 +191,7 @@ export async function checkAppEmbedEnabled(
       >;
     };
     try {
-      settings = JSON.parse(content);
+      settings = JSON.parse(stripped);
     } catch (e) {
       const debug = `settings_data.json parse failed: ${(e as Error).message}`;
       return { enabled: null, debug, dump };
