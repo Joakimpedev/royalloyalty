@@ -284,19 +284,20 @@ export async function buildStorefrontLoyaltyPayload(params: {
       issueReferralCode({ shopId: shop.id, memberId: member.id })
         .then((r) => r.code)
         .catch(() => null),
-      // Completed redemptions with a discount code, last 90 days. We don't
-      // yet track which codes the customer has actually used at checkout,
-      // so this can include already-used codes — Shopify will reject those
-      // on apply, and the storefront UI labels them as "single use".
+      // Completed redemptions with a still-unused discount code, last 90
+      // days. The orders/create webhook (markRedemptionsUsedByOrder) sets
+      // usedAt when the code is applied at checkout, dropping it from this
+      // list automatically. We join the Reward table manually below since
+      // the schema doesn't declare an explicit relation.
       prisma.redemption.findMany({
         where: {
           shopId: shop.id,
           memberId: member.id,
           status: "COMPLETED",
           discountCode: { not: null },
+          usedAt: null,
           createdAt: { gte: ninetyDaysAgo },
         },
-        include: { reward: true },
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
@@ -312,16 +313,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
     referralLink: referralCode
       ? referralLink(shopDomain, referralCode)
       : null,
-    activeCodes: activeRedemptions
-      .filter((r) => !!r.discountCode)
-      .map((r) => ({
-        id: r.id,
-        code: r.discountCode!,
-        label: defaultRewardLabel(r.reward.type, r.reward.value),
-        pointsSpent: r.pointsSpent,
-        redeemedAt: r.createdAt.toISOString(),
-        type: r.reward.type,
-      })),
+    activeCodes: await buildActiveCodes(activeRedemptions),
     activity: activityRows.map((a) => ({
       type: a.type,
       reason: a.reason,
@@ -337,6 +329,41 @@ export async function buildStorefrontLoyaltyPayload(params: {
 // label saved yet (e.g. very early rules from before the editor existed).
 // New rules always have a label saved at write time.
 // ───────────────────────────────────────────────────────────────────────────
+
+// Map a list of redemption rows to the storefront active-code shape,
+// fetching the rewards in a single query to label each one. We don't have
+// an explicit Reward relation declared on Redemption in the schema, so the
+// join lives here in application code.
+async function buildActiveCodes(
+  rows: Array<{
+    id: string;
+    discountCode: string | null;
+    pointsSpent: number;
+    createdAt: Date;
+    rewardId: string;
+  }>,
+): Promise<StorefrontActiveCode[]> {
+  const rewardIds = Array.from(new Set(rows.map((r) => r.rewardId)));
+  const rewards = rewardIds.length
+    ? await prisma.reward.findMany({ where: { id: { in: rewardIds } } })
+    : [];
+  const rewardById = new Map(rewards.map((rw) => [rw.id, rw]));
+  return rows
+    .filter((r) => !!r.discountCode)
+    .map((r) => {
+      const rw = rewardById.get(r.rewardId);
+      return {
+        id: r.id,
+        code: r.discountCode!,
+        label: rw
+          ? defaultRewardLabel(rw.type, rw.value)
+          : "Reward",
+        pointsSpent: r.pointsSpent,
+        redeemedAt: r.createdAt.toISOString(),
+        type: rw?.type ?? "unknown",
+      };
+    });
+}
 
 function defaultEarnLabel(
   action: string,

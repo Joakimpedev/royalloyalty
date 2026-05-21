@@ -407,6 +407,46 @@ export async function redeemReward(params: {
 }
 
 /**
+ * Mark any of the shop's Redemption rows whose discountCode appears in the
+ * order's `discount_codes[]` as used. Called from the orders/create webhook
+ * AFTER awardForOrder so the customer-facing active-codes list filters used
+ * codes out automatically.
+ *
+ * Idempotent: a redemption already marked used keeps its original usedAt.
+ * Returns the number of rows updated (0 when the order had no recognized
+ * Royal Loyalty codes).
+ */
+export async function markRedemptionsUsedByOrder(
+  shopDomain: string,
+  payload: OrdersCreatePayload,
+): Promise<number> {
+  const codes = (payload.discount_codes ?? [])
+    .map((d) => (d?.code ?? "").trim())
+    .filter((c) => c.length > 0);
+  if (!codes.length) return 0;
+
+  const shop = await prisma.shop.findUnique({
+    where: { shopDomain },
+    select: { id: true },
+  });
+  if (!shop) return 0;
+
+  const orderId = String(payload.id);
+  const result = await prisma.redemption.updateMany({
+    where: {
+      shopId: shop.id,
+      discountCode: { in: codes },
+      usedAt: null,
+    },
+    data: {
+      usedAt: new Date(),
+      usedOrderId: orderId,
+    },
+  });
+  return result.count;
+}
+
+/**
  * Create a Shopify basic discount code for a redemption reward.
  * GraphQL mutation: `discountCodeBasicCreate`.
  */

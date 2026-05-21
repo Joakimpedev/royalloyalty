@@ -188,8 +188,16 @@ model Redemption {
   pointsSpent     Int
   status          RecordStatus @default(PENDING)
   discountCode    String?
+  // Set when the orders/create webhook detects the discountCode applied
+  // to an order. Filters the customer-facing active-codes list so used
+  // codes drop off automatically. Null = still usable (or a store_credit
+  // redemption, which doesn't produce a discount code at all).
+  usedAt          DateTime?
+  usedOrderId     String?
   createdAt       DateTime     @default(now())
   statusChangedAt DateTime     @default(now())
+
+  @@index([shopId, discountCode])
 }
 
 model Referral {

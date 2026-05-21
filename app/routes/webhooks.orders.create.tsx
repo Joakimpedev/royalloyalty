@@ -8,7 +8,10 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { shouldProcess, safeLog } from "../lib/webhooks.server";
-import { awardForOrder } from "../lib/loyalty.server";
+import {
+  awardForOrder,
+  markRedemptionsUsedByOrder,
+} from "../lib/loyalty.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   // 1. HMAC. Invalid signature => authenticate.webhook throws a 401 Response.
@@ -27,6 +30,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const result = await awardForOrder(shop, payload as OrdersCreatePayload);
     safeLog(topic, shop, `order processed (${result.outcome})`);
+    // Mark any redemption rows whose code was applied to this order as
+    // used, so the customer's active-codes list drops them. Failure here
+    // is non-fatal for awarding — log and continue.
+    try {
+      const used = await markRedemptionsUsedByOrder(
+        shop,
+        payload as OrdersCreatePayload,
+      );
+      if (used > 0) safeLog(topic, shop, `redemption codes marked used (${used})`);
+    } catch {
+      safeLog(topic, shop, "redemption code mark-used failed");
+    }
   } catch (err) {
     // Never leak PII. Log the shop + a generic note only.
     safeLog(topic, shop, "order processing error");
@@ -56,4 +71,7 @@ export interface OrdersCreatePayload {
     first_name?: string;
     last_name?: string;
   } | null;
+  // Each discount applied to the order — Shopify ships `code` for code-based
+  // discounts. We match against our Redemption.discountCode to flag used.
+  discount_codes?: Array<{ code?: string; amount?: string; type?: string }>;
 }
