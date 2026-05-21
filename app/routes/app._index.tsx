@@ -219,59 +219,68 @@ export default function Home() {
 
       <WelcomeCard />
 
-      {/* Header strip — status chips + date range selector */}
+      {/* Status chips — plain row directly on the page background, not in
+          a boxed section. Presail-style: just a small bar of pills. */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          margin: "0 0 16px",
+        }}
+      >
+        <StatusChip
+          tone={data.embedEnabled === true ? "success" : "neutral"}
+          label={
+            data.embedEnabled === true
+              ? "App embed enabled"
+              : data.embedEnabled === false
+                ? "App embed disabled"
+                : "App embed status unknown"
+          }
+        />
+        <StatusChip
+          tone={data.programActivated ? "success" : "neutral"}
+          label={data.programActivated ? "Loyalty live" : "Loyalty inactive"}
+        />
+        <StatusChip tone="neutral" label={`${data.plan} plan`} />
+      </div>
+
+      {/* Plan summary moves to the TOP, right after the chips — Presail
+          puts plan usage above performance so the merchant sees their
+          quota before the metrics. */}
+      <PlanSummarySection
+        plan={data.plan}
+        ordersUsed={data.monthlyLoyaltyOrderCount}
+      />
+
+      {/* Compact setup guide — list rows with circle/check, title +
+          inline action, line-through on done. Single section card. */}
+      {!allDone && (
+        <s-section heading={`Setup guide — ${data.steps.length - remaining.length}/${data.steps.length} complete`}>
+          <SetupGuideList
+            steps={data.steps}
+            onCta={(href) => nav(href)}
+          />
+        </s-section>
+      )}
+
+      {/* Performance metrics — Essent / Smile pattern. Date range selector
+          sits in the section heading row, not as its own page-level row. */}
       <s-section>
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            flexWrap: "wrap",
             gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 12,
           }}
         >
-          <s-stack direction="inline" gap="base" alignItems="center">
-            <StatusChip
-              tone={data.embedEnabled === true ? "success" : "neutral"}
-              label={
-                data.embedEnabled === true
-                  ? "App embed enabled"
-                  : data.embedEnabled === false
-                    ? "App embed disabled"
-                    : "App embed status unknown"
-              }
-            />
-            <StatusChip
-              tone={data.programActivated ? "success" : "neutral"}
-              label={data.programActivated ? "Loyalty live" : "Loyalty inactive"}
-            />
-            <StatusChip tone="neutral" label={`${data.plan} plan`} />
-          </s-stack>
+          <s-text fontWeight="bold">Performance</s-text>
           <DateRangeSelect value={data.range} />
         </div>
-      </s-section>
-
-      {/* Setup guide — disappears entirely when all steps done */}
-      {!allDone && (
-        <s-section heading="Setup guide">
-          <s-stack direction="block" gap="base">
-            <s-paragraph>
-              <s-text tone="subdued">
-                {data.steps.length - remaining.length} of {data.steps.length} steps complete
-              </s-text>
-            </s-paragraph>
-            <s-stack direction="block" gap="base">
-              {data.steps.map((s) => (
-                <SetupStepCard key={s.id} step={s} onCta={() => nav(s.href)} />
-              ))}
-            </s-stack>
-          </s-stack>
-        </s-section>
-      )}
-
-      {/* Performance metrics — Essent / Smile pattern, 2 rows × 3 cards.
-          Empty-state copy on each so the page never looks dead pre-activity. */}
-      <s-section heading="Performance">
         <div
           style={{
             display: "grid",
@@ -349,12 +358,6 @@ export default function Home() {
           <TopMembersCard rows={d.topMembers} />
         </div>
       </s-section>
-
-      {/* Plan summary */}
-      <PlanSummarySection
-        plan={data.plan}
-        ordersUsed={data.monthlyLoyaltyOrderCount}
-      />
 
     </s-page>
   );
@@ -678,15 +681,16 @@ function PlanSummarySection({
   );
 }
 
-// One row in the Setup guide. Renders title + detail + primary CTA, plus
-// a "Mark as done" / "Done" toggle in the top-right. Done state is the OR
-// of auto-detection (e.g. embed enabled, rewards exist) and the merchant's
-// manual override stored on Shop.aiConfigSnapshot.setupManualDone.
-function SetupStepCard({
-  step,
+// Compact setup guide list. Single column of rows, each: filled-or-empty
+// circle + step title (line-through when done) + small inline action
+// button. Much tighter than per-step <s-box> cards — Presail-style. The
+// "I've done this" / "Unmark" toggle becomes a small text button to the
+// right of the primary action so the row doesn't grow vertically.
+function SetupGuideList({
+  steps,
   onCta,
 }: {
-  step: {
+  steps: Array<{
     id: string;
     label: string;
     detail: string;
@@ -694,68 +698,116 @@ function SetupStepCard({
     autoDone: boolean;
     manuallyDone: boolean;
     done: boolean;
-  };
-  onCta: () => void;
+    href: string;
+  }>;
+  onCta: (href: string) => void;
 }) {
   const fetcher = useFetcher();
-  const submitting = fetcher.state !== "idle";
-  const toggleManual = () => {
+  const toggleManual = (stepId: string) => {
     const fd = new FormData();
     fd.set("_intent", "toggle_setup_step");
-    fd.set("stepId", step.id);
+    fd.set("stepId", stepId);
     fetcher.submit(fd, { method: "POST", action: "/app" });
   };
   return (
-    <s-box padding="base" borderWidth="base" borderRadius="base">
-      <s-stack direction="block" gap="base">
-        <div
+    <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
+      {steps.map((step, i) => (
+        <li
+          key={step.id}
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
             gap: 12,
+            padding: "12px 0",
+            borderTop: i === 0 ? "none" : "1px solid #f1f2f3",
+            opacity: step.done ? 0.65 : 1,
           }}
         >
-          <s-stack direction="inline" gap="base" alignItems="center">
-            <s-badge tone={step.done ? "success" : "neutral"}>
-              {step.done ? "Done" : "To do"}
-            </s-badge>
-            <s-text fontWeight="bold">{step.label}</s-text>
-          </s-stack>
-          {/* Manual override toggle. Auto-done steps don't show this — the
-              source of truth is the live check (e.g. embed status). Only
-              show the toggle for steps that aren't auto-detected as done,
-              OR are currently in the manual-done set (so the merchant can
-              un-mark a step they marked done by mistake). */}
-          {(!step.autoDone || step.manuallyDone) && (
-            <button
-              type="button"
-              onClick={toggleManual}
-              disabled={submitting}
+          <StepCircle done={step.done} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
               style={{
-                background: "transparent",
-                border: "1px solid #c9cccf",
-                borderRadius: 999,
-                padding: "4px 12px",
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: 500,
-                cursor: submitting ? "default" : "pointer",
                 color: "#202223",
-                whiteSpace: "nowrap",
+                textDecoration: step.done ? "line-through" : "none",
               }}
             >
-              {step.manuallyDone ? "Unmark" : "I've done this"}
-            </button>
-          )}
-        </div>
-        <s-paragraph>{step.detail}</s-paragraph>
-        <div>
-          <s-button onClick={onCta} variant={step.done ? undefined : "primary"}>
-            {step.cta}
-          </s-button>
-        </div>
-      </s-stack>
-    </s-box>
+              {step.label}
+            </div>
+            <div style={{ fontSize: 12, color: "#6d7175", marginTop: 2 }}>
+              {step.detail}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {!step.done && (
+              <s-button onClick={() => onCta(step.href)}>{step.cta}</s-button>
+            )}
+            {step.done && (
+              <s-button onClick={() => onCta(step.href)}>Open</s-button>
+            )}
+            {(!step.autoDone || step.manuallyDone) && (
+              <button
+                type="button"
+                onClick={() => toggleManual(step.id)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#6d7175",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  padding: "4px 6px",
+                  whiteSpace: "nowrap",
+                }}
+                title={
+                  step.manuallyDone
+                    ? "Mark this step as not done"
+                    : "Mark this step as done"
+                }
+              >
+                {step.manuallyDone ? "Unmark" : "I've done this"}
+              </button>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function StepCircle({ done }: { done: boolean }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        width: 20,
+        height: 20,
+        minWidth: 20,
+        borderRadius: "50%",
+        border: done ? "none" : "1.5px solid #c9cccf",
+        background: done ? "#0e8a3e" : "transparent",
+        color: "#fff",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      {done && (
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      )}
+    </div>
   );
 }
 
