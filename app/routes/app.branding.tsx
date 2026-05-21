@@ -118,14 +118,15 @@ function LockedHint() {
   );
 }
 
-function EmbedDiagnostic({ dump }: { dump: Record<string, unknown> }) {
+// Quiet copy button for the "App embed status unknown" case — copies the
+// full diagnostic JSON to the clipboard without ever showing the dump on
+// screen. Label flips to "Copied!" for 2s after a successful copy.
+function CopyDiagnosticButton({ dump }: { dump: Record<string, unknown> }) {
   const [copied, setCopied] = useState(false);
   const text = JSON.stringify(dump, null, 2);
   const copy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -133,62 +134,32 @@ function EmbedDiagnostic({ dump }: { dump: Record<string, unknown> }) {
       ta.select();
       try {
         document.execCommand("copy");
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
       } catch {
         /* give up */
       }
       ta.remove();
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }, [text]);
   return (
-    <div style={{ marginTop: 12 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-          marginBottom: 6,
-        }}
-      >
-        <span style={{ fontSize: 12, color: "#6d7175" }}>
-          Diagnostic payload — share with support
-        </span>
-        <button
-          type="button"
-          onClick={copy}
-          style={{
-            background: copied ? "#0e8a3e" : "#1a1c1d",
-            color: "#fff",
-            border: "none",
-            padding: "4px 10px",
-            borderRadius: 6,
-            fontSize: 12,
-            cursor: "pointer",
-          }}
-        >
-          {copied ? "Copied!" : "Copy diagnostic"}
-        </button>
-      </div>
-      <pre
-        style={{
-          background: "#1a1c1d",
-          color: "#e5e7eb",
-          padding: 12,
-          borderRadius: 6,
-          fontSize: 11,
-          lineHeight: 1.4,
-          maxHeight: 360,
-          overflow: "auto",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          margin: 0,
-        }}
-      >
-        {text}
-      </pre>
-    </div>
+    <button
+      type="button"
+      onClick={copy}
+      style={{
+        background: "transparent",
+        color: "#202223",
+        border: "1px solid #c9cccf",
+        padding: "2px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 500,
+        cursor: "pointer",
+        lineHeight: 1.6,
+      }}
+    >
+      {copied ? "Copied!" : "Copy diagnostics"}
+    </button>
   );
 }
 
@@ -207,9 +178,11 @@ const ENABLE_EMBED_HREF = "shopify:admin/themes/current/editor?context=apps";
 function SectionHeader({
   title,
   embedEnabled,
+  embedDump,
 }: {
   title: string;
   embedEnabled: boolean | null;
+  embedDump?: Record<string, unknown>;
 }) {
   // s-badge tone="success" = green, tone="critical" = red. When the check
   // is inconclusive (enabled === null) we render a neutral warning badge so
@@ -250,6 +223,9 @@ function SectionHeader({
         </a>
       ) : (
         badge
+      )}
+      {embedEnabled === null && embedDump && (
+        <CopyDiagnosticButton dump={embedDump} />
       )}
     </div>
   );
@@ -583,26 +559,6 @@ export default function BrandingPage() {
         </s-section>
       )}
 
-      {embed.enabled !== true && (
-        <s-section>
-          <s-banner
-            tone={embed.enabled === null ? "warning" : "info"}
-            heading={
-              embed.enabled === null
-                ? "App embed status check failed"
-                : "App embed reported as disabled — diagnostic"
-            }
-          >
-            <s-paragraph>
-              {embed.enabled === null
-                ? "We couldn't determine whether the Royal Loyalty app embed is enabled on your live theme."
-                : "The check ran but didn't find Royal Loyalty among the MAIN theme's active blocks. Use the dump below to see which blocks Shopify reported and how their UIDs compare to ours."}{" "}
-              Diagnostic: <strong>{embed.debug}</strong>
-            </s-paragraph>
-            <EmbedDiagnostic dump={embed.dump} />
-          </s-banner>
-        </s-section>
-      )}
 
       {!paid && (
         <s-section>
@@ -814,6 +770,7 @@ export default function BrandingPage() {
         <SectionHeader
           title="Product page widget"
           embedEnabled={embedEnabled}
+          embedDump={embed.dump}
         />
         <s-stack direction="block" gap="base">
           <div style={{ color: "#6d7175", fontSize: 13 }}>
@@ -909,7 +866,11 @@ export default function BrandingPage() {
 
       {/* ---- Cart widget ---- */}
       <s-section>
-        <SectionHeader title="Cart widget" embedEnabled={embedEnabled} />
+        <SectionHeader
+          title="Cart widget"
+          embedEnabled={embedEnabled}
+          embedDump={embed.dump}
+        />
         <s-stack direction="block" gap="base">
           <div style={{ color: "#6d7175", fontSize: 13 }}>
             Shows inside the cart drawer and cart page.
