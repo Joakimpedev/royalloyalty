@@ -284,7 +284,6 @@ export default function Home() {
           tone={data.programActivated ? "success" : "neutral"}
           label={data.programActivated ? "Loyalty live" : "Loyalty inactive"}
         />
-        <StatusChip tone="neutral" label={`${data.plan} plan`} />
       </div>
 
       {/* Plan summary moves to the TOP, right after the chips — Presail
