@@ -121,37 +121,19 @@ export function PageTitle({
         }}
       >
         {backHref && (
-          <button
-            type="button"
+          // @ts-expect-error - s-button custom element JSX types
+          <s-button
+            variant="tertiary"
+            icon="arrow-left"
             onClick={() => nav(backHref)}
-            aria-label="Back"
-            style={{
-              background: "transparent",
-              border: "none",
-              padding: 4,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              color: "#202223",
-              borderRadius: 6,
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M12.78 4.22a.75.75 0 0 1 0 1.06L8.06 10l4.72 4.72a.75.75 0 1 1-1.06 1.06l-5.25-5.25a.75.75 0 0 1 0-1.06l5.25-5.25a.75.75 0 0 1 1.06 0Z" />
-            </svg>
-          </button>
+            accessibilityLabel="Back"
+          ></s-button>
         )}
         <h1
           style={{
             margin: 0,
-            fontSize: 20,
-            fontWeight: 600,
+            fontSize: 16,
+            fontWeight: 700,
             lineHeight: 1.2,
             color: "#202223",
           }}
