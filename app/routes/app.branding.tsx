@@ -118,6 +118,80 @@ function LockedHint() {
   );
 }
 
+function EmbedDiagnostic({ dump }: { dump: Record<string, unknown> }) {
+  const [copied, setCopied] = useState(false);
+  const text = JSON.stringify(dump, null, 2);
+  const copy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        /* give up */
+      }
+      ta.remove();
+    }
+  }, [text]);
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          marginBottom: 6,
+        }}
+      >
+        <span style={{ fontSize: 12, color: "#6d7175" }}>
+          Diagnostic payload — share with support
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          style={{
+            background: copied ? "#0e8a3e" : "#1a1c1d",
+            color: "#fff",
+            border: "none",
+            padding: "4px 10px",
+            borderRadius: 6,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          {copied ? "Copied!" : "Copy diagnostic"}
+        </button>
+      </div>
+      <pre
+        style={{
+          background: "#1a1c1d",
+          color: "#e5e7eb",
+          padding: 12,
+          borderRadius: 6,
+          fontSize: 11,
+          lineHeight: 1.4,
+          maxHeight: 360,
+          overflow: "auto",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          margin: 0,
+        }}
+      >
+        {text}
+      </pre>
+    </div>
+  );
+}
+
 function SectionHeader({
   title,
   embedEnabled,
@@ -478,8 +552,9 @@ export default function BrandingPage() {
           <s-banner tone="warning" heading="App embed status check failed">
             <s-paragraph>
               We couldn't determine whether the Royal Loyalty app embed is
-              enabled on your live theme. Diagnostic: {embed.debug}
+              enabled on your live theme. Diagnostic: <strong>{embed.debug}</strong>
             </s-paragraph>
+            <EmbedDiagnostic dump={embed.dump} />
           </s-banner>
         </s-section>
       )}

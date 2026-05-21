@@ -42,22 +42,42 @@ interface AdminLike {
 
 export interface EmbedCheck {
   enabled: boolean | null;
-  /** Human-readable diagnostic, surfaced in the admin when enabled === null
-   *  so we can debug "why doesn't the badge render" without server logs. */
+  /** Short human-readable summary surfaced in the admin. */
   debug: string;
+  /** Full diagnostic payload — rendered as JSON in the UI behind a copy
+   *  button when enabled === null, so users can hand us the exact state
+   *  without needing server log access. */
+  dump: Record<string, unknown>;
+}
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max) + `… [+${s.length - max} chars truncated]`;
 }
 
 export async function checkAppEmbedEnabled(
   admin: AdminLike,
 ): Promise<EmbedCheck> {
+  const dump: Record<string, unknown> = {
+    extension_uid: EXTENSION_UID,
+    query: QUERY,
+    api_version: "2026-01",
+    timestamp: new Date().toISOString(),
+  };
+
   try {
     const res = await admin.graphql(QUERY);
-    const json = (await res.json()) as {
+    dump.http_status = res.status;
+    const raw = await res.text();
+    dump.raw_response_first_4kb = truncate(raw, 4000);
+
+    let json: {
       data?: {
         themes?: {
           nodes?: Array<{
             id?: string;
             role?: string;
+            name?: string;
             files?: {
               nodes?: Array<{ body?: { content?: string } }>;
             };
@@ -66,15 +86,32 @@ export async function checkAppEmbedEnabled(
       };
       errors?: Array<{ message?: string }>;
     };
+    try {
+      json = JSON.parse(raw);
+    } catch (e) {
+      const debug = `response JSON parse failed: ${(e as Error).message}`;
+      return { enabled: null, debug, dump: { ...dump, fatal: debug } };
+    }
+
+    dump.graphql_errors = json.errors ?? null;
 
     if (json.errors?.length) {
       const msg = json.errors.map((e) => e.message).join("; ");
-      return { enabled: null, debug: `graphql errors: ${msg}` };
+      const debug = `graphql errors: ${msg}`;
+      return { enabled: null, debug, dump };
     }
 
     const themes = json.data?.themes?.nodes ?? [];
+    dump.themes_summary = themes.map((t) => ({
+      id: t.id,
+      role: t.role,
+      name: t.name,
+      hasSettingsFile: !!t.files?.nodes?.[0]?.body?.content,
+    }));
+
     if (!themes.length) {
-      return { enabled: null, debug: "no themes returned by Admin API" };
+      const debug = "no themes returned by Admin API";
+      return { enabled: null, debug, dump };
     }
 
     const mainTheme = themes.find(
@@ -82,16 +119,18 @@ export async function checkAppEmbedEnabled(
     );
     if (!mainTheme) {
       const roles = themes.map((t) => t.role ?? "?").join(",");
-      return { enabled: null, debug: `no MAIN theme (roles: ${roles})` };
+      const debug = `no MAIN theme (roles: ${roles})`;
+      return { enabled: null, debug, dump };
     }
+    dump.main_theme_id = mainTheme.id;
 
     const content = mainTheme.files?.nodes?.[0]?.body?.content;
     if (!content) {
-      return {
-        enabled: null,
-        debug: "MAIN theme returned no settings_data.json content",
-      };
+      const debug = "MAIN theme returned no settings_data.json content";
+      return { enabled: null, debug, dump };
     }
+    dump.settings_data_size = content.length;
+    dump.settings_data_first_2kb = truncate(content, 2000);
 
     let settings: {
       current?:
@@ -99,57 +138,81 @@ export async function checkAppEmbedEnabled(
         | {
             blocks?: Record<string, { type?: string; disabled?: boolean }>;
           };
+      presets?: Record<
+        string,
+        { blocks?: Record<string, { type?: string; disabled?: boolean }> }
+      >;
     };
     try {
       settings = JSON.parse(content);
     } catch (e) {
-      return {
-        enabled: null,
-        debug: `settings_data.json parse failed: ${(e as Error).message}`,
-      };
+      const debug = `settings_data.json parse failed: ${(e as Error).message}`;
+      return { enabled: null, debug, dump };
     }
+
+    dump.has_current = !!settings.current;
+    dump.current_type = typeof settings.current;
+    dump.preset_names = settings.presets ? Object.keys(settings.presets) : null;
 
     if (!settings.current) {
-      return { enabled: null, debug: "settings_data.json has no `current`" };
-    }
-    if (typeof settings.current === "string") {
-      // Theme is using a preset name reference rather than inline blocks.
-      // We don't follow the preset lookup yet — treat as disabled but
-      // surface this so we can prioritize handling it if it's common.
-      return {
-        enabled: false,
-        debug: `current is preset reference "${settings.current}" (inline blocks not present)`,
-      };
+      const debug = "settings_data.json has no `current`";
+      return { enabled: null, debug, dump };
     }
 
-    const blocks = settings.current.blocks ?? {};
+    // Resolve blocks from either the inline `current` object or the named
+    // preset it references. Older themes / fresh installs use the string
+    // form pointing at `presets.<name>`.
+    let blocksSource: "current" | `preset:${string}` | null = null;
+    let blocks: Record<string, { type?: string; disabled?: boolean }> = {};
+    if (typeof settings.current === "string") {
+      const preset = settings.presets?.[settings.current];
+      if (!preset) {
+        const debug = `current preset "${settings.current}" not found in presets`;
+        return { enabled: null, debug, dump };
+      }
+      blocks = preset.blocks ?? {};
+      blocksSource = `preset:${settings.current}`;
+    } else {
+      blocks = settings.current.blocks ?? {};
+      blocksSource = "current";
+    }
+    dump.blocks_source = blocksSource;
+
     const blockKeys = Object.keys(blocks);
+    dump.block_count = blockKeys.length;
+    dump.block_types = blockKeys.map((k) => ({
+      key: k,
+      type: blocks[k]?.type,
+      disabled: !!blocks[k]?.disabled,
+    }));
+
     for (const key of blockKeys) {
       const block = blocks[key];
       if (!block?.type) continue;
       // App embed block types look like:
       //   shopify://apps/{api_client_id}/blocks/{handle}/{extension_uid}
       if (block.type.includes(EXTENSION_UID)) {
-        return {
-          enabled: !block.disabled,
-          debug: `matched block ${key} (type=${block.type}, disabled=${!!block.disabled})`,
-        };
+        const debug = `matched block ${key} (type=${block.type}, disabled=${!!block.disabled})`;
+        return { enabled: !block.disabled, debug, dump };
       }
     }
 
-    // None of the current blocks reference our extension UID.
     const sample = blockKeys
       .slice(0, 3)
       .map((k) => blocks[k]?.type ?? "?")
       .join(" | ");
-    return {
-      enabled: false,
-      debug: `extension uid not in current.blocks (${blockKeys.length} block(s); sample types: ${sample || "none"})`,
-    };
+    const debug = `extension uid not in ${blocksSource} blocks (${blockKeys.length} block(s); sample types: ${sample || "none"})`;
+    return { enabled: false, debug, dump };
   } catch (err) {
+    const debug = `exception: ${(err as Error).message}`;
     return {
       enabled: null,
-      debug: `exception: ${(err as Error).message}`,
+      debug,
+      dump: {
+        ...dump,
+        exception_message: (err as Error).message,
+        exception_stack: (err as Error).stack,
+      },
     };
   }
 }
