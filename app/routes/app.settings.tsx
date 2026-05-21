@@ -241,13 +241,16 @@ export default function SettingsPage() {
       {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
       <ui-save-bar id="settings-save-bar" open={dirty ? true : undefined}>
         <button
-          variant="primary"
+          slot="save"
           onClick={saveContact}
           {...(busy ? { loading: "" } : {})}
         >
           Save
         </button>
-        <button onClick={() => setContactEmail(String(data.contactEmail ?? ""))}>
+        <button
+          slot="discard"
+          onClick={() => setContactEmail(String(data.contactEmail ?? ""))}
+        >
           Discard
         </button>
         {/* @ts-expect-error - ui-save-bar custom element */}

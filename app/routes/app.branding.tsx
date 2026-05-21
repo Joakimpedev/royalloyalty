@@ -523,13 +523,15 @@ export default function BrandingPage() {
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="branding-save-bar" open={dirty ? true : undefined}>
         <button
-          variant="primary"
+          slot="save"
           onClick={save}
           {...(saving ? { loading: "" } : {})}
         >
           Save
         </button>
-        <button onClick={() => setForm(baseline)}>Discard</button>
+        <button slot="discard" onClick={() => setForm(baseline)}>
+          Discard
+        </button>
         {/* @ts-expect-error - ui-save-bar custom element */}
       </ui-save-bar>
 

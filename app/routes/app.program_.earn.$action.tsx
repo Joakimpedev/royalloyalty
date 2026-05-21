@@ -612,13 +612,15 @@ export default function EarnRuleEditor() {
       {/* @ts-expect-error - ui-save-bar App Bridge custom element */}
       <ui-save-bar id="earn-rule-save-bar" open={dirty ? true : undefined}>
         <button
-          variant="primary"
+          slot="save"
           onClick={save}
           {...(saving ? { loading: "" } : {})}
         >
           Save
         </button>
-        <button onClick={discard}>Discard</button>
+        <button slot="discard" onClick={discard}>
+          Discard
+        </button>
         {/* @ts-expect-error - ui-save-bar custom element */}
       </ui-save-bar>
 
