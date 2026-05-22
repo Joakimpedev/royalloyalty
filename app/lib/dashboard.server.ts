@@ -45,6 +45,10 @@ export interface DashboardTopMember {
 export interface DashboardMetrics {
   /** One label per bucket — "MMM D" formatted, oldest -> newest. */
   seriesLabels: string[];
+  /** Same as seriesLabels but for the prior comparison window. Same
+   *  length, oldest -> newest. Used for the comparison row in the
+   *  sparkline hover tooltip. */
+  compareSeriesLabels: string[];
   /** Sum of order totals for orders that earned loyalty points in the
    *  window, ESTIMATED by reversing the active purchase rule. Honest:
    *  shows null when no purchase rule is configured so we don't lie. */
@@ -113,11 +117,19 @@ export async function getDashboardMetrics(
   // letting the comparison series overlay the current sparkline
   // bucket-for-bucket.
   const priorDayKeys: string[] = [];
+  const compareSeriesLabels: string[] = [];
   {
     const cursor = startOfDayUtc(priorSince);
     const endDay = startOfDayUtc(since);
     while (cursor < endDay) {
       priorDayKeys.push(cursor.toISOString().slice(0, 10));
+      compareSeriesLabels.push(
+        cursor.toLocaleDateString(undefined, {
+          timeZone: "UTC",
+          month: "short",
+          day: "numeric",
+        }),
+      );
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
   }
@@ -184,6 +196,7 @@ export async function getDashboardMetrics(
 
   return {
     seriesLabels,
+    compareSeriesLabels,
     loyaltyDrivenRevenueEstimated:
       revenueCur !== null
         ? {

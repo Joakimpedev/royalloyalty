@@ -501,7 +501,6 @@ export default function Home() {
           otherwise it's replaced by Referral orders so the grid still
           shows 6 distinct metrics. */}
       <s-section heading="Performance">
-        <SparklineDiagnostics data={data} />
         <div
           style={{
             display: "grid",
@@ -520,6 +519,7 @@ export default function Home() {
               series={d.loyaltyDrivenRevenueEstimated.series}
               compareSeries={d.loyaltyDrivenRevenueEstimated.previousSeries}
               seriesLabels={d.seriesLabels}
+              compareSeriesLabels={d.compareSeriesLabels}
               formatTooltipValue={(v) => formatCurrency(v, data.currencyCode)}
             />
           ) : (
@@ -530,6 +530,7 @@ export default function Home() {
               series={d.referralOrders.series}
               compareSeries={d.referralOrders.previousSeries}
               seriesLabels={d.seriesLabels}
+              compareSeriesLabels={d.compareSeriesLabels}
             />
           )}
           <MetricCard
@@ -539,6 +540,7 @@ export default function Home() {
             series={d.membersAdded.series}
             compareSeries={d.membersAdded.previousSeries}
             seriesLabels={d.seriesLabels}
+            compareSeriesLabels={d.compareSeriesLabels}
           />
           <MetricCard
             label="Earners"
@@ -547,6 +549,7 @@ export default function Home() {
             series={d.earners.series}
             compareSeries={d.earners.previousSeries}
             seriesLabels={d.seriesLabels}
+            compareSeriesLabels={d.compareSeriesLabels}
           />
           <MetricCard
             label="Redeemers"
@@ -555,6 +558,7 @@ export default function Home() {
             series={d.redeemers.series}
             compareSeries={d.redeemers.previousSeries}
             seriesLabels={d.seriesLabels}
+            compareSeriesLabels={d.compareSeriesLabels}
           />
           <MetricCard
             label="Rewards claimed"
@@ -563,6 +567,7 @@ export default function Home() {
             series={d.rewardsClaimed.series}
             compareSeries={d.rewardsClaimed.previousSeries}
             seriesLabels={d.seriesLabels}
+            compareSeriesLabels={d.compareSeriesLabels}
           />
           <MetricCard
             label="Redemption rate"
@@ -571,6 +576,7 @@ export default function Home() {
             series={d.redemptionRate.series}
             compareSeries={d.redemptionRate.previousSeries}
             seriesLabels={d.seriesLabels}
+            compareSeriesLabels={d.compareSeriesLabels}
             formatTooltipValue={(v) => `${v.toLocaleString()} redemptions`}
           />
         </div>
@@ -922,6 +928,7 @@ function Sparkline({
   values,
   compareValues,
   labels,
+  compareLabels,
   height = 44,
   formatValue,
 }: {
@@ -932,6 +939,9 @@ function Sparkline({
   compareValues?: number[];
   /** One label per bucket, oldest -> newest. */
   labels?: string[];
+  /** Prior-window labels, same length/order as `labels`. Shown on the
+   *  comparison row of the hover tooltip. */
+  compareLabels?: string[];
   height?: number;
   /** Optional value formatter for the tooltip (e.g. money formatter). */
   formatValue?: (v: number) => string;
@@ -1014,7 +1024,8 @@ function Sparkline({
     return d;
   };
   const curvePath = buildCurve(pts);
-  const comparePath = hasCompare ? buildCurve(toPts(cmp)) : null;
+  const comparePts = hasCompare ? toPts(cmp) : null;
+  const comparePath = comparePts ? buildCurve(comparePts) : null;
   const areaPath = `${curvePath} L${w.toFixed(2)},${h} L0,${h} Z`;
   const stroke = "#202223";
   const fill = "#e1e3e5";
@@ -1036,13 +1047,16 @@ function Sparkline({
   };
   const handleLeave = () => setHovered(null);
 
+  const fmt = (v: number) =>
+    formatValue ? formatValue(v) : v.toLocaleString();
   const tipLabel = hovered != null && labels ? labels[hovered] : null;
-  const tipValue =
-    hovered != null
-      ? formatValue
-        ? formatValue(values[hovered])
-        : values[hovered].toLocaleString()
+  const tipValue = hovered != null ? fmt(values[hovered]) : null;
+  const compareTipLabel =
+    hovered != null && comparePts && compareLabels
+      ? compareLabels[hovered]
       : null;
+  const compareTipValue =
+    hovered != null && comparePts ? fmt(cmp[hovered]) : null;
 
   return (
     <div
@@ -1088,8 +1102,28 @@ function Sparkline({
       </svg>
       {hovered != null && pts[hovered] && (
         <>
-          {/* Hover dot — HTML-positioned so it stays circular regardless
-              of the SVG's non-uniform aspect ratio. */}
+          {/* Comparison hover dot — smaller + gray + dashed-ring so it
+              reads as the "previous" series. Rendered first so the
+              current dot sits on top when the two lines overlap. */}
+          {comparePts && comparePts[hovered] && (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: `${comparePts[hovered].x}%`,
+                top: `${(comparePts[hovered].y / h) * 100}%`,
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                background: compareStroke,
+                transform: "translate(-50%, -50%)",
+                pointerEvents: "none",
+                boxShadow: "0 0 0 1.5px #fff",
+              }}
+            />
+          )}
+          {/* Current hover dot — HTML-positioned so it stays circular
+              regardless of the SVG's non-uniform aspect ratio. */}
           <div
             aria-hidden
             style={{
@@ -1105,7 +1139,10 @@ function Sparkline({
               boxShadow: "0 0 0 1.5px #fff",
             }}
           />
-          {/* Tooltip */}
+          {/* Tooltip — one row per series. Each row carries a tiny line
+              glyph (solid = current, dashed = comparison) so the values
+              are unambiguous, plus that series' own date. Kept minimal:
+              glyph · date · value. */}
           <div
             role="tooltip"
             style={{
@@ -1115,20 +1152,32 @@ function Sparkline({
               transform: "translate(-50%, -100%)",
               background: "#1a1c1d",
               color: "#fff",
-              padding: "4px 8px",
+              padding: "5px 8px",
               borderRadius: 6,
               fontSize: 11,
-              lineHeight: 1.3,
+              lineHeight: 1.35,
               whiteSpace: "nowrap",
               pointerEvents: "none",
               boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
               zIndex: 1,
+              display: "grid",
+              gap: 3,
             }}
           >
-            {tipLabel && (
-              <div style={{ color: "#a8acaf", fontSize: 10 }}>{tipLabel}</div>
+            <TooltipRow
+              dashed={false}
+              color="#fff"
+              label={tipLabel}
+              value={tipValue}
+            />
+            {comparePts && (
+              <TooltipRow
+                dashed
+                color={compareStroke}
+                label={compareTipLabel}
+                value={compareTipValue}
+              />
             )}
-            <div style={{ fontWeight: 600 }}>{tipValue}</div>
           </div>
         </>
       )}
@@ -1136,67 +1185,38 @@ function Sparkline({
   );
 }
 
-// TEMP diagnostic — dumps the real per-metric series + comparison series
-// so we can see exactly what the loader produced at runtime. Remove once
-// the comparison overlay is confirmed working.
-function SparklineDiagnostics({
-  data,
+// One line of the sparkline hover tooltip. A tiny line glyph (solid for
+// the current series, dashed for the comparison) sits before the series'
+// own date + value so the two rows are never confused.
+function TooltipRow({
+  dashed,
+  color,
+  label,
+  value,
 }: {
-  data: ReturnType<typeof useLoaderData<typeof loader>>;
+  dashed: boolean;
+  color: string;
+  label: string | null;
+  value: string | null;
 }) {
-  if (data.shopMissing) return null;
-  const d = data.dashboard;
-  const sum = (a: number[]) => a.reduce((s, n) => s + n, 0);
-  const describe = (m: { series: number[]; previousSeries: number[] } | null) =>
-    m
-      ? {
-          seriesLen: m.series.length,
-          prevLen: m.previousSeries.length,
-          lenMatch: m.series.length === m.previousSeries.length,
-          seriesSum: sum(m.series),
-          prevSum: sum(m.previousSeries),
-        }
-      : null;
-  const report = {
-    range: data.range,
-    compareRange: data.compareRange,
-    seriesLabelsLen: d.seriesLabels.length,
-    metrics: {
-      loyaltyDrivenRevenue: describe(d.loyaltyDrivenRevenueEstimated),
-      referralOrders: describe(d.referralOrders),
-      membersAdded: describe(d.membersAdded),
-      earners: describe(d.earners),
-      redeemers: describe(d.redeemers),
-      rewardsClaimed: describe(d.rewardsClaimed),
-      redemptionRate: describe(d.redemptionRate),
-    },
-    membersAddedRaw: {
-      current: d.membersAdded.current,
-      previous: d.membersAdded.previous,
-      deltaFraction: d.membersAdded.deltaFraction,
-      series: d.membersAdded.series,
-      previousSeries: d.membersAdded.previousSeries,
-    },
-  };
+  if (value == null) return null;
   return (
-    <pre
-      style={{
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-all",
-        fontSize: 11,
-        background: "#fff4e5",
-        border: "1px solid #e0b589",
-        borderRadius: 6,
-        padding: 10,
-        margin: "0 0 12px",
-        maxHeight: 320,
-        overflow: "auto",
-        userSelect: "all",
-      }}
-    >
-      SPARKLINE DIAGNOSTICS (copy everything below):{"\n"}
-      {JSON.stringify(report, null, 2)}
-    </pre>
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <svg width={14} height={6} aria-hidden style={{ flex: "0 0 auto" }}>
+        <line
+          x1={0}
+          y1={3}
+          x2={14}
+          y2={3}
+          stroke={color}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          {...(dashed ? { strokeDasharray: "3 2" } : {})}
+        />
+      </svg>
+      {label && <span style={{ color: "#a8acaf", fontSize: 10 }}>{label}</span>}
+      <span style={{ fontWeight: 600 }}>{value}</span>
+    </div>
   );
 }
 
@@ -1207,6 +1227,7 @@ function MetricCard({
   series,
   compareSeries,
   seriesLabels,
+  compareSeriesLabels,
   formatTooltipValue,
 }: {
   label: string;
@@ -1216,6 +1237,8 @@ function MetricCard({
   /** Prior-window series for the dotted comparison line. */
   compareSeries?: number[];
   seriesLabels: string[];
+  /** Prior-window labels for the comparison row of the hover tooltip. */
+  compareSeriesLabels?: string[];
   /** Tooltip value formatter (e.g. currency). Falls back to .toLocaleString(). */
   formatTooltipValue?: (v: number) => string;
 }) {
@@ -1231,6 +1254,7 @@ function MetricCard({
           values={series}
           compareValues={compareSeries}
           labels={seriesLabels}
+          compareLabels={compareSeriesLabels}
           formatValue={formatTooltipValue}
         />
       </s-stack>
