@@ -222,6 +222,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           : (shopifyCustomers.currentWindow - shopifyCustomers.priorWindow) /
             shopifyCustomers.priorWindow,
       series: shopifyCustomers.seriesByDay,
+      // Keep the DB-derived prior series for the dotted comparison line —
+      // we don't fetch a per-day Shopify customer list for the prior
+      // window (the headline count is what we override for accuracy).
+      previousSeries: dashboard.membersAdded.previousSeries,
     };
   }
 
@@ -293,9 +297,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     done: s.autoDone || manuallyDone.includes(s.id),
   }));
 
+  // Comparison window — same duration as the selected range, ending the
+  // day before it starts. Shown read-only next to the picker and drives
+  // the dotted comparison line on the sparklines.
+  const windowMs = untilDate.getTime() - sinceDate.getTime();
+  const compareSince = new Date(sinceDate.getTime() - windowMs);
+  const compareToInclusive = new Date(sinceDate.getTime());
+  compareToInclusive.setUTCDate(compareToInclusive.getUTCDate() - 1);
+  const compareRange = {
+    from: compareSince.toISOString().slice(0, 10),
+    to: compareToInclusive.toISOString().slice(0, 10),
+  };
+
   return {
     shopMissing: false as const,
     range,
+    compareRange,
     steps,
     // (rangeLabels available on dashboard.seriesLabels for tooltips)
     dashboard,
@@ -432,14 +449,20 @@ export default function Home() {
       )}
 
       {/* Date range picker — its own row above the Performance grid so
-          shoppers know it scopes the metrics below. */}
+          shoppers know it scopes the metrics below. The read-only
+          "Compared to" chip mirrors the picker's shape but isn't
+          pickable: the comparison window is always the period of equal
+          length immediately preceding the selected range. */}
       <div
         style={{
           display: "flex",
           justifyContent: "flex-end",
+          alignItems: "center",
+          gap: 8,
           margin: "0 0 8px",
         }}
       >
+        <CompareToChip range={data.compareRange} />
         <DateRangePicker value={data.range} />
       </div>
 
@@ -464,6 +487,7 @@ export default function Home() {
               )}
               delta={d.loyaltyDrivenRevenueEstimated.deltaFraction}
               series={d.loyaltyDrivenRevenueEstimated.series}
+              compareSeries={d.loyaltyDrivenRevenueEstimated.previousSeries}
               seriesLabels={d.seriesLabels}
               formatTooltipValue={(v) => formatCurrency(v, data.currencyCode)}
             />
@@ -473,6 +497,7 @@ export default function Home() {
               value={d.referralOrders.current.toLocaleString()}
               delta={d.referralOrders.deltaFraction}
               series={d.referralOrders.series}
+              compareSeries={d.referralOrders.previousSeries}
               seriesLabels={d.seriesLabels}
             />
           )}
@@ -481,6 +506,7 @@ export default function Home() {
             value={d.membersAdded.current.toLocaleString()}
             delta={d.membersAdded.deltaFraction}
             series={d.membersAdded.series}
+            compareSeries={d.membersAdded.previousSeries}
             seriesLabels={d.seriesLabels}
           />
           <MetricCard
@@ -488,6 +514,7 @@ export default function Home() {
             value={d.earners.current.toLocaleString()}
             delta={d.earners.deltaFraction}
             series={d.earners.series}
+            compareSeries={d.earners.previousSeries}
             seriesLabels={d.seriesLabels}
           />
           <MetricCard
@@ -495,6 +522,7 @@ export default function Home() {
             value={d.redeemers.current.toLocaleString()}
             delta={d.redeemers.deltaFraction}
             series={d.redeemers.series}
+            compareSeries={d.redeemers.previousSeries}
             seriesLabels={d.seriesLabels}
           />
           <MetricCard
@@ -502,6 +530,7 @@ export default function Home() {
             value={d.rewardsClaimed.current.toLocaleString()}
             delta={d.rewardsClaimed.deltaFraction}
             series={d.rewardsClaimed.series}
+            compareSeries={d.rewardsClaimed.previousSeries}
             seriesLabels={d.seriesLabels}
           />
           <MetricCard
@@ -509,6 +538,7 @@ export default function Home() {
             value={`${(d.redemptionRate.current * 100).toFixed(0)}%`}
             delta={d.redemptionRate.deltaFraction}
             series={d.redemptionRate.series}
+            compareSeries={d.redemptionRate.previousSeries}
             seriesLabels={d.seriesLabels}
             formatTooltipValue={(v) => `${v.toLocaleString()} redemptions`}
           />
@@ -728,6 +758,18 @@ function displayRange(from: string, to: string): string {
   return `${part(f, !sameYear)} – ${part(t, true)}`;
 }
 
+// Read-only sibling of the date picker. Same button silhouette (so the
+// two read as a pair on the row) but disabled — the merchant can't choose
+// what to compare against; it's always the equal-length window directly
+// before the selected range. Reads e.g. "Compared to Apr 22 – May 21".
+function CompareToChip({ range }: { range: DateRange }) {
+  return (
+    <s-button disabled icon="calendar" aria-disabled="true">
+      Compared to {displayRange(range.from, range.to)}
+    </s-button>
+  );
+}
+
 function DateRangePicker({ value }: { value: DateRange }) {
   const [params, setParams] = useSearchParams();
   const [draft, setDraft] = useState<DateRange>(value);
@@ -847,11 +889,16 @@ function DateRangePicker({ value }: { value: DateRange }) {
 // HTML overlay so it renders crisp at any svg aspect ratio.
 function Sparkline({
   values,
+  compareValues,
   labels,
   height = 44,
   formatValue,
 }: {
   values: number[];
+  /** Prior-window series, same length as `values`. Drawn as a faint
+   *  gray dotted line behind the current curve for at-a-glance
+   *  comparison. Omit to hide the comparison line. */
+  compareValues?: number[];
   /** One label per bucket, oldest -> newest. */
   labels?: string[];
   height?: number;
@@ -862,20 +909,26 @@ function Sparkline({
   if (!values.length) return null;
   const w = 100;
   const h = height;
-  const max = Math.max(...values, 0);
-  const min = Math.min(...values, 0);
+  const hasCompare = !!compareValues && compareValues.length === values.length;
+  const cmp = hasCompare ? compareValues! : [];
+  // Scale both series on a shared min/max so the comparison line is
+  // directly readable against the current curve (same baseline + ceiling).
+  const max = Math.max(...values, ...cmp, 0);
+  const min = Math.min(...values, ...cmp, 0);
   const range = max - min || 1;
   const stepX = w / (values.length - 1 || 1);
-  const pts = values.map((v, i) => {
-    const x = i * stepX;
-    const y = h - ((v - min) / range) * (h - 8) - 4;
-    return { x, y };
-  });
+  const toPts = (vals: number[]) =>
+    vals.map((v, i) => {
+      const x = i * stepX;
+      const y = h - ((v - min) / range) * (h - 8) - 4;
+      return { x, y };
+    });
+  const pts = toPts(values);
   // Monotone cubic interpolation (Fritsch-Carlson). Produces a smooth
   // curve through every point WITHOUT overshooting — tangents are
   // clamped to zero at local minima/maxima so a value at 0 never dips
   // below 0 on the chart. Same algorithm d3's d3.curveMonotoneX uses.
-  const curvePath = (() => {
+  const buildCurve = (pts: { x: number; y: number }[]) => {
     if (pts.length === 1) {
       return `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
     }
@@ -928,10 +981,13 @@ function Sparkline({
       d += ` C${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${pts[i + 1].x.toFixed(2)},${pts[i + 1].y.toFixed(2)}`;
     }
     return d;
-  })();
+  };
+  const curvePath = buildCurve(pts);
+  const comparePath = hasCompare ? buildCurve(toPts(cmp)) : null;
   const areaPath = `${curvePath} L${w.toFixed(2)},${h} L0,${h} Z`;
   const stroke = "#202223";
   const fill = "#e1e3e5";
+  const compareStroke = "#8c9196";
 
   const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -976,6 +1032,19 @@ function Sparkline({
           opacity={0.55}
           vectorEffect="non-scaling-stroke"
         />
+        {comparePath && (
+          <path
+            d={comparePath}
+            fill="none"
+            stroke={compareStroke}
+            strokeWidth={1.25}
+            strokeDasharray="3 2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.85}
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
         <path
           d={curvePath}
           fill="none"
@@ -1041,6 +1110,7 @@ function MetricCard({
   value,
   delta,
   series,
+  compareSeries,
   seriesLabels,
   formatTooltipValue,
 }: {
@@ -1048,6 +1118,8 @@ function MetricCard({
   value: string;
   delta: number | null;
   series: number[];
+  /** Prior-window series for the dotted comparison line. */
+  compareSeries?: number[];
   seriesLabels: string[];
   /** Tooltip value formatter (e.g. currency). Falls back to .toLocaleString(). */
   formatTooltipValue?: (v: number) => string;
@@ -1062,6 +1134,7 @@ function MetricCard({
         </s-stack>
         <Sparkline
           values={series}
+          compareValues={compareSeries}
           labels={seriesLabels}
           formatValue={formatTooltipValue}
         />

@@ -19,6 +19,10 @@ export interface DashboardMetric {
    *  the per-card sparkline. Length matches seriesLabels in the parent
    *  DashboardMetrics. */
   series: number[];
+  /** Same shape as `series` but for the prior comparison window, oldest
+   *  -> newest. Same length as `series` (prior window mirrors current
+   *  duration) so it overlays as the dotted comparison line. */
+  previousSeries: number[];
 }
 
 export interface DashboardActivity {
@@ -99,11 +103,26 @@ export async function getDashboardMetrics(
     }
   }
 
+  // Prior-window day keys — mirrors the current window's duration, ending
+  // the day before `since`. Built with the exact same inclusive-endpoint
+  // loop as dayKeys so it has the SAME length, letting the comparison
+  // series overlay the current sparkline bucket-for-bucket.
+  const priorDayKeys: string[] = [];
+  {
+    const cursor = startOfDayUtc(priorSince);
+    const endDay = startOfDayUtc(since);
+    while (cursor <= endDay) {
+      priorDayKeys.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+
   const [
     purchaseRule,
     cur,
     prev,
     series,
+    priorSeries,
     recentRows,
     topRows,
   ] = await Promise.all([
@@ -114,6 +133,7 @@ export async function getDashboardMetrics(
     aggregatesFor(shopId, since, until),
     aggregatesFor(shopId, priorSince, since),
     buildSeriesFor(shopId, since, until, dayKeys),
+    buildSeriesFor(shopId, priorSince, since, priorDayKeys),
     prisma.pointTransaction.findMany({
       where: { shopId },
       orderBy: { createdAt: "desc" },
@@ -146,6 +166,7 @@ export async function getDashboardMetrics(
   let revenueCur: number | null = null;
   let revenuePrev: number | null = null;
   let revenueSeries: number[] | null = null;
+  let revenuePrevSeries: number[] | null = null;
   if (purchaseRule?.perDollar && purchaseRule.points > 0) {
     const cfg = (purchaseRule.config ?? null) as { perAmount?: number } | null;
     const perAmount = Math.max(1, cfg?.perAmount ?? 1);
@@ -153,6 +174,7 @@ export async function getDashboardMetrics(
     revenueCur = cur.earnPurchasePoints * ratio;
     revenuePrev = prev.earnPurchasePoints * ratio;
     revenueSeries = series.earnPurchasePointsByDay.map((p) => p * ratio);
+    revenuePrevSeries = priorSeries.earnPurchasePointsByDay.map((p) => p * ratio);
   }
 
   return {
@@ -164,18 +186,50 @@ export async function getDashboardMetrics(
             previous: revenuePrev ?? 0,
             deltaFraction: fractionDelta(revenueCur, revenuePrev ?? 0),
             series: revenueSeries ?? [],
+            previousSeries: revenuePrevSeries ?? [],
           }
         : null,
-    membersAdded: metric(cur.membersAdded, prev.membersAdded, series.membersAddedByDay),
-    earners: metric(cur.earners, prev.earners, series.earnEventsByDay),
-    redeemers: metric(cur.redeemers, prev.redeemers, series.redeemEventsByDay),
-    pointsIssued: metric(cur.pointsIssued, prev.pointsIssued, series.pointsIssuedByDay),
-    pointsRedeemed: metric(cur.pointsRedeemed, prev.pointsRedeemed, series.pointsRedeemedByDay),
-    referralOrders: metric(cur.referralOrders, prev.referralOrders, series.referralOrdersByDay),
+    membersAdded: metric(
+      cur.membersAdded,
+      prev.membersAdded,
+      series.membersAddedByDay,
+      priorSeries.membersAddedByDay,
+    ),
+    earners: metric(
+      cur.earners,
+      prev.earners,
+      series.earnEventsByDay,
+      priorSeries.earnEventsByDay,
+    ),
+    redeemers: metric(
+      cur.redeemers,
+      prev.redeemers,
+      series.redeemEventsByDay,
+      priorSeries.redeemEventsByDay,
+    ),
+    pointsIssued: metric(
+      cur.pointsIssued,
+      prev.pointsIssued,
+      series.pointsIssuedByDay,
+      priorSeries.pointsIssuedByDay,
+    ),
+    pointsRedeemed: metric(
+      cur.pointsRedeemed,
+      prev.pointsRedeemed,
+      series.pointsRedeemedByDay,
+      priorSeries.pointsRedeemedByDay,
+    ),
+    referralOrders: metric(
+      cur.referralOrders,
+      prev.referralOrders,
+      series.referralOrdersByDay,
+      priorSeries.referralOrdersByDay,
+    ),
     rewardsClaimed: metric(
       cur.rewardsClaimed,
       prev.rewardsClaimed,
       series.rewardsClaimedByDay,
+      priorSeries.rewardsClaimedByDay,
     ),
     redemptionRate: {
       // Fraction (0..1). Headline value formatted upstream as %.
@@ -189,6 +243,7 @@ export async function getDashboardMetrics(
       // (redeemers/earners) which doesn't bucket meaningfully per day,
       // so the trend shows redemption activity over time instead.
       series: series.redeemEventsByDay,
+      previousSeries: priorSeries.redeemEventsByDay,
     },
     recentActivity: recentRows.map((r) => ({
       id: r.id,
@@ -398,12 +453,14 @@ function metric(
   current: number,
   previous: number,
   series: number[],
+  previousSeries: number[],
 ): DashboardMetric {
   return {
     current,
     previous,
     deltaFraction: fractionDelta(current, previous),
     series,
+    previousSeries,
   };
 }
 
