@@ -471,6 +471,7 @@ export default function Home() {
           otherwise it's replaced by Referral orders so the grid still
           shows 6 distinct metrics. */}
       <s-section heading="Performance">
+        <SparklineDiagnostics data={data} />
         <div
           style={{
             display: "grid",
@@ -1102,6 +1103,67 @@ function Sparkline({
         </>
       )}
     </div>
+  );
+}
+
+// TEMP diagnostic — dumps the real per-metric series + comparison series
+// so we can see exactly what the loader produced at runtime. Remove once
+// the comparison overlay is confirmed working.
+function SparklineDiagnostics({
+  data,
+}: {
+  data: ReturnType<typeof useLoaderData<typeof loader>>;
+}) {
+  if (data.shopMissing) return null;
+  const d = data.dashboard;
+  const sum = (a: number[]) => a.reduce((s, n) => s + n, 0);
+  const describe = (m: { series: number[]; previousSeries: number[] } | null) =>
+    m
+      ? {
+          seriesLen: m.series.length,
+          prevLen: m.previousSeries.length,
+          lenMatch: m.series.length === m.previousSeries.length,
+          seriesSum: sum(m.series),
+          prevSum: sum(m.previousSeries),
+        }
+      : null;
+  const report = {
+    range: data.range,
+    compareRange: data.compareRange,
+    seriesLabelsLen: d.seriesLabels.length,
+    metrics: {
+      loyaltyDrivenRevenue: describe(d.loyaltyDrivenRevenueEstimated),
+      referralOrders: describe(d.referralOrders),
+      membersAdded: describe(d.membersAdded),
+      earners: describe(d.earners),
+      redeemers: describe(d.redeemers),
+      rewardsClaimed: describe(d.rewardsClaimed),
+      redemptionRate: describe(d.redemptionRate),
+    },
+    membersAddedRaw: {
+      series: d.membersAdded.series,
+      previousSeries: d.membersAdded.previousSeries,
+    },
+  };
+  return (
+    <pre
+      style={{
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-all",
+        fontSize: 11,
+        background: "#fff4e5",
+        border: "1px solid #e0b589",
+        borderRadius: 6,
+        padding: 10,
+        margin: "0 0 12px",
+        maxHeight: 320,
+        overflow: "auto",
+        userSelect: "all",
+      }}
+    >
+      SPARKLINE DIAGNOSTICS (copy everything below):{"\n"}
+      {JSON.stringify(report, null, 2)}
+    </pre>
   );
 }
 
