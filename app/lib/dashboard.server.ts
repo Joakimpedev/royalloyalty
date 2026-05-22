@@ -84,13 +84,17 @@ export async function getDashboardMetrics(
   const windowMs = until.getTime() - since.getTime();
   const priorSince = new Date(since.getTime() - windowMs);
 
-  // Daily bucket list, inclusive of both endpoints (UTC).
+  // Daily bucket list. `until` is exclusive (start-of-day after the picked
+  // "to"), so we stop strictly before it — otherwise the last bucket is a
+  // phantom always-zero day and the series ends up one longer than the
+  // Shopify-sourced customer series the loader splices in, which silently
+  // disabled the comparison overlay on the New-customers card.
   const dayKeys: string[] = [];
   const seriesLabels: string[] = [];
   {
     const cursor = startOfDayUtc(since);
     const endDay = startOfDayUtc(until);
-    while (cursor <= endDay) {
+    while (cursor < endDay) {
       dayKeys.push(cursor.toISOString().slice(0, 10));
       seriesLabels.push(
         cursor.toLocaleDateString(undefined, {
@@ -104,14 +108,15 @@ export async function getDashboardMetrics(
   }
 
   // Prior-window day keys — mirrors the current window's duration, ending
-  // the day before `since`. Built with the exact same inclusive-endpoint
-  // loop as dayKeys so it has the SAME length, letting the comparison
-  // series overlay the current sparkline bucket-for-bucket.
+  // the day before `since` (which is exclusive here too). Built with the
+  // same strictly-before loop as dayKeys so it has the SAME length,
+  // letting the comparison series overlay the current sparkline
+  // bucket-for-bucket.
   const priorDayKeys: string[] = [];
   {
     const cursor = startOfDayUtc(priorSince);
     const endDay = startOfDayUtc(since);
-    while (cursor <= endDay) {
+    while (cursor < endDay) {
       priorDayKeys.push(cursor.toISOString().slice(0, 10));
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
