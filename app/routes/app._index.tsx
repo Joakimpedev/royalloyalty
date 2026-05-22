@@ -55,12 +55,18 @@ async function fetchShopifyCustomerCounts(
   sinceDate: Date,
   untilDate: Date,
   dayKeys: string[],
+  priorDayKeys: string[],
 ): Promise<{
   total: number;
   currentWindow: number;
   priorWindow: number;
   /** One bucket per day in the window, aligned with dayKeys. */
   seriesByDay: number[];
+  /** One bucket per day in the prior window, aligned with priorDayKeys.
+   *  Drives the dotted comparison line on the New-customers card so it
+   *  matches the Shopify-sourced headline (the DB Member table is empty
+   *  on stores whose customers haven't triggered a loyalty event yet). */
+  priorSeriesByDay: number[];
 } | null> {
   const windowMs = untilDate.getTime() - sinceDate.getTime();
   const priorSince = new Date(sinceDate.getTime() - windowMs);
@@ -68,10 +74,10 @@ async function fetchShopifyCustomerCounts(
   const untilStr = untilDate.toISOString().slice(0, 10);
   const priorSinceStr = priorSince.toISOString().slice(0, 10);
   // Counts (fast, single query) + the list of createdAt timestamps for
-  // the current window (so we can bucket per day for the sparkline).
-  // 250 entries is plenty for most merchants' month-scale windows; on
-  // an unusually busy shop we'll undercount the sparkline buckets only,
-  // not the headline count.
+  // BOTH windows (so we can bucket per day for the sparkline + its dotted
+  // comparison line). 250 entries is plenty for most merchants'
+  // month-scale windows; on an unusually busy shop we'll undercount the
+  // sparkline buckets only, not the headline count.
   const query = `#graphql
     query RoyalDashboardCustomerData(
       $current: String!
@@ -81,6 +87,9 @@ async function fetchShopifyCustomerCounts(
       currentWindow: customersCount(query: $current) { count }
       priorWindow: customersCount(query: $prior) { count }
       customers(first: 250, query: $current, sortKey: CREATED_AT) {
+        nodes { createdAt }
+      }
+      priorCustomers: customers(first: 250, query: $prior, sortKey: CREATED_AT) {
         nodes { createdAt }
       }
     }
@@ -98,21 +107,28 @@ async function fetchShopifyCustomerCounts(
         currentWindow?: { count?: number };
         priorWindow?: { count?: number };
         customers?: { nodes?: Array<{ createdAt: string }> };
+        priorCustomers?: { nodes?: Array<{ createdAt: string }> };
       };
     };
     if (!json.data) return null;
-    const seriesByDay = new Array(dayKeys.length).fill(0);
-    const idx = new Map(dayKeys.map((k, i) => [k, i]));
-    for (const node of json.data.customers?.nodes ?? []) {
-      const day = node.createdAt.slice(0, 10);
-      const i = idx.get(day);
-      if (i !== undefined) seriesByDay[i] += 1;
-    }
+    const bucket = (
+      nodes: Array<{ createdAt: string }> | undefined,
+      keys: string[],
+    ) => {
+      const out = new Array(keys.length).fill(0);
+      const idx = new Map(keys.map((k, i) => [k, i]));
+      for (const node of nodes ?? []) {
+        const i = idx.get(node.createdAt.slice(0, 10));
+        if (i !== undefined) out[i] += 1;
+      }
+      return out;
+    };
     return {
       total: json.data.total?.count ?? 0,
       currentWindow: json.data.currentWindow?.count ?? 0,
       priorWindow: json.data.priorWindow?.count ?? 0,
-      seriesByDay,
+      seriesByDay: bucket(json.data.customers?.nodes, dayKeys),
+      priorSeriesByDay: bucket(json.data.priorCustomers?.nodes, priorDayKeys),
     };
   } catch {
     return null;
@@ -197,11 +213,27 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
 
+  // Prior-window day keys (same length as dayKeys) for the New-customers
+  // comparison line. The prior window is [since - windowMs, since).
+  const priorDayKeys: string[] = [];
+  {
+    const windowMs = untilDate.getTime() - sinceDate.getTime();
+    const cursor = new Date(sinceDate.getTime() - windowMs);
+    const endDay = new Date(sinceDate.getTime());
+    // since is exclusive for the prior window, so stop one day before it.
+    endDay.setUTCDate(endDay.getUTCDate() - 1);
+    while (cursor <= endDay) {
+      priorDayKeys.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+
   const shopifyCustomers = await fetchShopifyCustomerCounts(
     admin,
     sinceDate,
     untilDate,
     dayKeys,
+    priorDayKeys,
   );
 
   // Override the Member.enrolledAt-based "Members added" headline with
@@ -209,9 +241,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // get created on the first triggering event (order, customers/create
   // webhook), so pre-existing customers don't show up there — using
   // Shopify as source of truth removes the "0 members but I see 4
-  // customers" disconnect the merchant kept hitting. Sparkline still
-  // reflects Member.enrolledAt because per-day customer-listing would
-  // be expensive; the headline value is what matters most here.
+  // customers" disconnect the merchant kept hitting. Both the current
+  // and the comparison sparkline series are Shopify-sourced too, so the
+  // dotted prior-period line matches the headline delta instead of
+  // sitting flat at zero (the DB Member table is empty on these stores).
   if (shopifyCustomers) {
     dashboard.membersAdded = {
       current: shopifyCustomers.currentWindow,
@@ -222,10 +255,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           : (shopifyCustomers.currentWindow - shopifyCustomers.priorWindow) /
             shopifyCustomers.priorWindow,
       series: shopifyCustomers.seriesByDay,
-      // Keep the DB-derived prior series for the dotted comparison line —
-      // we don't fetch a per-day Shopify customer list for the prior
-      // window (the headline count is what we override for accuracy).
-      previousSeries: dashboard.membersAdded.previousSeries,
+      previousSeries: shopifyCustomers.priorSeriesByDay,
     };
   }
 
@@ -1141,6 +1171,9 @@ function SparklineDiagnostics({
       redemptionRate: describe(d.redemptionRate),
     },
     membersAddedRaw: {
+      current: d.membersAdded.current,
+      previous: d.membersAdded.previous,
+      deltaFraction: d.membersAdded.deltaFraction,
       series: d.membersAdded.series,
       previousSeries: d.membersAdded.previousSeries,
     },
