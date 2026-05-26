@@ -28,8 +28,8 @@
     aria-controls="royal-panel"
     id="royal-launcher-btn"
   >
-    <span aria-hidden="true">&#9819;</span>
-    {{ block.settings.launcher_text | default: 'Rewards' | escape }}
+    <span class="royal-launcher__icon" aria-hidden="true">&#9819;</span>
+    <span class="royal-launcher__text">{{ block.settings.launcher_text | default: 'Rewards' | escape }}</span>
   </button>
 
   <div
@@ -39,7 +39,7 @@
     aria-label="{{ block.settings.title | default: 'Your rewards' | escape }}"
     hidden
   >
-    <button type="button" id="royal-panel-close" class="royal-btn" style="float:right;background:transparent;color:#666;padding:4px 8px;" aria-label="Close">&times;</button>
+    <button type="button" id="royal-panel-close" class="royal-panel__close" aria-label="Close">&times;</button>
     <h2 style="margin:0 0 8px;">{{ block.settings.title | default: 'Your rewards' | escape }}</h2>
 
     {%- if customer -%}
@@ -197,9 +197,13 @@
             card.appendChild(rb);
             wrap.appendChild(card);
           });
-        }, function () {
+        }, function (diag) {
           R.setStatus(status, 'error',
             "We couldn't load your rewards right now. Please try again later.");
+          var wrap = document.getElementById('royal-rewards');
+          if (diag) {
+            R.renderDiag(wrap || status.parentNode, diag, 'loyalty/balance failed');
+          }
         });
       }
     }

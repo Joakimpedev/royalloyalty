@@ -40,9 +40,60 @@
     );
     o.credentials = "same-origin";
     return fetch(url, o).then(function (r) {
-      if (!r.ok) throw new Error("request_failed");
-      return r.json();
+      if (!r.ok) {
+        return r.text().then(function (body) {
+          var err = new Error("request_failed");
+          err.royalDiag = {
+            url: url,
+            status: r.status,
+            statusText: r.statusText,
+            bodySnippet: (body || "").slice(0, 240),
+            contentType: r.headers.get("content-type") || "",
+          };
+          throw err;
+        });
+      }
+      return r.text().then(function (body) {
+        try {
+          return JSON.parse(body);
+        } catch (e) {
+          var err = new Error("parse_failed");
+          err.royalDiag = {
+            url: url,
+            status: r.status,
+            bodySnippet: (body || "").slice(0, 240),
+            contentType: r.headers.get("content-type") || "",
+            note: "response was not valid JSON",
+          };
+          throw err;
+        }
+      });
+    }).catch(function (e) {
+      if (e && e.royalDiag) throw e;
+      var err = new Error("network_error");
+      err.royalDiag = {
+        url: url,
+        note: "fetch failed (network/CORS/offline): " + (e && e.message ? e.message : "unknown"),
+      };
+      throw err;
     });
+  }
+
+  function renderDiag(target, diag, label) {
+    if (!target || !diag) return;
+    var box = document.createElement("pre");
+    box.className = "royal-diag";
+    box.style.cssText =
+      "margin:8px 0 0;padding:10px 12px;background:#fff5f5;border:1px solid #f3c2c2;border-radius:6px;color:#7a1f1f;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all;text-align:left;";
+    var lines = [];
+    if (label) lines.push("[" + label + "]");
+    if (diag.url) lines.push("URL: " + diag.url);
+    if (diag.status != null) lines.push("Status: " + diag.status + (diag.statusText ? " " + diag.statusText : ""));
+    if (diag.contentType) lines.push("Content-Type: " + diag.contentType);
+    if (diag.note) lines.push("Note: " + diag.note);
+    if (diag.bodySnippet) lines.push("Body: " + diag.bodySnippet);
+    box.textContent = lines.join("\n");
+    target.appendChild(box);
   }
 
   /* Capture ?ref= for referral attribution into a first-party cookie. */
@@ -109,8 +160,8 @@
       .then(function (d) {
         onData(d);
       })
-      .catch(function () {
-        if (typeof onError === "function") onError("network");
+      .catch(function (err) {
+        if (typeof onError === "function") onError(err && err.royalDiag ? err.royalDiag : { note: "unknown" });
       });
   }
 
@@ -539,6 +590,7 @@
     redeem: redeem,
     captureReferral: captureReferral,
     applyBranding: applyBranding,
+    renderDiag: renderDiag,
     formatMoney: formatMoney,
     rewardLabel: rewardLabel,
     injectProduct: injectProduct,
