@@ -72,6 +72,6 @@ redirect_urls = [ "https://royalloyalty-production.up.railway.app/api/auth" ]
 # it must be set to the dev tunnel URL for local testing and to the Railway
 # production URL for deploy.
 [app_proxy]
-url = "https://royalloyalty-production.up.railway.app"
+url = "https://royalloyalty-production.up.railway.app/proxy"
 subpath = "royal"
 prefix = "apps"
