@@ -43,28 +43,26 @@ export default function VariablePicker({
     >
       <button
         type="button"
-        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         aria-label="Insert variable"
         aria-expanded={open}
         title="Insert variable"
         style={{
-          background: disabled ? "#f6f6f7" : "#f4eefb",
-          border: "1px solid #d6c4ec",
-          padding: "2px 8px",
-          cursor: disabled ? "not-allowed" : "pointer",
-          color: disabled ? "#8c9196" : "#6b3eb8",
-          fontSize: 12,
+          background: "transparent",
+          border: "none",
+          padding: 2,
+          cursor: "pointer",
+          color: "#6b3eb8",
           fontFamily:
             "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-          fontWeight: 700,
-          lineHeight: 1.4,
-          borderRadius: 6,
+          fontWeight: 800,
+          fontSize: 14,
+          lineHeight: 1,
         }}
       >
-        {"{ }"}
+        {"{}"}
       </button>
-      {open && !disabled ? (
+      {open ? (
         <div
           style={{
             position: "absolute",
@@ -111,9 +109,15 @@ export default function VariablePicker({
                   key={t.token}
                   type="button"
                   onClick={() => {
+                    if (disabled) return;
                     onPick(t.token);
                     setOpen(false);
                   }}
+                  title={
+                    disabled
+                      ? "Available on paid plans"
+                      : "Insert " + t.token
+                  }
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
@@ -124,15 +128,16 @@ export default function VariablePicker({
                     background: "transparent",
                     border: "none",
                     padding: "6px 10px",
-                    cursor: "pointer",
+                    cursor: disabled ? "not-allowed" : "pointer",
                     fontFamily: "inherit",
                     fontSize: 13,
-                    color: "#202223",
+                    color: disabled ? "#8c9196" : "#202223",
                     borderRadius: 4,
                   }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#f6f6f7")
-                  }
+                  onMouseEnter={(e) => {
+                    if (!disabled)
+                      e.currentTarget.style.background = "#f6f6f7";
+                  }}
                   onMouseLeave={(e) =>
                     (e.currentTarget.style.background = "transparent")
                   }
@@ -141,7 +146,7 @@ export default function VariablePicker({
                   <code
                     style={{
                       fontSize: 11,
-                      color: "#6b3eb8",
+                      color: disabled ? "#8c9196" : "#6b3eb8",
                       fontFamily:
                         "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
                     }}

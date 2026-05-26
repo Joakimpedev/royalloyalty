@@ -50,12 +50,10 @@ import { formatMoney } from "../lib/use-money";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
 import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
 import VariablePicker from "../components/VariablePicker";
+import LockedHint from "../components/LockedHint";
 import {
   DEFAULT_EARN_COPY,
   TOKEN_GROUPS_BY_ACTION,
-  substituteTokens,
-  formatMoneyAmount,
-  currencySymbol,
 } from "../lib/tokens";
 
 const ACTIONS = [
@@ -511,53 +509,6 @@ function SocialPlatformsEditor({
   );
 }
 
-/** Live preview of the substituted title + description — mirrors what the
- *  storefront extension renders in the launcher's "Earn points" list. Uses
- *  the same substituteTokens function as the server-side payload builder
- *  so both reads are identical. */
-function ContentPreview({
-  title,
-  description,
-  points,
-  perAmount,
-  currencyCode,
-  locale,
-}: {
-  title: string;
-  description: string;
-  points: number;
-  perAmount: number;
-  currencyCode: string;
-  locale?: string;
-}) {
-  const ctx: Record<string, string> = {
-    points: String(points),
-    currency_code: currencyCode,
-    currency_symbol: currencySymbol(currencyCode, locale),
-    per_amount: formatMoneyAmount(perAmount, currencyCode, locale),
-  };
-  return (
-    <div
-      style={{
-        border: "1px solid #e1e3e5",
-        borderRadius: 8,
-        padding: "10px 12px",
-        background: "#fafbfb",
-      }}
-    >
-      <div style={{ fontSize: 11, fontWeight: 600, color: "#6d7175", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-        Storefront preview
-      </div>
-      <div style={{ fontWeight: 600, color: "#202223", fontSize: 14 }}>
-        {substituteTokens(title, ctx) || "—"}
-      </div>
-      <div style={{ color: "#6d7175", fontSize: 13, marginTop: 2 }}>
-        {substituteTokens(description, ctx) || "—"}
-      </div>
-    </div>
-  );
-}
-
 export default function EarnRuleEditor() {
   const { action: actionName, rule, money: moneyCtx, paid } =
     useLoaderData<typeof loader>();
@@ -731,90 +682,7 @@ export default function EarnRuleEditor() {
 
       {/* ───── Main column ───── */}
 
-      {showContentSection ? (
-        <s-section heading="Content">
-          <s-stack direction="block" gap="base">
-            <s-paragraph>
-              <s-text tone="subdued">
-                Customize what shoppers see in the launcher's "Earn points"
-                list. Click <strong>{"{ }"}</strong> to insert a value that
-                gets filled in at render time.
-              </s-text>
-            </s-paragraph>
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 4,
-                }}
-              >
-                <span style={{ fontSize: 13, color: "#202223" }}>
-                  Card title
-                </span>
-                <VariablePicker
-                  groups={tokenGroups}
-                  disabled={!paid}
-                  onPick={insertTokenInto("title")}
-                />
-              </div>
-              <s-text-field
-                label=""
-                value={title}
-                disabled={!paid ? true : undefined}
-                onChange={(e: any) =>
-                  setTitle(String(e.target.value ?? ""))
-                }
-              />
-            </div>
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 4,
-                }}
-              >
-                <span style={{ fontSize: 13, color: "#202223" }}>
-                  Card description
-                </span>
-                <VariablePicker
-                  groups={tokenGroups}
-                  disabled={!paid}
-                  onPick={insertTokenInto("description")}
-                />
-              </div>
-              <s-text-field
-                label=""
-                value={description}
-                disabled={!paid ? true : undefined}
-                placeholder={rule.defaultDescription}
-                onChange={(e: any) =>
-                  setDescription(String(e.target.value ?? ""))
-                }
-              />
-            </div>
-            <ContentPreview
-              title={title}
-              description={description || rule.defaultDescription}
-              points={points}
-              perAmount={perAmount}
-              currencyCode={currencyCode}
-              locale={moneyCtx.locale}
-            />
-            {!paid ? (
-              <s-paragraph>
-                <s-text tone="subdued">
-                  Title and description customization is available on paid
-                  plans. Free shops render the defaults shown above.
-                </s-text>
-              </s-paragraph>
-            ) : null}
-          </s-stack>
-        </s-section>
-      ) : (
+      {showContentSection ? null : (
         <s-section heading="Title">
           <s-text-field
             label="Title"
@@ -914,6 +782,88 @@ export default function EarnRuleEditor() {
         </s-stack>
       </s-section>
       )}
+
+      {showContentSection ? (
+        <s-section heading="Content">
+          <s-stack direction="block" gap="base">
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  marginBottom: 4,
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "#202223",
+                  }}
+                >
+                  Card title
+                  {!paid ? <LockedHint /> : null}
+                </span>
+                <VariablePicker
+                  groups={tokenGroups}
+                  disabled={!paid}
+                  onPick={insertTokenInto("title")}
+                />
+              </div>
+              <s-text-field
+                label=""
+                value={title}
+                disabled={!paid ? true : undefined}
+                onChange={(e: any) =>
+                  setTitle(String(e.target.value ?? ""))
+                }
+              />
+            </div>
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  marginBottom: 4,
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "#202223",
+                  }}
+                >
+                  Card description
+                  {!paid ? <LockedHint /> : null}
+                </span>
+                <VariablePicker
+                  groups={tokenGroups}
+                  disabled={!paid}
+                  onPick={insertTokenInto("description")}
+                />
+              </div>
+              <s-text-field
+                label=""
+                value={description}
+                disabled={!paid ? true : undefined}
+                placeholder={rule.defaultDescription}
+                onChange={(e: any) =>
+                  setDescription(String(e.target.value ?? ""))
+                }
+              />
+            </div>
+          </s-stack>
+        </s-section>
+      ) : null}
 
       {/* ───── Right rail (Polaris page aside) ───── */}
 
