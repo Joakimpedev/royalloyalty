@@ -85,6 +85,27 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     return jsonCors({ points, enrolled: true });
   }
 
+  // POS localization — POS extension calls this once on mount to fetch
+  // the active locale's bundle, then resolves every UI string with t().
+  if (sub === "pos/localization") {
+    const { readLocalization, buildResolvedBundle } = await import(
+      "../lib/localization.server"
+    );
+    const shop = await prisma.shop.findUnique({ where: { shopDomain } });
+    if (!shop) return jsonCors({ error: "shop_not_found" }, 404);
+    const config = readLocalization(shop.aiConfigSnapshot);
+    const bundle = buildResolvedBundle(config, config.defaultLocale);
+    const { LOCALE_INDEX } = await import("../lib/localization-locales");
+    const meta = LOCALE_INDEX.get(config.defaultLocale);
+    return jsonCors({
+      bundle,
+      locale: {
+        code: config.defaultLocale,
+        rtl: Boolean(meta?.rtl),
+      },
+    });
+  }
+
   return jsonCors({ error: "not_found" }, 404);
 };
 

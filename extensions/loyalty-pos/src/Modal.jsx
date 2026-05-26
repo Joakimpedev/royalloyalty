@@ -49,6 +49,25 @@ const ModalComponent = () => {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState({ kind: "", msg: "" });
   const [busy, setBusy] = useState(false);
+  // Localization bundle for POS (loaded once on mount).
+  const [locBundle, setLocBundle] = useState({});
+  const t = useCallback(
+    (key, fallback) =>
+      (locBundle && typeof locBundle[key] === "string"
+        ? locBundle[key]
+        : fallback) || "",
+    [locBundle],
+  );
+  const tSub = useCallback(
+    (template, vars) => {
+      let out = String(template == null ? "" : template);
+      Object.keys(vars || {}).forEach((k) => {
+        out = out.replace(new RegExp(`\\{${k}\\}`, "g"), String(vars[k]));
+      });
+      return out;
+    },
+    [],
+  );
 
   // Pull the customer attached to the current POS cart, if any.
   useEffect(() => {
@@ -60,9 +79,29 @@ const ModalComponent = () => {
     }
   }, [api]);
 
+  // Fetch the localization bundle once. Falls back silently to English
+  // defaults (the hardcoded fallbacks in t() calls below) on any error.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const d = await call("/loyalty/pos/localization", { method: "GET" });
+        if (active && d && d.bundle) setLocBundle(d.bundle);
+      } catch (e) {
+        /* leave fallbacks */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [call]);
+
   const lookup = useCallback(async () => {
     if (!customer) {
-      setStatus({ kind: "error", msg: "Attach a customer to the cart first." });
+      setStatus({
+        kind: "error",
+        msg: t("pos.errorNoCustomer", "Attach a customer to the cart first."),
+      });
       return;
     }
     setBusy(true);
@@ -76,12 +115,15 @@ const ModalComponent = () => {
     } catch (e) {
       setStatus({
         kind: "error",
-        msg: "Couldn't load this customer's balance. Check the connection and retry.",
+        msg: t(
+          "pos.errorLoadBalance",
+          "Couldn't load this customer's balance. Check the connection and retry.",
+        ),
       });
     } finally {
       setBusy(false);
     }
-  }, [call, customer]);
+  }, [call, customer, t]);
 
   const earn = useCallback(async () => {
     if (!customer) return;
@@ -96,13 +138,21 @@ const ModalComponent = () => {
         }),
       });
       setData(d);
-      setStatus({ kind: "success", msg: `Awarded ${d.awarded ?? 0} points.` });
+      setStatus({
+        kind: "success",
+        msg: tSub(t("social.awardedStatus", "Awarded {points} points."), {
+          points: d.awarded ?? 0,
+        }),
+      });
     } catch (e) {
-      setStatus({ kind: "error", msg: "Could not award points. Please retry." });
+      setStatus({
+        kind: "error",
+        msg: t("pos.errorAward", "Could not award points. Please retry."),
+      });
     } finally {
       setBusy(false);
     }
-  }, [api, call, customer]);
+  }, [api, call, customer, t, tSub]);
 
   const redeem = useCallback(
     async (rewardId) => {
@@ -120,22 +170,27 @@ const ModalComponent = () => {
         setStatus({
           kind: "success",
           msg: d.discountCode
-            ? `Applied reward code ${d.discountCode}.`
-            : "Reward redeemed.",
+            ? tSub(t("pos.appliedCode", "Applied reward code {code}."), {
+                code: d.discountCode,
+              })
+            : t("pos.redeemed", "Reward redeemed."),
         });
         lookup();
       } catch (e) {
-        setStatus({ kind: "error", msg: "Could not redeem. Please retry." });
+        setStatus({
+          kind: "error",
+          msg: t("pos.errorRedeem", "Could not redeem. Please retry."),
+        });
       } finally {
         setBusy(false);
       }
     },
-    [api, call, customer, lookup],
+    [api, call, customer, lookup, t, tSub],
   );
 
   return (
     <Navigator>
-      <Screen name="RoyalLoyalty" title="Royal Loyalty">
+      <Screen name="RoyalLoyalty" title={t("pos.tileTitle", "Royal Loyalty")}>
         <ScrollView>
           {status.msg ? (
             <Banner
@@ -147,28 +202,32 @@ const ModalComponent = () => {
 
           <Section title="Customer">
             <Text>
-              {customer ? customer.name || customer.id : "No customer on cart"}
+              {customer
+                ? customer.name || customer.id
+                : t("pos.noCustomerOnCart", "No customer on cart")}
             </Text>
-            <Button title="Look up balance" onPress={lookup} isDisabled={busy} />
+            <Button
+              title={t("pos.lookupBalanceButton", "Look up balance")}
+              onPress={lookup}
+              isDisabled={busy}
+            />
           </Section>
 
           {data ? (
             <>
-              <Section title="Balance">
+              <Section title={t("pos.sectionBalance", "Balance")}>
                 <Text>{data.balance ?? 0} points</Text>
-                {/* Tier line hidden — backend still tracks tier but feature
-                    is not yet user-facing. */}
               </Section>
 
-              <Section title="Earn">
+              <Section title={t("pos.sectionEarn", "Earn")}>
                 <Button
-                  title="Award points for this cart"
+                  title={t("pos.awardButton", "Award points for this cart")}
                   onPress={earn}
                   isDisabled={busy || !customer}
                 />
               </Section>
 
-              <Section title="Redeem">
+              <Section title={t("pos.sectionRedeem", "Redeem")}>
                 {data.rewards && data.rewards.length ? (
                   <List
                     data={data.rewards.map((r) => ({
@@ -181,18 +240,26 @@ const ModalComponent = () => {
                           ? redeem(r.id)
                           : setStatus({
                               kind: "error",
-                              msg: "Not enough points for that reward.",
+                              msg: t(
+                                "pos.errorInsufficient",
+                                "Not enough points for that reward.",
+                              ),
                             }),
                     }))}
                   />
                 ) : (
-                  <Text>No rewards available.</Text>
+                  <Text>{t("pos.noRewards", "No rewards available.")}</Text>
                 )}
               </Section>
             </>
           ) : (
-            <Section title="Balance">
-              <Text>Look up a customer to see their points and rewards.</Text>
+            <Section title={t("pos.sectionBalance", "Balance")}>
+              <Text>
+                {t(
+                  "pos.lookupHint",
+                  "Look up a customer to see their points and rewards.",
+                )}
+              </Text>
             </Section>
           )}
         </ScrollView>
