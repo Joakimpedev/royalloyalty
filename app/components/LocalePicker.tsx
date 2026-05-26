@@ -174,14 +174,10 @@ export default function LocalePicker({
                 >
                   <img
                     src={flagSrc(l.countryCode, 24)}
-                    width={24}
-                    height={18}
+                    width={20}
+                    height={15}
                     alt=""
-                    style={{
-                      flexShrink: 0,
-                      borderRadius: 2,
-                      border: "1px solid #e1e3e5",
-                    }}
+                    style={{ flexShrink: 0, display: "block" }}
                   />
                   <span style={{ flex: 1 }}>{l.displayName}</span>
                   {l.rtl ? (
@@ -231,14 +227,10 @@ export default function LocalePicker({
       >
         <img
           src={flagSrc(current.countryCode, 24)}
-          width={24}
-          height={18}
+          width={20}
+          height={15}
           alt=""
-          style={{
-            flexShrink: 0,
-            borderRadius: 2,
-            border: "1px solid #e1e3e5",
-          }}
+          style={{ flexShrink: 0, display: "block" }}
         />
         <span style={{ flex: 1 }}>{current.displayName}</span>
         <span
