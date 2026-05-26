@@ -123,6 +123,12 @@
 .royal-panel__back { left: 10px; }
 .royal-panel__close:hover,
 .royal-panel__back:hover { opacity: 1; background: rgba(255,255,255,0.12); }
+/* The HTML `hidden` attribute sets display:none, but our `.royal-panel__back`
+   rule sets display:inline-flex which overrides it. Re-assert hidden so the
+   back arrow doesn't sit under the title text on the hub view. */
+.royal-panel__back[hidden],
+.royal-row[hidden],
+.royal-view[hidden] { display: none !important; }
 
 .royal-panel__body {
   padding: 8px 16px 16px;
@@ -195,9 +201,6 @@
 }
 .royal-muted { color: #6b6b6b; font-size: 0.9em; }
 
-@media (prefers-reduced-motion: no-preference) {
-  .royal-panel { transition: opacity 0.15s ease; }
-}
 
 /* Injected cards (product page + cart drawer/page). Rendered by the launcher
    app embed via RoyalLoyalty.injectProduct / injectCart — not by an app

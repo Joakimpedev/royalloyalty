@@ -49,15 +49,20 @@
     <div class="royal-panel__body">
       {%- comment -%} Hub: the default landing view inside the panel. {%- endcomment -%}
       <div class="royal-view" data-view="hub" id="royal-view-hub">
-        <button type="button" class="royal-row" data-go="earn" id="royal-row-earn" hidden>
+        {%- comment -%}
+          Rows are rendered visible on first paint so the panel never opens
+          half-empty. JS only hides a row if the merchant explicitly turned
+          its section off in the admin Branding page.
+        {%- endcomment -%}
+        <button type="button" class="royal-row" data-go="earn" id="royal-row-earn">
           <span class="royal-row__label">Earn points</span>
           <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
         </button>
-        <button type="button" class="royal-row" data-go="rewards" id="royal-row-rewards" hidden>
+        <button type="button" class="royal-row" data-go="rewards" id="royal-row-rewards">
           <span class="royal-row__label">Redeem rewards</span>
           <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
         </button>
-        <button type="button" class="royal-row" data-go="referral" id="royal-row-referral" hidden>
+        <button type="button" class="royal-row" data-go="referral" id="royal-row-referral">
           <span class="royal-row__label">Refer a friend</span>
           <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
         </button>

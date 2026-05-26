@@ -127,7 +127,11 @@ export interface StorefrontPayload {
 const DEFAULT_BRANDING: StorefrontBranding = {
   primaryColor: "#2C2A29",
   secondaryColor: "#FFFFFF",
-  programName: "Rewards",
+  // Defaults mirror app/routes/app.branding.tsx::DEFAULTS so an unsaved
+  // shop sees the same hero text on the storefront as it does in the
+  // admin live-preview. Drift here was the cause of the storefront
+  // showing "Rewards" while the preview showed "Your rewards".
+  programName: "Your rewards",
   pointsName: "Points",
   launcherText: "Rewards",
   launcherPosition: "bottom-right",
