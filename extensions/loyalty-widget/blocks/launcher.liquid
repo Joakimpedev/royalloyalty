@@ -1,8 +1,8 @@
 {% comment %}
   Royal Loyalty — floating launcher + slide-in panel.
-  App embed block (rendered site-wide via theme app embed). Graceful: if the
-  customer is signed out it shows a sign-in prompt; on network error a friendly
-  inline message. Accessible: button, aria-expanded, focus-managed panel.
+  App embed block (rendered site-wide via theme app embed). Layout mirrors the
+  admin Branding preview: dark hero header with title + subtitle, then a hub
+  list (Earn / Redeem / Refer) that drills down into each surface.
 {% endcomment %}
 
 <link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
@@ -39,25 +39,49 @@
     aria-label="{{ block.settings.title | default: 'Your rewards' | escape }}"
     hidden
   >
-    <button type="button" id="royal-panel-close" class="royal-panel__close" aria-label="Close">&times;</button>
-    <h2 style="margin:0 0 8px;">{{ block.settings.title | default: 'Your rewards' | escape }}</h2>
+    <div class="royal-panel__hero">
+      <button type="button" id="royal-panel-back" class="royal-panel__back" aria-label="Back" hidden>&#8249;</button>
+      <button type="button" id="royal-panel-close" class="royal-panel__close" aria-label="Close">&times;</button>
+      <div class="royal-panel__title" id="royal-panel-title">{{ block.settings.title | default: 'Your rewards' | escape }}</div>
+      <div class="royal-panel__subtitle" id="royal-panel-subtitle">Earn points on every order — redeem for rewards.</div>
+    </div>
 
-    {%- if customer -%}
-      <p id="royal-balance" class="royal-points">Loading…</p>
-      <p id="royal-cashback-line" class="royal-muted" hidden style="margin-top:-4px;font-size:13px;"></p>
-      {%- comment -%} Tier line hidden — backend still ships tier in payload but feature is not yet user-facing. {%- endcomment -%}
-      <div id="royal-active-codes-wrap" hidden>
-        <h3 style="margin:12px 0 4px;">Your active codes</h3>
-        <div id="royal-active-codes"></div>
+    <div class="royal-panel__body">
+      {%- comment -%} Hub: the default landing view inside the panel. {%- endcomment -%}
+      <div class="royal-view" data-view="hub" id="royal-view-hub">
+        <button type="button" class="royal-row" data-go="earn" id="royal-row-earn" hidden>
+          <span class="royal-row__label">Earn points</span>
+          <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
+        </button>
+        <button type="button" class="royal-row" data-go="rewards" id="royal-row-rewards" hidden>
+          <span class="royal-row__label">Redeem rewards</span>
+          <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
+        </button>
+        <button type="button" class="royal-row" data-go="referral" id="royal-row-referral" hidden>
+          <span class="royal-row__label">Refer a friend</span>
+          <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
+        </button>
+        <div class="royal-row__hint" id="royal-hub-hint" hidden></div>
       </div>
-      <h3 style="margin:12px 0 4px;">Rewards</h3>
-      <div id="royal-rewards"><p class="royal-muted">Loading rewards…</p></div>
-    {%- else -%}
-      <p>Sign in to see your points and rewards.</p>
-      <a class="royal-btn" href="/account/login" style="display:inline-block;text-decoration:none;">Sign in</a>
-    {%- endif -%}
 
-    <p id="royal-status" class="royal-status" aria-live="polite"></p>
+      <div class="royal-view" data-view="earn" hidden>
+        <div id="royal-earn-list" class="royal-list"></div>
+      </div>
+
+      <div class="royal-view" data-view="rewards" hidden>
+        <div id="royal-active-codes-wrap" hidden>
+          <h3 class="royal-section-title">Your active codes</h3>
+          <div id="royal-active-codes"></div>
+        </div>
+        <div id="royal-rewards" class="royal-list"><p class="royal-muted">Loading rewards…</p></div>
+      </div>
+
+      <div class="royal-view" data-view="referral" hidden>
+        <div id="royal-referral-content"></div>
+      </div>
+
+      <p id="royal-status" class="royal-status" aria-live="polite"></p>
+    </div>
   </div>
 </div>
 
@@ -72,114 +96,169 @@
       var btn = document.getElementById('royal-launcher-btn');
       var panel = document.getElementById('royal-panel');
       var closeBtn = document.getElementById('royal-panel-close');
+      var backBtn = document.getElementById('royal-panel-back');
       var status = document.getElementById('royal-status');
+      var titleEl = document.getElementById('royal-panel-title');
+      var subtitleEl = document.getElementById('royal-panel-subtitle');
+      var payload = null;
       var loaded = false;
+      var fetched = false;
+
+      function showView(name) {
+        var views = panel.querySelectorAll('.royal-view');
+        views.forEach(function (v) {
+          v.hidden = v.getAttribute('data-view') !== name;
+        });
+        backBtn.hidden = name === 'hub';
+      }
 
       function open() {
         panel.hidden = false;
         btn.setAttribute('aria-expanded', 'true');
         closeBtn.focus();
-        if (!loaded && cfg.loggedIn) { loaded = true; load(); }
+        showView('hub');
+        if (!fetched) { fetched = true; load(); }
       }
       function close() {
         panel.hidden = true;
         btn.setAttribute('aria-expanded', 'false');
         btn.focus();
       }
-      btn.addEventListener('click', function () {
-        panel.hidden ? open() : close();
-      });
-      if (closeBtn) closeBtn.addEventListener('click', close);
+      btn.addEventListener('click', function () { panel.hidden ? open() : close(); });
+      closeBtn.addEventListener('click', close);
+      backBtn.addEventListener('click', function () { showView('hub'); });
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && !panel.hidden) close();
       });
 
-      // Storefront injections (product card above add-to-cart, cart redeem
-      // card inside the drawer / cart page) are driven by the SAME branding
-      // payload the launcher uses. Fetch once on page load — independent of
-      // whether the user opens the launcher — so the cards render even if
-      // the shopper never touches the floating button.
-      R.loadBalance(cfg, function (d) {
-        try { R.injectProduct(cfg, d); } catch (e) { /* non-fatal */ }
-        try { R.injectCart(cfg, d); } catch (e) { /* non-fatal */ }
-      }, function () { /* network error — skip injections */ });
+      // Hub row clicks → drill into sub-views. Rewards is the only view with
+      // a logged-out gating message; earn rules + referrals render the same
+      // info for everyone (anon visitors see the program but can't claim).
+      panel.querySelectorAll('[data-go]').forEach(function (row) {
+        row.addEventListener('click', function () {
+          var name = row.getAttribute('data-go');
+          showView(name);
+          if (name === 'rewards') renderRewards();
+          else if (name === 'earn') renderEarn();
+          else if (name === 'referral') renderReferral();
+        });
+      });
 
       function load() {
         R.setStatus(status, 'loading', '');
         R.loadBalance(cfg, function (d) {
-          /* Apply branding from the admin Branding page (colors override the
-             theme-editor settings used as initial render defaults). */
+          payload = d;
           R.applyBranding(root, d.branding);
-          if (d.branding) {
-            var panelTitle = document.querySelector('#royal-panel h2');
-            if (panelTitle && d.branding.programName)
-              panelTitle.textContent = d.branding.programName;
-            var btnLabel = document.getElementById('royal-launcher-btn');
-            if (btnLabel && d.branding.launcherText) {
-              /* Only replace the trailing text node so the crown icon stays. */
-              var last = btnLabel.lastChild;
-              if (last && last.nodeType === 3) last.textContent = ' ' + d.branding.launcherText;
-            }
-          }
+          applyCopy(d);
+          buildHub(d);
+          // Pre-inject product / cart cards while we have the payload.
+          try { R.injectProduct(cfg, d); } catch (e) { /* non-fatal */ }
+          try { R.injectCart(cfg, d); } catch (e) { /* non-fatal */ }
+          loaded = true;
+        }, function (diag) {
+          R.setStatus(status, 'error', "We couldn't load your rewards right now. Please try again later.");
+          var hub = document.getElementById('royal-view-hub');
+          if (diag) R.renderDiag(hub || status.parentNode, diag, 'loyalty/balance failed');
+        });
+      }
 
-          if (!d.enrolled) {
-            /* Signed-in customer who isn't a member yet — show a friendly
-               prompt instead of "0 points" without context. */
-            var bAnon = document.getElementById('royal-balance');
-            var tAnon = document.getElementById('royal-tier');
-            if (bAnon) bAnon.textContent = 'Sign up to start earning';
-            if (tAnon) tAnon.textContent = '';
+      function applyCopy(d) {
+        var b = d.branding || {};
+        if (b.programName) titleEl.textContent = b.programName;
+        // Subtitle: logged-in member shows balance; otherwise the hero copy.
+        if (cfg.loggedIn && d.enrolled) {
+          var pname = (b.pointsName || 'points').toLowerCase();
+          subtitleEl.textContent = (d.balance || 0) + ' ' + pname +
+            (d.tier ? ' · ' + d.tier : '');
+        } else if (cfg.loggedIn) {
+          subtitleEl.textContent = 'Sign up to start earning';
+        } else {
+          subtitleEl.textContent = b.heroSubtitle || 'Earn points on every order — redeem for rewards.';
+        }
+        // Launcher pill label
+        if (b.launcherText) {
+          var pill = document.querySelector('#royal-launcher-btn .royal-launcher__text');
+          if (pill) pill.textContent = b.launcherText;
+        }
+      }
+
+      function buildHub(d) {
+        var b = d.branding || {};
+        var hasEarn = b.showEarn !== false && (d.earnRules || []).length > 0;
+        var hasRewards = b.showRewards !== false && (d.rewards || []).length > 0;
+        var hasReferral = b.showReferral !== false;
+        document.getElementById('royal-row-earn').hidden = !hasEarn;
+        document.getElementById('royal-row-rewards').hidden = !hasRewards;
+        document.getElementById('royal-row-referral').hidden = !hasReferral;
+        var hint = document.getElementById('royal-hub-hint');
+        if (!hasEarn && !hasRewards && !hasReferral) {
+          hint.hidden = false;
+          hint.textContent = 'Your loyalty program is being set up. Check back soon.';
+        }
+      }
+
+      function renderEarn() {
+        var list = document.getElementById('royal-earn-list');
+        if (!payload) return;
+        var rules = (payload.earnRules || []);
+        if (!rules.length) {
+          list.innerHTML = '<p class="royal-muted">No ways to earn yet — check back soon.</p>';
+          return;
+        }
+        list.innerHTML = '';
+        rules.forEach(function (r) {
+          var row = document.createElement('div');
+          row.className = 'royal-card';
+          var perDollar = r.perDollar
+            ? ' per ' + (payload.currencyCode === 'USD' ? '$' : '') + (r.perAmount || 1)
+            : '';
+          row.innerHTML =
+            '<div class="royal-card__label">' + escapeHtml(r.label || r.action) + '</div>' +
+            '<div class="royal-muted">' + r.points + ' pts' + perDollar + '</div>';
+          list.appendChild(row);
+        });
+      }
+
+      function renderRewards() {
+        var wrap = document.getElementById('royal-rewards');
+        if (!payload) return;
+        var d = payload;
+
+        // Active codes block
+        R.renderActiveCodes(
+          document.getElementById('royal-active-codes-wrap'),
+          document.getElementById('royal-active-codes'),
+          d.activeCodes,
+          status
+        );
+
+        if (!d.rewards || !d.rewards.length) {
+          wrap.innerHTML = '<p class="royal-muted">No rewards available yet — check back soon.</p>';
+          return;
+        }
+        wrap.innerHTML = '';
+        d.rewards.forEach(function (rw) {
+          var card = document.createElement('div');
+          card.className = 'royal-card';
+          var canAfford = d.enrolled && (d.balance || 0) >= rw.pointsCost;
+          var label = R.rewardLabel(rw, d.currencyCode);
+          card.innerHTML =
+            '<div class="royal-card__label">' + escapeHtml(label) + '</div>' +
+            '<div class="royal-muted">' + rw.pointsCost + ' points</div>';
+          var rb = document.createElement('button');
+          rb.className = 'royal-btn';
+          rb.type = 'button';
+          rb.textContent = cfg.loggedIn ? 'Redeem' : 'Sign in to redeem';
+          rb.disabled = !canAfford;
+          if (!cfg.loggedIn) {
+            rb.addEventListener('click', function () {
+              window.location.href = '/account/login';
+            });
+            rb.disabled = false;
+            rb.classList.add('royal-btn--ghost');
+          } else if (!canAfford) {
+            rb.title = d.enrolled ? 'Not enough points yet' : 'Sign up to redeem';
           } else {
-            var b = document.getElementById('royal-balance');
-            var t = document.getElementById('royal-tier');
-            if (b) b.textContent = (d.balance || 0) + ' ' + (d.branding && d.branding.pointsName ? d.branding.pointsName.toLowerCase() : 'points');
-            if (t) t.textContent = d.tier ? 'Your tier: ' + d.tier : '';
-          }
-
-          /* Cashback line under the balance — keeps customers aware they
-             are earning store credit on every order. */
-          var cbLine = document.getElementById('royal-cashback-line');
-          if (cbLine) {
-            if (d.cashback && d.cashback.enabled && d.cashback.percent > 0) {
-              cbLine.textContent =
-                'Earn ' + d.cashback.percent + '% back as store credit on every order.';
-              cbLine.hidden = false;
-            } else {
-              cbLine.hidden = true;
-            }
-          }
-
-          /* Active codes — the customer's redeemed-but-still-usable reward
-             codes. Shown above the reward list so they can find a code they
-             redeemed earlier without an email channel. */
-          R.renderActiveCodes(
-            document.getElementById('royal-active-codes-wrap'),
-            document.getElementById('royal-active-codes'),
-            d.activeCodes,
-            status
-          );
-
-          var wrap = document.getElementById('royal-rewards');
-          if (!wrap) return;
-          if (!d.rewards || !d.rewards.length) {
-            wrap.innerHTML = '<p class="royal-muted">No rewards available yet — check back soon.</p>';
-            return;
-          }
-          wrap.innerHTML = '';
-          d.rewards.forEach(function (rw) {
-            var card = document.createElement('div');
-            card.className = 'royal-card';
-            var canAfford = d.enrolled && (d.balance || 0) >= rw.pointsCost;
-            var label = R.rewardLabel(rw, d.currencyCode);
-            card.innerHTML =
-              '<div><strong>' + label + '</strong></div>' +
-              '<div class="royal-muted">' + rw.pointsCost + ' points</div>';
-            var rb = document.createElement('button');
-            rb.className = 'royal-btn';
-            rb.type = 'button';
-            rb.textContent = 'Redeem';
-            rb.disabled = !canAfford;
-            if (!canAfford) rb.title = d.enrolled ? 'Not enough points yet' : 'Sign in to redeem';
             rb.addEventListener('click', function () {
               rb.disabled = true;
               R.setStatus(status, 'loading', 'Redeeming…');
@@ -194,17 +273,45 @@
                   "We couldn't redeem that reward. Please try again.");
               });
             });
-            card.appendChild(rb);
-            wrap.appendChild(card);
-          });
-        }, function (diag) {
-          R.setStatus(status, 'error',
-            "We couldn't load your rewards right now. Please try again later.");
-          var wrap = document.getElementById('royal-rewards');
-          if (diag) {
-            R.renderDiag(wrap || status.parentNode, diag, 'loyalty/balance failed');
           }
+          card.appendChild(rb);
+          wrap.appendChild(card);
         });
+      }
+
+      function renderReferral() {
+        var box = document.getElementById('royal-referral-content');
+        if (!payload) return;
+        if (!cfg.loggedIn) {
+          box.innerHTML =
+            '<p class="royal-muted">Sign in to get your personal referral link.</p>' +
+            '<a class="royal-btn" href="/account/login" style="text-decoration:none;display:inline-block;">Sign in</a>';
+          return;
+        }
+        if (!payload.referralLink) {
+          box.innerHTML = '<p class="royal-muted">Referrals aren\'t available right now.</p>';
+          return;
+        }
+        box.innerHTML =
+          '<p class="royal-muted" style="margin-bottom:8px;">Share your link. You both earn when friends place their first order.</p>' +
+          '<div class="royal-active-code__row">' +
+          '<code class="royal-active-code__code" id="royal-ref-link"></code>' +
+          '<button type="button" class="royal-btn royal-btn--ghost" id="royal-ref-copy">Copy</button>' +
+          '</div>';
+        document.getElementById('royal-ref-link').textContent = payload.referralLink;
+        document.getElementById('royal-ref-copy').addEventListener('click', function () {
+          R.copyText(payload.referralLink).then(function () {
+            var b = document.getElementById('royal-ref-copy');
+            b.textContent = 'Copied!';
+            setTimeout(function () { b.textContent = 'Copy'; }, 1500);
+          });
+        });
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
       }
     }
     init();
