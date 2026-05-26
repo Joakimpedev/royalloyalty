@@ -86,7 +86,11 @@
   position: relative;
   background: var(--royal-primary, #2C2A29);
   color: var(--royal-secondary, #fff);
-  padding: 18px 48px 18px 20px;
+  /* Symmetric horizontal padding reserves space for the close button on
+     the right AND the back arrow on the left, so the title always clears
+     both icons regardless of which view is active. Avoids the title
+     "running through" the back arrow on the sub-views. */
+  padding: 18px 48px;
   flex-shrink: 0;
 }
 .royal-panel__title {

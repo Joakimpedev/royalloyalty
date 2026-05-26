@@ -207,11 +207,21 @@
         var list = document.getElementById('royal-earn-list');
         if (!payload) return;
         var rules = (payload.earnRules || []);
+        // Logged-out customers see ways to earn but with a sign-in CTA at
+        // the top so they understand they need an account to start banking
+        // points. Empty list = merchant hasn't configured any earn rules.
+        var html = '';
+        if (!cfg.loggedIn) {
+          html +=
+            '<p class="royal-muted">Sign in or create an account to start earning points on every order.</p>' +
+            '<a class="royal-btn" href="/account/login" style="text-decoration:none;display:inline-block;margin-bottom:12px;">Sign in to earn</a>';
+        }
         if (!rules.length) {
-          list.innerHTML = '<p class="royal-muted">No ways to earn yet — check back soon.</p>';
+          html += '<p class="royal-muted">No ways to earn yet — check back soon.</p>';
+          list.innerHTML = html;
           return;
         }
-        list.innerHTML = '';
+        list.innerHTML = html;
         rules.forEach(function (r) {
           var row = document.createElement('div');
           row.className = 'royal-card';
@@ -238,11 +248,16 @@
           status
         );
 
+        var preface = '';
+        if (!cfg.loggedIn) {
+          preface =
+            '<p class="royal-muted">These are the rewards you can redeem with your points. <a href="/account/login">Sign in</a> or create an account to start earning.</p>';
+        }
         if (!d.rewards || !d.rewards.length) {
-          wrap.innerHTML = '<p class="royal-muted">No rewards available yet — check back soon.</p>';
+          wrap.innerHTML = preface + '<p class="royal-muted">No rewards available yet — check back soon.</p>';
           return;
         }
-        wrap.innerHTML = '';
+        wrap.innerHTML = preface;
         d.rewards.forEach(function (rw) {
           var card = document.createElement('div');
           card.className = 'royal-card';
@@ -290,8 +305,8 @@
         if (!payload) return;
         if (!cfg.loggedIn) {
           box.innerHTML =
-            '<p class="royal-muted">Sign in to get your personal referral link.</p>' +
-            '<a class="royal-btn" href="/account/login" style="text-decoration:none;display:inline-block;">Sign in</a>';
+            '<p class="royal-muted" style="margin-bottom:12px;">Share your personal link with friends. When they place their first order, you both earn rewards.</p>' +
+            '<a class="royal-btn" href="/account/login" style="text-decoration:none;display:inline-block;">Sign in to get your link</a>';
           return;
         }
         if (!payload.referralLink) {
