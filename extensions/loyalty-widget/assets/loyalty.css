@@ -70,6 +70,29 @@
 }
 .royal-panel[hidden] { display: none; }
 .royal-panel--left { left: 24px; right: auto; }
+
+/* RTL support — mirror the launcher pill side and panel internals when
+   the merchant's active locale is ar/he/ur. We only flip what's
+   directional (text-align, the back/close positions, the chevron),
+   leaving fixed colors/sizes alone. */
+[dir="rtl"] .royal-panel {
+  text-align: right;
+}
+[dir="rtl"] .royal-panel__close { right: auto; left: 10px; }
+[dir="rtl"] .royal-panel__back { left: auto; right: 10px; }
+[dir="rtl"] .royal-panel__hero {
+  padding-left: 48px;
+  padding-right: 48px;
+}
+[dir="rtl"] .royal-row__chev { transform: scaleX(-1); }
+[dir="rtl"] .royal-launcher--right {
+  right: auto;
+  left: 24px;
+}
+[dir="rtl"] .royal-launcher--left {
+  left: auto;
+  right: 24px;
+}
 .royal-panel *,
 .royal-panel *::before,
 .royal-panel *::after { box-sizing: border-box; }

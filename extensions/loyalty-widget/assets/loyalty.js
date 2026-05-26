@@ -33,8 +33,13 @@
    * in normal flow since the baked defaults cover every key in the
    * catalog. */
   var _bundle = {};
+  var _localeCode = "en";
+  var _isRtl = false;
   function setBundle(bundle) {
     _bundle = bundle || {};
+  }
+  function getLocale() {
+    return { code: _localeCode, rtl: _isRtl };
   }
   function t(key, defaultValue) {
     var v = _bundle && _bundle[key];
@@ -188,8 +193,22 @@
     api(cfg.proxy, "/loyalty/balance", { method: "GET" })
       .then(function (d) {
         // Cache the localization bundle so t() can resolve keys without
-        // needing the payload passed in everywhere.
+        // needing the payload passed in everywhere. RTL locales
+        // (ar/he/ur) get a global flag the renderers consult before
+        // injecting cards.
         if (d && d.localization) setBundle(d.localization);
+        if (d && d.locale) {
+          _localeCode = d.locale.code || "en";
+          _isRtl = !!d.locale.rtl;
+          // Set dir="rtl" on the root widget elements so all visual
+          // mirroring (text-align, icon position) flows from one
+          // attribute. Applied lazily because the elements may not be
+          // present yet when this fires.
+          ["royal-launcher-root", "royal-page-root", "royal-account-root"].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.setAttribute("dir", _isRtl ? "rtl" : "ltr");
+          });
+        }
         onData(d);
       })
       .catch(function (err) {

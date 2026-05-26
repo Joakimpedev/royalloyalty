@@ -27,6 +27,30 @@ import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
 import LockedHint from "../components/LockedHint";
 
+/** Small footnote rendered at the bottom of each Branding container,
+ *  pointing the merchant to the Localization page for the long-tail
+ *  copy that isn't exposed here. Renders an in-iframe Polaris link so
+ *  navigation stays inside the embedded admin and respects auth. */
+function LocalizationFootnote() {
+  return (
+    <div
+      style={{
+        marginTop: 8,
+        paddingTop: 10,
+        borderTop: "1px solid #f1f2f3",
+        fontSize: 12,
+        color: "#6d7175",
+      }}
+    >
+      {/* @ts-expect-error - s-link */}
+      <s-link href="/app/localization">
+        For further localization, see Localization →
+        {/* @ts-expect-error */}
+      </s-link>
+    </div>
+  );
+}
+
 function ColorField({
   label,
   value,
@@ -598,6 +622,7 @@ export default function BrandingPage() {
               </div>
             </div>
           </div>
+          <LocalizationFootnote />
         </s-stack>
       </s-section>
 
@@ -688,6 +713,7 @@ export default function BrandingPage() {
               <div style={{ opacity: 0.85 }}>{form.page.heroSubtitle}</div>
             </div>
           </s-box>
+          <LocalizationFootnote />
         </s-stack>
       </s-section>
 
@@ -787,6 +813,7 @@ export default function BrandingPage() {
               </div>
             </div>
           </s-box>
+          <LocalizationFootnote />
         </s-stack>
       </s-section>
 
@@ -889,6 +916,7 @@ export default function BrandingPage() {
               </div>
             </div>
           </s-box>
+          <LocalizationFootnote />
         </s-stack>
       </s-section>
 

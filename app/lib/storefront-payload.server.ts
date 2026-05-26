@@ -27,6 +27,7 @@ import {
   readLocalization,
   buildResolvedBundle,
 } from "./localization.server";
+import { LOCALE_INDEX } from "./localization-locales";
 
 export interface StorefrontBranding {
   primaryColor: string;
@@ -135,6 +136,10 @@ export interface StorefrontPayload {
    *  app/lib/localization-defaults.ts. The storefront extension's t()
    *  helper reads this; the client never knows about other locales. */
   localization: Record<string, string>;
+  /** Active locale + RTL flag for the storefront extension. RTL locales
+   *  (ar/he/ur) need `dir="rtl"` applied to root widget elements; the
+   *  client uses this to set that attribute. */
+  locale: { code: string; rtl: boolean };
   /** The customer's redeemed-but-not-yet-used reward codes. We don't have
    *  an email channel today, so this is how customers re-find a code
    *  after closing the tab. Limited to the last 90 days. */
@@ -329,6 +334,11 @@ export async function buildStorefrontLoyaltyPayload(params: {
     localizationConfig,
     localizationConfig.defaultLocale,
   );
+  const activeLocaleMeta = LOCALE_INDEX.get(localizationConfig.defaultLocale);
+  const localeInfo = {
+    code: localizationConfig.defaultLocale,
+    rtl: Boolean(activeLocaleMeta?.rtl),
+  };
   const earnRules: StorefrontEarnRule[] = earnRulesRows.map((r) => {
     const cfg = (r.config ?? null) as
       | {
@@ -421,6 +431,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       cashback,
       branding,
       localization: localizationBundle,
+      locale: localeInfo,
     };
   }
 
@@ -451,6 +462,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       cashback,
       branding,
       localization: localizationBundle,
+      locale: localeInfo,
     };
   }
 
@@ -507,6 +519,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
     })),
     branding,
     localization: localizationBundle,
+    locale: localeInfo,
   };
 }
 

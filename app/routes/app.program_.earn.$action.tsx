@@ -921,6 +921,21 @@ export default function EarnRuleEditor() {
               />
             </>
           ) : null}
+          <div
+            style={{
+              marginTop: 8,
+              paddingTop: 10,
+              borderTop: "1px solid #f1f2f3",
+              fontSize: 12,
+              color: "#6d7175",
+            }}
+          >
+            {/* @ts-expect-error - s-link */}
+            <s-link href="/app/localization">
+              Generic widget chrome (button labels, empty states, errors) lives on Localization →
+              {/* @ts-expect-error */}
+            </s-link>
+          </div>
         </s-stack>
       </s-section>
 
