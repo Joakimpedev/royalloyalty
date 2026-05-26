@@ -32,8 +32,6 @@ import {
   type LocalizationSection,
 } from "../lib/localization-keys";
 import {
-  LOCALES,
-  LOCALE_INDEX,
   isLocaleCode,
   type LocaleCode,
 } from "../lib/localization-locales";
@@ -44,6 +42,7 @@ import {
   type LocalizationConfig,
 } from "../lib/localization";
 import LockedHint from "../components/LockedHint";
+import LocalePicker from "../components/LocalePicker";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -243,7 +242,7 @@ export default function LocalizationPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                marginBottom: 4,
+                marginBottom: 6,
               }}
             >
               <span style={{ fontSize: 13, color: "#202223" }}>
@@ -251,24 +250,11 @@ export default function LocalizationPage() {
               </span>
               {!paid ? <LockedHint /> : null}
             </div>
-            {/* @ts-expect-error - s-select */}
-            <s-select
+            <LocalePicker
               value={defaultLocale}
-              disabled={!paid ? true : undefined}
-              onChange={(e: { target: { value: string } }) => {
-                const v = e.target.value;
-                if (isLocaleCode(v)) onLocaleChange(v);
-              }}
-            >
-              {LOCALES.map((l) => (
-                // @ts-expect-error - s-option
-                <s-option key={l.code} value={l.code}>
-                  {l.flag} {l.displayName}
-                  {/* @ts-expect-error */}
-                </s-option>
-              ))}
-              {/* @ts-expect-error */}
-            </s-select>
+              onChange={onLocaleChange}
+              readOnly={!paid}
+            />
           </div>
           {/* @ts-expect-error */}
         </s-stack>
