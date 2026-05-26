@@ -16,29 +16,28 @@
     "loggedIn": {% if customer %}true{% else %}false{% endif %}
   }'
 >
-  <h2>{{ block.settings.heading | default: 'Your loyalty' | escape }}</h2>
+  <h2 data-loc-key="account.heading">{{ block.settings.heading | default: 'Your loyalty' | escape }}</h2>
 
   {%- if customer -%}
     <div class="royal-card">
       <p style="font-size:1.3em;">
-        <span id="royal-acc-balance" class="royal-points">…</span> points
+        <span id="royal-acc-balance" class="royal-points">…</span><span data-loc-key="account.pointsSuffix"> points</span>
       </p>
-      {%- comment -%} Tier line hidden — backend still ships tier in payload but feature is not yet user-facing. {%- endcomment -%}
     </div>
 
-    <h3>Recent activity</h3>
-    <div id="royal-acc-activity"><p class="royal-muted">Loading…</p></div>
+    <h3 data-loc-key="account.recentActivityHeading">Recent activity</h3>
+    <div id="royal-acc-activity"><p class="royal-muted" data-loc-key="page.loading">Loading…</p></div>
 
-    <h3>Rewards</h3>
-    <div id="royal-acc-rewards"><p class="royal-muted">Loading…</p></div>
+    <h3 data-loc-key="account.rewardsHeading">Rewards</h3>
+    <div id="royal-acc-rewards"><p class="royal-muted" data-loc-key="page.loading">Loading…</p></div>
 
-    <h3>Refer a friend</h3>
+    <h3 data-loc-key="account.referHeading">Refer a friend</h3>
     <div class="royal-card">
       <code id="royal-acc-ref" style="word-break:break-all;">…</code>
-      <button type="button" id="royal-acc-copy" class="royal-btn" style="margin-top:8px;">Copy link</button>
+      <button type="button" id="royal-acc-copy" class="royal-btn" style="margin-top:8px;" data-loc-key="account.referCopyButton">Copy link</button>
     </div>
   {%- else -%}
-    <p>Please sign in to view your loyalty status.</p>
+    <p data-loc-key="account.signInRequired">Please sign in to view your loyalty status.</p>
   {%- endif -%}
 
   <p id="royal-acc-status" class="royal-status" aria-live="polite"></p>
@@ -57,6 +56,14 @@
       R.loadBalance(cfg, function (d) {
         R.applyBranding(root, d.branding);
 
+        // Apply locale-resolved strings to every data-loc-key element.
+        var locNodes = root.querySelectorAll('[data-loc-key]');
+        for (var i = 0; i < locNodes.length; i++) {
+          var k = locNodes[i].getAttribute('data-loc-key');
+          var v = R.t(k, '');
+          if (v) locNodes[i].textContent = v;
+        }
+
         var b = document.getElementById('royal-acc-balance');
         var t = document.getElementById('royal-acc-tier');
         if (b) b.textContent = (d.balance || 0);
@@ -74,7 +81,7 @@
                   (a.points > 0 ? '+' : '') + a.points + ' pts ' +
                   '<span class="royal-muted">' + dateStr + '</span></div>';
               }).join('')
-            : '<p class="royal-muted">No activity yet. Place an order to start earning.</p>';
+            : '<p class="royal-muted">' + R.t('account.emptyActivity', 'No activity yet. Place an order to start earning.') + '</p>';
         }
         var rw = document.getElementById('royal-acc-rewards');
         if (rw) {
@@ -83,7 +90,7 @@
                 return '<div class="royal-card"><strong>' + R.rewardLabel(x, d.currencyCode) +
                   '</strong> — ' + x.pointsCost + ' pts</div>';
               }).join('')
-            : '<p class="royal-muted">No rewards available yet — check back soon.</p>';
+            : '<p class="royal-muted">' + R.t('empty.rewards', 'No rewards available yet — check back soon.') + '</p>';
         }
         var ref = document.getElementById('royal-acc-ref');
         if (ref && d.referralLink) {

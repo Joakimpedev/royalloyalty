@@ -21,20 +21,19 @@
     {%- if block.settings.logo_url != blank -%}
       <img src="{{ block.settings.logo_url }}" alt="" style="max-height:48px;display:block;margin-bottom:12px;">
     {%- endif -%}
-    <h1 style="margin:0;">{{ block.settings.hero_title | default: 'Earn points. Get rewards.' | escape }}</h1>
-    <p style="margin:8px 0 0;opacity:.9;">{{ block.settings.hero_subtitle | default: 'Join the program and earn on every order.' | escape }}</p>
+    <h1 style="margin:0;" data-loc-key="page.heroTitle">{{ block.settings.hero_title | default: 'Earn points. Get rewards.' | escape }}</h1>
+    <p style="margin:8px 0 0;opacity:.9;" data-loc-key="page.heroSubtitle">{{ block.settings.hero_subtitle | default: 'Join the program and earn on every order.' | escape }}</p>
   </header>
 
   {%- if customer -%}
-    <p style="margin:20px 0 4px;">Your balance: <span id="royal-page-balance" class="royal-points">…</span></p>
-    {%- comment -%} Tier line hidden — backend still ships tier in payload but feature is not yet user-facing. {%- endcomment -%}
+    <p style="margin:20px 0 4px;"><span data-loc-key="page.balanceLabel">Your balance:</span> <span id="royal-page-balance" class="royal-points">…</span></p>
     <div id="royal-page-active-codes-wrap" hidden style="margin:16px 0;">
-      <h2 style="margin:0 0 8px;">Your active codes</h2>
+      <h2 style="margin:0 0 8px;" data-loc-key="page.activeCodesHeading">Your active codes</h2>
       <div id="royal-page-active-codes"></div>
     </div>
   {%- else -%}
     <p style="margin:20px 0;">
-      <a class="royal-btn" href="/account/login" style="display:inline-block;text-decoration:none;">Sign in to view your points</a>
+      <a class="royal-btn" href="/account/login" style="display:inline-block;text-decoration:none;" data-loc-key="page.signInCta">Sign in to view your points</a>
     </p>
   {%- endif -%}
 
@@ -43,26 +42,26 @@
   </div>
 
   {%- if block.settings.show_earn -%}
-    <h2>Ways to earn</h2>
-    <div id="royal-page-earn"><p class="royal-muted">Loading…</p></div>
+    <h2 data-loc-key="page.waysToEarnHeading">Ways to earn</h2>
+    <div id="royal-page-earn"><p class="royal-muted" data-loc-key="page.loading">Loading…</p></div>
   {%- endif -%}
 
   {%- if block.settings.show_rewards -%}
-    <h2>Rewards</h2>
-    <div id="royal-page-rewards"><p class="royal-muted">Loading…</p></div>
+    <h2 data-loc-key="page.rewardsHeading">Rewards</h2>
+    <div id="royal-page-rewards"><p class="royal-muted" data-loc-key="page.loading">Loading…</p></div>
   {%- endif -%}
 
   <div id="royal-page-social-wrap" hidden style="margin-top: 24px;">
-    <h2>Follow us</h2>
+    <h2 data-loc-key="page.followUsHeading">Follow us</h2>
     <div id="royal-page-social"></div>
   </div>
 
   {%- if block.settings.show_referral and customer -%}
-    <h2>Refer a friend</h2>
-    <p>Share your link — you both get rewarded.</p>
+    <h2 data-loc-key="page.referHeading">Refer a friend</h2>
+    <p data-loc-key="page.referDescription">Share your link — you both get rewarded.</p>
     <div class="royal-card">
-      <code id="royal-ref-link" style="word-break:break-all;">Loading your link…</code>
-      <button type="button" id="royal-ref-copy" class="royal-btn" style="margin-top:8px;">Copy link</button>
+      <code id="royal-ref-link" style="word-break:break-all;" data-loc-key="page.referLoadingLink">Loading your link…</code>
+      <button type="button" id="royal-ref-copy" class="royal-btn" style="margin-top:8px;" data-loc-key="page.referCopyButton">Copy link</button>
     </div>
   {%- endif -%}
 
@@ -83,6 +82,17 @@
          balance / tier / referral for enrolled customers. */
       R.loadBalance(cfg, function (d) {
         R.applyBranding(root, d.branding);
+
+        // Apply locale-resolved strings to every Liquid element marked
+        // with data-loc-key. Branding-level overrides for heroTitle /
+        // heroSubtitle still take precedence (they live on the Branding
+        // page, but the value is the same key).
+        var locNodes = root.querySelectorAll('[data-loc-key]');
+        for (var i = 0; i < locNodes.length; i++) {
+          var k = locNodes[i].getAttribute('data-loc-key');
+          var v = R.t(k, '');
+          if (v) locNodes[i].textContent = v;
+        }
 
         if (d.branding) {
           var heroH1 = root.querySelector('header h1');

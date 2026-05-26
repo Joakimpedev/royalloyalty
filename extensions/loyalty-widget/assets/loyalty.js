@@ -24,6 +24,33 @@
     }
   }
 
+  /* Translation lookup. The server ships a flat key→value bundle in
+   * payload.localization (merchant overrides on top of the active
+   * locale's baked defaults). We hold the most-recently-seen bundle in
+   * module scope so any code path can call t(key) without threading the
+   * payload through. defaultValue is a final fallback when neither the
+   * merchant nor the baked defaults have the key — should never trigger
+   * in normal flow since the baked defaults cover every key in the
+   * catalog. */
+  var _bundle = {};
+  function setBundle(bundle) {
+    _bundle = bundle || {};
+  }
+  function t(key, defaultValue) {
+    var v = _bundle && _bundle[key];
+    if (typeof v === "string") return v;
+    return defaultValue == null ? "" : defaultValue;
+  }
+  /* Substitute simple {placeholder} tokens (single-brace, legacy form
+   * used by cart / product injection runtime values). */
+  function tSubstitute(template, vars) {
+    var out = String(template == null ? "" : template);
+    Object.keys(vars || {}).forEach(function (k) {
+      out = out.replace(new RegExp("\\{" + k + "\\}", "g"), String(vars[k]));
+    });
+    return out;
+  }
+
   function setStatus(node, kind, msg) {
     if (!node) return;
     node.textContent = msg;
@@ -147,8 +174,10 @@
       return formatMoney(rw.value, currencyCode) + " in store credit";
     if (rw.type === "percent_off" && rw.value != null)
       return rw.value + "% off";
-    if (rw.type === "free_shipping") return "Free shipping";
-    if (rw.type === "free_product") return "Free product";
+    if (rw.type === "free_shipping")
+      return t("reward.type.freeShipping", "Free shipping");
+    if (rw.type === "free_product")
+      return t("reward.type.freeProduct", "Free product");
     return rw.label || rw.type;
   }
 
@@ -158,6 +187,9 @@
   function loadBalance(cfg, onData, onError) {
     api(cfg.proxy, "/loyalty/balance", { method: "GET" })
       .then(function (d) {
+        // Cache the localization bundle so t() can resolve keys without
+        // needing the payload passed in everywhere.
+        if (d && d.localization) setBundle(d.localization);
         onData(d);
       })
       .catch(function (err) {
@@ -208,18 +240,18 @@
       var copyBtn = document.createElement("button");
       copyBtn.type = "button";
       copyBtn.className = "royal-btn royal-btn--ghost";
-      copyBtn.textContent = "Copy";
+      copyBtn.textContent = t("reward.copyCode", "Copy");
       copyBtn.addEventListener("click", function () {
         copyText(c.code).then(function () {
-          copyBtn.textContent = "Copied!";
+          copyBtn.textContent = t("reward.copiedCode", "Copied!");
           setTimeout(function () {
-            copyBtn.textContent = "Copy";
+            copyBtn.textContent = t("reward.copyCode", "Copy");
           }, 1500);
         });
       });
       var applyBtn = document.createElement("a");
       applyBtn.className = "royal-btn";
-      applyBtn.textContent = "Apply to cart";
+      applyBtn.textContent = t("reward.applyToCart", "Apply to cart");
       applyBtn.href =
         "/discount/" + encodeURIComponent(c.code) + "?redirect=/cart";
       codeRow.appendChild(codeBox);
@@ -442,9 +474,13 @@
       if (!cfg.loggedIn) {
         card.innerHTML =
           '<div class="royal-injected__heading">' +
-          (b.cartHeading || "Use your points") +
+          (b.cartHeading || t("cart.heading", "Use your points")) +
           '</div>' +
-          '<div class="royal-injected__sub"><a href="/account/login">Sign in</a> to apply your points to this order.</div>';
+          '<div class="royal-injected__sub"><a href="/account/login">' +
+          t("empty.rewardsSignInLink", "Sign in") +
+          "</a> " +
+          t("cart.signedOutCta", "to apply your points to this order.") +
+          "</div>";
         insertIntoForm(form, card);
         return;
       }
@@ -461,7 +497,7 @@
         '<div class="royal-injected__head">' +
         '<div class="royal-injected__icon" aria-hidden="true">★</div>' +
         '<div class="royal-injected__heading">' +
-        (b.cartHeading || "Use your points") +
+        (b.cartHeading || t("cart.heading", "Use your points")) +
         " — " +
         balance +
         " " +
@@ -471,7 +507,7 @@
 
       var earnLine = b.cartShowEarnLine
         ? '<div class="royal-injected__sub" id="royal-injected-cart-earn">' +
-          "Calculating points earned…" +
+          t("cart.earnLineLoading", "Calculating points earned…") +
           "</div>"
         : "";
 
@@ -479,9 +515,13 @@
       if (!affordable.length && rewards.length) {
         list =
           '<div class="royal-injected__sub">' +
-          "Keep shopping to unlock your first reward (" +
-          rewards[0].pointsCost +
-          " points)." +
+          tSubstitute(
+            t(
+              "cart.keepShoppingForFirstReward",
+              "Keep shopping to unlock your first reward ({points} points).",
+            ),
+            { points: rewards[0].pointsCost },
+          ) +
           "</div>";
       } else if (affordable.length) {
         list = '<div class="royal-injected__rewards">';
@@ -505,7 +545,9 @@
       var activeCodesBlock =
         payload.activeCodes && payload.activeCodes.length
           ? '<div class="royal-injected__active-codes-wrap">' +
-            '<div class="royal-injected__sub" style="margin-bottom:6px;"><strong>Your active codes</strong></div>' +
+            '<div class="royal-injected__sub" style="margin-bottom:6px;"><strong>' +
+            t("cart.activeCodesHeading", "Your active codes") +
+            "</strong></div>" +
             '<div id="royal-injected-cart-active-codes"></div>' +
             "</div>"
           : "";
@@ -532,7 +574,7 @@
         .forEach(function (rb) {
           rb.addEventListener("click", function () {
             rb.disabled = true;
-            setStatus(statusEl, "loading", "Redeeming…");
+            setStatus(statusEl, "loading", t("status.redeeming", "Redeeming…"));
             redeem(cfg, rb.getAttribute("data-reward-id"))
               .then(function (res) {
                 if (res.discountCode) {
@@ -541,7 +583,11 @@
                     encodeURIComponent(res.discountCode) +
                     "?redirect=/cart";
                 } else {
-                  setStatus(statusEl, "success", "Reward redeemed.");
+                  setStatus(
+                    statusEl,
+                    "success",
+                    t("status.rewardRedeemed", "Reward redeemed."),
+                  );
                   rb.disabled = false;
                 }
               })
@@ -550,7 +596,10 @@
                 setStatus(
                   statusEl,
                   "error",
-                  "We couldn't apply that reward. Please try again."
+                  t(
+                    "error.couldNotApplyReward",
+                    "We couldn't apply that reward. Please try again.",
+                  ),
                 );
               });
           });
@@ -575,7 +624,10 @@
               var purchaseRule = findPurchaseRule(payload);
               var template =
                 (purchaseRule && purchaseRule.cartLine) ||
-                "+{{points}} pts for this order";
+                t(
+                  "rule.purchase.cartLine",
+                  "+{{points}} pts for this order",
+                );
               pieces.push(
                 substituteTokens(template, {
                   points: String(earn),
@@ -597,7 +649,10 @@
                 ) / 100;
               if (credit > 0) {
                 pieces.push(
-                  "+" + formatMoney(credit, payload.currencyCode) + " store credit"
+                  "+" +
+                    formatMoney(credit, payload.currencyCode) +
+                    " " +
+                    t("cart.cashbackSuffix", "store credit"),
                 );
               }
             }
@@ -652,6 +707,9 @@
     captureReferral: captureReferral,
     applyBranding: applyBranding,
     renderDiag: renderDiag,
+    t: t,
+    tSubstitute: tSubstitute,
+    setBundle: setBundle,
     formatMoney: formatMoney,
     rewardLabel: rewardLabel,
     injectProduct: injectProduct,
@@ -685,15 +743,20 @@
       var card = document.createElement("div");
       card.className = "royal-card royal-social-card";
       var line = document.createElement("div");
+      var platformName = t("social.platform." + p.id, "");
+      if (!platformName) {
+        platformName =
+          {
+            instagram: "Instagram",
+            tiktok: "TikTok",
+            x: "X",
+            facebook: "Facebook",
+            youtube: "YouTube",
+          }[p.id] || p.id;
+      }
       line.innerHTML =
         "<strong>" +
-        ({
-          instagram: "Instagram",
-          tiktok: "TikTok",
-          x: "X",
-          facebook: "Facebook",
-          youtube: "YouTube",
-        }[p.id] || p.id) +
+        platformName +
         "</strong>" +
         ' <span class="royal-muted">— ' +
         p.points +
@@ -718,16 +781,23 @@
         claimSocial(cfg, p.id)
           .then(function (res) {
             if (res && res.outcome === "awarded") {
-              btn.textContent = "Awarded +" + (res.points || p.points);
+              var awardedPts = String(res.points || p.points);
+              btn.textContent = tSubstitute(
+                t("social.awardedButton", "Awarded +{points}"),
+                { points: awardedPts },
+              );
               btn.classList.add("royal-btn--ghost");
               if (statusEl)
                 setStatus(
                   statusEl,
                   "success",
-                  "Awarded " + (res.points || p.points) + " points.",
+                  tSubstitute(
+                    t("social.awardedStatus", "Awarded {points} points."),
+                    { points: awardedPts },
+                  ),
                 );
             } else if (res && res.outcome === "duplicate") {
-              btn.textContent = "Already claimed";
+              btn.textContent = t("social.alreadyClaimed", "Already claimed");
               btn.classList.add("royal-btn--ghost");
             }
           })

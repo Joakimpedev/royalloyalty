@@ -19,11 +19,14 @@ import { issueReferralCode, referralLink } from "./referrals.server";
 import { readCashbackSettings } from "./storecredit.server";
 import { seedDefaultEarnRules } from "./loyalty.server";
 import {
-  DEFAULT_EARN_COPY,
   substituteTokens,
   formatMoneyAmount,
   currencySymbol,
 } from "./tokens";
+import {
+  readLocalization,
+  buildResolvedBundle,
+} from "./localization.server";
 
 export interface StorefrontBranding {
   primaryColor: string;
@@ -127,6 +130,11 @@ export interface StorefrontPayload {
   rewards: StorefrontReward[];
   referralLink: string | null;
   activity: StorefrontActivity[];
+  /** Flat key→value map for the active storefront locale, merging merchant
+   *  overrides on top of the baked defaults from
+   *  app/lib/localization-defaults.ts. The storefront extension's t()
+   *  helper reads this; the client never knows about other locales. */
+  localization: Record<string, string>;
   /** The customer's redeemed-but-not-yet-used reward codes. We don't have
    *  an email channel today, so this is how customers re-find a code
    *  after closing the tab. Limited to the last 90 days. */
@@ -316,6 +324,11 @@ export async function buildStorefrontLoyaltyPayload(params: {
   const branding = readBranding(shop.aiConfigSnapshot);
 
   const shopCurrency = shop.currencyCode ?? "USD";
+  const localizationConfig = readLocalization(shop.aiConfigSnapshot);
+  const localizationBundle = buildResolvedBundle(
+    localizationConfig,
+    localizationConfig.defaultLocale,
+  );
   const earnRules: StorefrontEarnRule[] = earnRulesRows.map((r) => {
     const cfg = (r.config ?? null) as
       | {
@@ -336,14 +349,16 @@ export async function buildStorefrontLoyaltyPayload(params: {
       currency_symbol: currencySymbol(shopCurrency),
       per_amount: formatMoneyAmount(perAmount, shopCurrency),
     };
-    const defaults = DEFAULT_EARN_COPY[r.action];
-    const defaultTitle = defaults?.title ?? r.action;
+    // Defaults now come from the active locale's bundle (localization-keys.ts).
+    // Merchant edits on the rule editor pages take precedence.
+    const defaultTitle =
+      localizationBundle[`rule.${r.action}.title`] || r.action;
     const defaultDescription =
       r.action === "purchase"
         ? (r.perDollar
-            ? defaults?.descriptionPerDollar
-            : defaults?.description) ?? ""
-        : defaults?.description ?? "";
+            ? localizationBundle[`rule.purchase.descriptionPerDollar`]
+            : localizationBundle[`rule.purchase.description`]) ?? ""
+        : localizationBundle[`rule.${r.action}.description`] ?? "";
     const rawTitle = cfg?.title || defaultTitle;
     const rawDescription = cfg?.description || defaultDescription;
     const out: StorefrontEarnRule = {
@@ -365,8 +380,13 @@ export async function buildStorefrontLoyaltyPayload(params: {
         per_amount: formatMoneyAmount(perAmount, shopCurrency),
       };
       const rawProductLine =
-        cfg?.productLine || defaults?.productLine || "";
-      const rawCartLine = cfg?.cartLine || defaults?.cartLine || "";
+        cfg?.productLine ||
+        localizationBundle["rule.purchase.productLine"] ||
+        "";
+      const rawCartLine =
+        cfg?.cartLine ||
+        localizationBundle["rule.purchase.cartLine"] ||
+        "";
       out.productLine = substituteTokens(rawProductLine, dynamicCtx);
       out.cartLine = substituteTokens(rawCartLine, dynamicCtx);
     }
@@ -400,6 +420,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       socialPlatforms,
       cashback,
       branding,
+      localization: localizationBundle,
     };
   }
 
@@ -429,6 +450,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       socialPlatforms,
       cashback,
       branding,
+      localization: localizationBundle,
     };
   }
 
@@ -484,6 +506,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       date: a.createdAt.toISOString(),
     })),
     branding,
+    localization: localizationBundle,
   };
 }
 

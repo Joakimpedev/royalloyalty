@@ -47,23 +47,21 @@
     </div>
 
     <div class="royal-panel__body">
-      {%- comment -%} Hub: the default landing view inside the panel. {%- endcomment -%}
+      {%- comment -%} Hub: the default landing view inside the panel.
+        Row labels are initially the English defaults; once the JS payload
+        lands with the merchant-edited localization bundle, they get
+        overwritten with the locale-appropriate copy. {%- endcomment -%}
       <div class="royal-view" data-view="hub" id="royal-view-hub">
-        {%- comment -%}
-          Rows are rendered visible on first paint so the panel never opens
-          half-empty. JS only hides a row if the merchant explicitly turned
-          its section off in the admin Branding page.
-        {%- endcomment -%}
         <button type="button" class="royal-row" data-go="earn" id="royal-row-earn">
-          <span class="royal-row__label">Earn points</span>
+          <span class="royal-row__label" data-loc-key="launcher.hub.earn">Earn points</span>
           <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
         </button>
         <button type="button" class="royal-row" data-go="rewards" id="royal-row-rewards">
-          <span class="royal-row__label">Redeem rewards</span>
+          <span class="royal-row__label" data-loc-key="launcher.hub.redeem">Redeem rewards</span>
           <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
         </button>
         <button type="button" class="royal-row" data-go="referral" id="royal-row-referral">
-          <span class="royal-row__label">Refer a friend</span>
+          <span class="royal-row__label" data-loc-key="launcher.hub.refer">Refer a friend</span>
           <span class="royal-row__chev" aria-hidden="true">&#8250;</span>
         </button>
         <div class="royal-row__hint" id="royal-hub-hint" hidden></div>
@@ -75,10 +73,10 @@
 
       <div class="royal-view" data-view="rewards" hidden>
         <div id="royal-active-codes-wrap" hidden>
-          <h3 class="royal-section-title">Your active codes</h3>
+          <h3 class="royal-section-title" data-loc-key="launcher.activeCodesHeading">Your active codes</h3>
           <div id="royal-active-codes"></div>
         </div>
-        <div id="royal-rewards" class="royal-list"><p class="royal-muted">Loading rewards…</p></div>
+        <div id="royal-rewards" class="royal-list"><p class="royal-muted" data-loc-key="launcher.loadingRewards">Loading rewards…</p></div>
       </div>
 
       <div class="royal-view" data-view="referral" hidden>
@@ -149,6 +147,18 @@
         });
       });
 
+      function applyLocaleDom() {
+        // Walk every element with data-loc-key and replace its text with
+        // the merchant-resolved string. Lets us localize the static Liquid
+        // labels (hub rows, headings, etc.) without per-render JS plumbing.
+        var nodes = panel.querySelectorAll('[data-loc-key]');
+        for (var i = 0; i < nodes.length; i++) {
+          var k = nodes[i].getAttribute('data-loc-key');
+          var v = R.t(k, '');
+          if (v) nodes[i].textContent = v;
+        }
+      }
+
       function load() {
         R.setStatus(status, 'loading', '');
         R.loadBalance(cfg, function (d) {
@@ -156,12 +166,13 @@
           R.applyBranding(root, d.branding);
           applyCopy(d);
           buildHub(d);
+          applyLocaleDom();
           // Pre-inject product / cart cards while we have the payload.
           try { R.injectProduct(cfg, d); } catch (e) { /* non-fatal */ }
           try { R.injectCart(cfg, d); } catch (e) { /* non-fatal */ }
           loaded = true;
         }, function (diag) {
-          R.setStatus(status, 'error', "We couldn't load your rewards right now. Please try again later.");
+          R.setStatus(status, 'error', R.t('error.couldNotLoad', "We couldn't load your rewards right now. Please try again later."));
           var hub = document.getElementById('royal-view-hub');
           if (diag) R.renderDiag(hub || status.parentNode, diag, 'loyalty/balance failed');
         });
@@ -169,18 +180,17 @@
 
       function applyCopy(d) {
         var b = d.branding || {};
-        if (b.programName) titleEl.textContent = b.programName;
-        // Subtitle: logged-in member shows balance; otherwise the hero copy.
-        // Subtitle always comes from the merchant-editable Branding →
-        // Widget subtitle field. Balance/tier are surfaced in the Redeem
-        // sub-view, not the hero, so the hero copy stays identical to
-        // what the admin live-preview shows.
+        // Title and subtitle both layer Branding overrides on top of the
+        // localized defaults from the Localization page. Launcher pill
+        // label follows the same priority.
+        titleEl.textContent =
+          b.programName || R.t('launcher.title', 'Your rewards');
         subtitleEl.textContent =
-          b.widgetSubtitle || 'Earn points on every order — redeem for rewards.';
-        // Launcher pill label
-        if (b.launcherText) {
-          var pill = document.querySelector('#royal-launcher-btn .royal-launcher__text');
-          if (pill) pill.textContent = b.launcherText;
+          b.widgetSubtitle ||
+          R.t('launcher.subtitle', 'Earn points on every order — redeem for rewards.');
+        var pill = document.querySelector('#royal-launcher-btn .royal-launcher__text');
+        if (pill) {
+          pill.textContent = b.launcherText || R.t('launcher.text', 'Rewards');
         }
       }
 
@@ -199,7 +209,7 @@
         var hint = document.getElementById('royal-hub-hint');
         if (!hasEarn && !hasRewards && !hasReferral) {
           hint.hidden = false;
-          hint.textContent = 'Your loyalty program is being set up. Check back soon.';
+          hint.textContent = R.t('empty.programBeingSetUp', 'Your loyalty program is being set up. Check back soon.');
         }
       }
 
@@ -213,11 +223,17 @@
         var html = '';
         if (!cfg.loggedIn) {
           html +=
-            '<p class="royal-muted">Sign in or create an account to start earning points on every order.</p>' +
-            '<a class="royal-btn" href="/account/login" style="text-decoration:none;display:inline-block;margin-bottom:12px;">Sign in to earn</a>';
+            '<p class="royal-muted">' +
+            R.t('empty.earnSignedOut', 'Sign in or create an account to start earning points on every order.') +
+            '</p>' +
+            '<a class="royal-btn" href="/account/login" style="text-decoration:none;display:inline-block;margin-bottom:12px;">' +
+            R.t('empty.earnSignInButton', 'Sign in to earn') +
+            '</a>';
         }
         if (!rules.length) {
-          html += '<p class="royal-muted">No ways to earn yet — check back soon.</p>';
+          html += '<p class="royal-muted">' +
+            R.t('empty.earnRules', 'No ways to earn yet — check back soon.') +
+            '</p>';
           list.innerHTML = html;
           return;
         }
@@ -253,11 +269,25 @@
 
         var preface = '';
         if (!cfg.loggedIn) {
+          var signInLink =
+            '<a href="/account/login">' +
+            R.t('empty.rewardsSignInLink', 'Sign in') +
+            '</a>';
           preface =
-            '<p class="royal-muted">These are the rewards you can redeem with your points. <a href="/account/login">Sign in</a> or create an account to start earning.</p>';
+            '<p class="royal-muted">' +
+            R.tSubstitute(
+              R.t(
+                'empty.rewardsSignedOut',
+                'These are the rewards you can redeem with your points. {signInLink} or create an account to start earning.',
+              ),
+              { signInLink: signInLink },
+            ) +
+            '</p>';
         }
         if (!d.rewards || !d.rewards.length) {
-          wrap.innerHTML = preface + '<p class="royal-muted">No rewards available yet — check back soon.</p>';
+          wrap.innerHTML = preface + '<p class="royal-muted">' +
+            R.t('empty.rewards', 'No rewards available yet — check back soon.') +
+            '</p>';
           return;
         }
         wrap.innerHTML = preface;
@@ -272,7 +302,9 @@
           var rb = document.createElement('button');
           rb.className = 'royal-btn';
           rb.type = 'button';
-          rb.textContent = cfg.loggedIn ? 'Redeem' : 'Sign in to redeem';
+          rb.textContent = cfg.loggedIn
+            ? R.t('reward.redeemButton', 'Redeem')
+            : R.t('reward.signInToRedeemButton', 'Sign in to redeem');
           rb.disabled = !canAfford;
           if (!cfg.loggedIn) {
             rb.addEventListener('click', function () {
@@ -281,20 +313,30 @@
             rb.disabled = false;
             rb.classList.add('royal-btn--ghost');
           } else if (!canAfford) {
-            rb.title = d.enrolled ? 'Not enough points yet' : 'Sign up to redeem';
+            rb.title = d.enrolled
+              ? R.t('tooltip.notEnoughPoints', 'Not enough points yet')
+              : R.t('tooltip.signUpToRedeem', 'Sign up to redeem');
           } else {
             rb.addEventListener('click', function () {
               rb.disabled = true;
-              R.setStatus(status, 'loading', 'Redeeming…');
+              R.setStatus(status, 'loading', R.t('status.redeeming', 'Redeeming…'));
               R.redeem(cfg, rw.id).then(function (res) {
-                R.setStatus(status, 'success',
-                  res && res.result && res.result.discountCode
-                    ? 'Reward redeemed — your code is ' + res.result.discountCode + '.'
-                    : 'Reward redeemed.');
+                if (res && res.result && res.result.discountCode) {
+                  R.setStatus(
+                    status,
+                    'success',
+                    R.tSubstitute(
+                      R.t('status.rewardRedeemedWithCode', 'Reward redeemed — your code is {code}.'),
+                      { code: res.result.discountCode },
+                    ),
+                  );
+                } else {
+                  R.setStatus(status, 'success', R.t('status.rewardRedeemed', 'Reward redeemed.'));
+                }
               }).catch(function () {
                 rb.disabled = false;
                 R.setStatus(status, 'error',
-                  "We couldn't redeem that reward. Please try again.");
+                  R.t('error.couldNotRedeem', "We couldn't redeem that reward. Please try again."));
               });
             });
           }
@@ -308,26 +350,36 @@
         if (!payload) return;
         if (!cfg.loggedIn) {
           box.innerHTML =
-            '<p class="royal-muted" style="margin-bottom:12px;">Share your personal link with friends. When they place their first order, you both earn rewards.</p>' +
-            '<a class="royal-btn" href="/account/login" style="text-decoration:none;display:inline-block;">Sign in to get your link</a>';
+            '<p class="royal-muted" style="margin-bottom:12px;">' +
+            R.t('refer.descSignedOut', 'Share your personal link with friends. When they place their first order, you both earn rewards.') +
+            '</p>' +
+            '<a class="royal-btn" href="/account/login" style="text-decoration:none;display:inline-block;">' +
+            R.t('refer.signInCta', 'Sign in to get your link') +
+            '</a>';
           return;
         }
         if (!payload.referralLink) {
-          box.innerHTML = '<p class="royal-muted">Referrals aren\'t available right now.</p>';
+          box.innerHTML = '<p class="royal-muted">' +
+            R.t('refer.unavailable', "Referrals aren't available right now.") +
+            '</p>';
           return;
         }
         box.innerHTML =
-          '<p class="royal-muted" style="margin-bottom:8px;">Share your link. You both earn when friends place their first order.</p>' +
+          '<p class="royal-muted" style="margin-bottom:8px;">' +
+          R.t('refer.descSignedIn', 'Share your link. You both earn when friends place their first order.') +
+          '</p>' +
           '<div class="royal-active-code__row">' +
           '<code class="royal-active-code__code" id="royal-ref-link"></code>' +
-          '<button type="button" class="royal-btn royal-btn--ghost" id="royal-ref-copy">Copy</button>' +
+          '<button type="button" class="royal-btn royal-btn--ghost" id="royal-ref-copy">' +
+          R.t('refer.copyButton', 'Copy') +
+          '</button>' +
           '</div>';
         document.getElementById('royal-ref-link').textContent = payload.referralLink;
         document.getElementById('royal-ref-copy').addEventListener('click', function () {
           R.copyText(payload.referralLink).then(function () {
             var b = document.getElementById('royal-ref-copy');
-            b.textContent = 'Copied!';
-            setTimeout(function () { b.textContent = 'Copy'; }, 1500);
+            b.textContent = R.t('refer.copiedButton', 'Copied!');
+            setTimeout(function () { b.textContent = R.t('refer.copyButton', 'Copy'); }, 1500);
           });
         });
       }
