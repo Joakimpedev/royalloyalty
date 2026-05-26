@@ -40,6 +40,7 @@ export default function App() {
         <s-link href="/app/program">Program</s-link>
         <s-link href="/app/members">Members</s-link>
         <s-link href="/app/branding">Branding</s-link>
+        <s-link href="/app/localization">Localization</s-link>
         <s-link href="/app/analytics">Analytics</s-link>
         <s-link href="/app/settings">Settings</s-link>
       </s-app-nav>
