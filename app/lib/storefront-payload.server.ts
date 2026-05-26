@@ -26,7 +26,7 @@ import {
 import {
   readLocalization,
   buildResolvedBundle,
-} from "./localization.server";
+} from "./localization";
 import { LOCALE_INDEX } from "./localization-locales";
 
 export interface StorefrontBranding {

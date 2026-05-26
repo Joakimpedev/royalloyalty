@@ -89,7 +89,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   // the active locale's bundle, then resolves every UI string with t().
   if (sub === "pos/localization") {
     const { readLocalization, buildResolvedBundle } = await import(
-      "../lib/localization.server"
+      "../lib/localization"
     );
     const shop = await prisma.shop.findUnique({ where: { shopDomain } });
     if (!shop) return jsonCors({ error: "shop_not_found" }, 404);

@@ -40,7 +40,7 @@ import {
   writeLocalization,
   buildResolvedBundle,
   type LocalizationConfig,
-} from "../lib/localization.server";
+} from "../lib/localization";
 import LockedHint from "../components/LockedHint";
 
 async function requireShop(shopDomain: string) {
