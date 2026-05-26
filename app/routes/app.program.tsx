@@ -17,6 +17,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { seedDefaultEarnRules } from "../lib/loyalty.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
 
@@ -83,10 +84,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
 
   if (form.get("_intent") === "activate") {
+    // Activation = merchant consent. Persist the defaults the loader
+    // synthesizes as "Active" (Place an order + Create an account) so the
+    // storefront and admin always read the same DB-backed truth.
     await prisma.shop.update({
       where: { id: shop.id },
       data: { programActivatedAt: new Date() },
     });
+    await seedDefaultEarnRules(shop.id);
     return { ok: true, message: "Program activated." };
   }
 

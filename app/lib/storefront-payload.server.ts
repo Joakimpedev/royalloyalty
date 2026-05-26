@@ -17,6 +17,7 @@ import type { Shop } from "@prisma/client";
 import { getBalance } from "./points.server";
 import { issueReferralCode, referralLink } from "./referrals.server";
 import { readCashbackSettings } from "./storecredit.server";
+import { seedDefaultEarnRules } from "./loyalty.server";
 
 export interface StorefrontBranding {
   primaryColor: string;
@@ -225,7 +226,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
 
   // Earn rules and rewards are shop-wide — load them in parallel regardless
   // of customer presence so signed-out visitors still see "ways to earn".
-  const [earnRulesRows, rewardsRows] = await Promise.all([
+  let [earnRulesRows, rewardsRows] = await Promise.all([
     prisma.earnRule.findMany({
       where: { shopId: shop.id, enabled: true },
       orderBy: { action: "asc" },
@@ -235,6 +236,19 @@ export async function buildStorefrontLoyaltyPayload(params: {
       orderBy: { pointsCost: "asc" },
     }),
   ]);
+
+  // Self-healing backfill for shops that activated the program before the
+  // seeding fix shipped. If the program is live but no earn-rule rows
+  // exist, persist the two defaults the admin marks Active and re-query.
+  // Idempotent (seed is a no-op once rows exist) so this only writes once
+  // per shop in practice.
+  if (shop.programActivatedAt && earnRulesRows.length === 0) {
+    await seedDefaultEarnRules(shop.id);
+    earnRulesRows = await prisma.earnRule.findMany({
+      where: { shopId: shop.id, enabled: true },
+      orderBy: { action: "asc" },
+    });
+  }
 
   const cashback: StorefrontCashback = readCashbackSettings(shop.aiConfigSnapshot);
 
@@ -282,54 +296,21 @@ export async function buildStorefrontLoyaltyPayload(params: {
 
   const branding = readBranding(shop.aiConfigSnapshot);
 
-  // Mirror the admin program page (app/routes/app.program.tsx loader):
-  // when no EarnRule row exists for an action, the admin synthesizes a
-  // default — `purchase` and `signup` default to enabled. The storefront
-  // must apply the same defaulting or it shows "no ways to earn" while
-  // the admin shows two Active badges. A merchant activating the program
-  // without explicitly saving each rule is the common path — we treat
-  // those synthesized defaults as the source of truth on both sides.
-  const DEFAULT_ENABLED_ACTIONS = new Set(["purchase", "signup"]);
-  const DEFAULT_POINTS: Record<string, number> = {
-    purchase: 1,
-    signup: 50,
-    birthday: 50,
-    newsletter: 50,
-    social: 50,
-    review: 50,
-    anniversary: 50,
-  };
-  const earnRulesByAction = new Map(earnRulesRows.map((r) => [r.action, r]));
-  const earnRules: StorefrontEarnRule[] = [];
-  for (const action of Object.keys(DEFAULT_POINTS)) {
-    const r = earnRulesByAction.get(action);
-    if (r) {
-      if (!r.enabled) continue;
-      const cfg = (r.config ?? null) as
-        | { title?: string; perAmount?: number }
-        | null;
-      const perAmount = Math.max(1, cfg?.perAmount ?? 1);
-      earnRules.push({
-        action: r.action,
-        label:
-          cfg?.title ??
-          defaultEarnLabel(r.action, r.points, perAmount, r.perDollar),
-        points: r.points,
-        perDollar: r.perDollar,
-        perAmount,
-      });
-    } else if (DEFAULT_ENABLED_ACTIONS.has(action)) {
-      const points = DEFAULT_POINTS[action];
-      const perDollar = action === "purchase";
-      earnRules.push({
-        action,
-        label: defaultEarnLabel(action, points, 1, perDollar),
-        points,
-        perDollar,
-        perAmount: 1,
-      });
-    }
-  }
+  const earnRules: StorefrontEarnRule[] = earnRulesRows.map((r) => {
+    const cfg = (r.config ?? null) as
+      | { title?: string; perAmount?: number }
+      | null;
+    const perAmount = Math.max(1, cfg?.perAmount ?? 1);
+    return {
+      action: r.action,
+      label:
+        cfg?.title ??
+        defaultEarnLabel(r.action, r.points, perAmount, r.perDollar),
+      points: r.points,
+      perDollar: r.perDollar,
+      perAmount,
+    };
+  });
 
   // Reward model has no per-row config field, so labels are computed from
   // type + value. The storefront JS re-formats `amount_off`/`store_credit`

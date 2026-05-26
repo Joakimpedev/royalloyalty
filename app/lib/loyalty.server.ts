@@ -19,6 +19,51 @@ import { transitionStatus } from "./status.server";
 import { canAwardLoyalty } from "./quota.server";
 import type { OrdersCreatePayload } from "../routes/webhooks.orders.create";
 
+/**
+ * Seed the two earn rules that the admin program page synthesizes as
+ * "Active by default" (Place an order, Create an account). Called when a
+ * shop activates the loyalty program so the storefront-payload sees real
+ * DB rows instead of relying on duplicated default logic. Idempotent —
+ * skips any action that already has a row, so resyncing or repeated
+ * activation calls are safe. Mirrors app/routes/app.program.tsx loader
+ * defaults: `purchase` → 1 pt/$1, `signup` → 50 pts one-shot.
+ */
+export async function seedDefaultEarnRules(shopId: string): Promise<void> {
+  const existing = await prisma.earnRule.findMany({
+    where: { shopId, action: { in: ["purchase", "signup"] } },
+    select: { action: true },
+  });
+  const have = new Set(existing.map((r) => r.action));
+  const toCreate: Array<{
+    shopId: string;
+    action: string;
+    points: number;
+    perDollar: boolean;
+    enabled: boolean;
+  }> = [];
+  if (!have.has("purchase")) {
+    toCreate.push({
+      shopId,
+      action: "purchase",
+      points: 1,
+      perDollar: true,
+      enabled: true,
+    });
+  }
+  if (!have.has("signup")) {
+    toCreate.push({
+      shopId,
+      action: "signup",
+      points: 50,
+      perDollar: false,
+      enabled: true,
+    });
+  }
+  if (toCreate.length) {
+    await prisma.earnRule.createMany({ data: toCreate });
+  }
+}
+
 // admin.graphql from authenticate.admin(); kept structurally typed so this file
 // does not depend on the Shopify SDK's exact generic surface.
 type GraphqlClient = (
