@@ -18,6 +18,12 @@ import { getBalance } from "./points.server";
 import { issueReferralCode, referralLink } from "./referrals.server";
 import { readCashbackSettings } from "./storecredit.server";
 import { seedDefaultEarnRules } from "./loyalty.server";
+import {
+  DEFAULT_EARN_COPY,
+  substituteTokens,
+  formatMoneyAmount,
+  currencySymbol,
+} from "./tokens";
 
 export interface StorefrontBranding {
   primaryColor: string;
@@ -50,7 +56,11 @@ export interface StorefrontBranding {
 
 export interface StorefrontEarnRule {
   action: string;
+  /** Pre-substituted card title shown in the storefront earn list. */
   label: string;
+  /** Pre-substituted card description (sub-line) shown under the title.
+   *  Empty string if the merchant cleared it and no default applies. */
+  description: string;
   points: number;
   perDollar: boolean;
   /** Only meaningful when perDollar=true; "X points per perAmount currency". */
@@ -296,16 +306,35 @@ export async function buildStorefrontLoyaltyPayload(params: {
 
   const branding = readBranding(shop.aiConfigSnapshot);
 
+  const shopCurrency = shop.currencyCode ?? "USD";
   const earnRules: StorefrontEarnRule[] = earnRulesRows.map((r) => {
     const cfg = (r.config ?? null) as
-      | { title?: string; perAmount?: number }
+      | { title?: string; description?: string; perAmount?: number }
       | null;
     const perAmount = Math.max(1, cfg?.perAmount ?? 1);
+    // Token substitution context. Mirrors app/lib/tokens.ts and the
+    // admin-side ContentPreview so the storefront renders identical
+    // output to the admin's live preview.
+    const ctx: Record<string, string> = {
+      points: String(r.points),
+      currency_code: shopCurrency,
+      currency_symbol: currencySymbol(shopCurrency),
+      per_amount: formatMoneyAmount(perAmount, shopCurrency),
+    };
+    const defaults = DEFAULT_EARN_COPY[r.action];
+    const defaultTitle = defaults?.title ?? r.action;
+    const defaultDescription =
+      r.action === "purchase"
+        ? (r.perDollar
+            ? defaults?.descriptionPerDollar
+            : defaults?.description) ?? ""
+        : defaults?.description ?? "";
+    const rawTitle = cfg?.title || defaultTitle;
+    const rawDescription = cfg?.description || defaultDescription;
     return {
       action: r.action,
-      label:
-        cfg?.title ??
-        defaultEarnLabel(r.action, r.points, perAmount, r.perDollar),
+      label: substituteTokens(rawTitle, ctx),
+      description: substituteTokens(rawDescription, ctx),
       points: r.points,
       perDollar: r.perDollar,
       perAmount,
@@ -465,27 +494,6 @@ async function buildActiveCodes(
         type: rw?.type ?? "unknown",
       };
     });
-}
-
-function defaultEarnLabel(
-  action: string,
-  points: number,
-  perAmount: number,
-  perDollar: boolean,
-): string {
-  const pts = `${points} point${points === 1 ? "" : "s"}`;
-  if (action === "purchase" && perDollar)
-    return `Earn ${pts} for every ${perAmount} spent`;
-  if (action === "purchase") return `Earn ${pts} per order`;
-  if (action === "signup") return `Earn ${pts} for creating an account`;
-  if (action === "birthday") return `Earn ${pts} on your birthday`;
-  if (action === "newsletter")
-    return `Earn ${pts} for subscribing to the newsletter`;
-  if (action === "social") return `Earn ${pts} for a social follow`;
-  if (action === "review") return `Earn ${pts} for a product review`;
-  if (action === "anniversary")
-    return `Earn ${pts} on your join anniversary`;
-  return `Earn ${pts}`;
 }
 
 function defaultRewardLabel(type: string, value: number | null): string {

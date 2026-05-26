@@ -225,12 +225,15 @@
         rules.forEach(function (r) {
           var row = document.createElement('div');
           row.className = 'royal-card';
-          var perDollar = r.perDollar
-            ? ' per ' + (payload.currencyCode === 'USD' ? '$' : '') + (r.perAmount || 1)
-            : '';
+          // Server pre-substitutes the merchant's title + description with
+          // shop-currency-aware values, so the storefront just renders the
+          // text as-is. Empty description = no sub-line (keeps the card
+          // visually tight when the merchant clears it).
+          var label = r.label || r.action;
+          var desc = r.description || '';
           row.innerHTML =
-            '<div class="royal-card__label">' + escapeHtml(r.label || r.action) + '</div>' +
-            '<div class="royal-muted">' + r.points + ' pts' + perDollar + '</div>';
+            '<div class="royal-card__label">' + escapeHtml(label) + '</div>' +
+            (desc ? '<div class="royal-muted">' + escapeHtml(desc) + '</div>' : '');
           list.appendChild(row);
         });
       }

@@ -49,6 +49,14 @@ import { useAppNavigate } from "../lib/app-navigate";
 import { formatMoney } from "../lib/use-money";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
 import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
+import VariablePicker from "../components/VariablePicker";
+import {
+  DEFAULT_EARN_COPY,
+  TOKEN_GROUPS_BY_ACTION,
+  substituteTokens,
+  formatMoneyAmount,
+  currencySymbol,
+} from "../lib/tokens";
 
 const ACTIONS = [
   "purchase",
@@ -118,6 +126,9 @@ async function requireShop(shopDomain: string) {
 
 type ConfigBlob = {
   title?: string;
+  /** Sub-line copy shown under the title in the storefront earn list.
+   *  Supports {{token}} placeholders via app/lib/tokens.ts. */
+  description?: string;
   completionLimit?: number | null; // null = unlimited
   /** "X points per Y currency units"; 1 = points-per-1-unit. */
   perAmount?: number;
@@ -184,21 +195,36 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   });
 
   const config = (existing?.config ?? null) as ConfigBlob | null;
-  const defaultTitle = LABELS[action].title;
+  const defaults = DEFAULT_EARN_COPY[action];
+  const defaultTitle = defaults?.title ?? LABELS[action].title;
+  const perDollar =
+    existing?.perDollar ?? action === "purchase";
+  // The "per-dollar" purchase rule and the flat-purchase rule use different
+  // default descriptions; everything else has one default.
+  const defaultDescription =
+    action === "purchase"
+      ? (perDollar
+          ? defaults?.descriptionPerDollar
+          : defaults?.description) ?? ""
+      : defaults?.description ?? "";
 
   // Fetch the shop's currency directly here too — the parent app.tsx loader
   // also fetches it, but the previous useRouteLoaderData wiring couldn't be
   // trusted to resolve the parent route ID across flatRoutes setups. Reading
   // it in this loader and returning it on `money` removes the dependency.
   const money = await loadShopMoneyContext(admin, session.shop);
+  const paid = shop.plan !== "FREE";
 
   return {
     action,
     money,
+    paid,
     rule: {
       title: config?.title ?? defaultTitle,
+      description: config?.description ?? defaultDescription,
+      defaultDescription,
       points: existing?.points ?? (action === "purchase" ? 1 : 50),
-      perDollar: existing?.perDollar ?? action === "purchase",
+      perDollar,
       enabled:
         existing?.enabled ?? (action === "purchase" || action === "signup"),
       completionLimit:
@@ -224,6 +250,7 @@ export const action = async ({
   const a = String(params.action ?? "");
   if (!isActionName(a)) throw new Response("Unknown action", { status: 404 });
 
+  const paid = shop.plan !== "FREE";
   const form = await request.formData();
   const points = Number.parseInt(String(form.get("points")), 10);
   if (!Number.isFinite(points) || points < 0) {
@@ -235,7 +262,14 @@ export const action = async ({
   const perDollar = form.get("perDollar") === "on";
   const enabled = form.get("enabled") === "on";
   const titleRaw = String(form.get("title") ?? "").trim();
-  const title = titleRaw.slice(0, 80) || LABELS[a].title;
+  // Title + description are copy fields → paid gate. On free plan we ignore
+  // the submitted values and fall through to the per-action default so the
+  // storefront still renders something sensible.
+  const title = paid
+    ? titleRaw.slice(0, 80) || LABELS[a].title
+    : LABELS[a].title;
+  const descriptionRaw = String(form.get("description") ?? "");
+  const description = paid ? descriptionRaw.slice(0, 200) : "";
   const limitRaw = String(form.get("completionLimit") ?? "").trim();
   const completionLimit =
     limitRaw === "" || limitRaw.toLowerCase() === "unlimited"
@@ -246,7 +280,12 @@ export const action = async ({
     Number.parseInt(String(form.get("perAmount") ?? "1"), 10) || 1,
   );
 
-  const config: ConfigBlob = { title, completionLimit, perAmount };
+  const config: ConfigBlob = {
+    title,
+    description: description || undefined,
+    completionLimit,
+    perAmount,
+  };
 
   // Social rule carries a JSON list of platforms (handle / label / points
   // / enabled) instead of using `points` on the row itself. We parse and
@@ -472,8 +511,55 @@ function SocialPlatformsEditor({
   );
 }
 
+/** Live preview of the substituted title + description — mirrors what the
+ *  storefront extension renders in the launcher's "Earn points" list. Uses
+ *  the same substituteTokens function as the server-side payload builder
+ *  so both reads are identical. */
+function ContentPreview({
+  title,
+  description,
+  points,
+  perAmount,
+  currencyCode,
+  locale,
+}: {
+  title: string;
+  description: string;
+  points: number;
+  perAmount: number;
+  currencyCode: string;
+  locale?: string;
+}) {
+  const ctx: Record<string, string> = {
+    points: String(points),
+    currency_code: currencyCode,
+    currency_symbol: currencySymbol(currencyCode, locale),
+    per_amount: formatMoneyAmount(perAmount, currencyCode, locale),
+  };
+  return (
+    <div
+      style={{
+        border: "1px solid #e1e3e5",
+        borderRadius: 8,
+        padding: "10px 12px",
+        background: "#fafbfb",
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 600, color: "#6d7175", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        Storefront preview
+      </div>
+      <div style={{ fontWeight: 600, color: "#202223", fontSize: 14 }}>
+        {substituteTokens(title, ctx) || "—"}
+      </div>
+      <div style={{ color: "#6d7175", fontSize: 13, marginTop: 2 }}>
+        {substituteTokens(description, ctx) || "—"}
+      </div>
+    </div>
+  );
+}
+
 export default function EarnRuleEditor() {
-  const { action: actionName, rule, money: moneyCtx } =
+  const { action: actionName, rule, money: moneyCtx, paid } =
     useLoaderData<typeof loader>();
   const actionData = useActionData() as EarnActionResult | undefined;
   const nav = useNavigation();
@@ -498,6 +584,7 @@ export default function EarnRuleEditor() {
   const isPurchase = actionName === "purchase";
 
   const [title, setTitle] = useState(rule.title);
+  const [description, setDescription] = useState(rule.description);
   const [points, setPoints] = useState(rule.points);
   const [perDollar, setPerDollar] = useState(rule.perDollar);
   const [enabled, setEnabled] = useState(rule.enabled);
@@ -508,9 +595,19 @@ export default function EarnRuleEditor() {
   const [platforms, setPlatforms] = useState<SocialPlatform[]>(rule.platforms);
 
   const isSocial = actionName === "social";
+  // Phase 1: Content section is wired for `purchase` only. Other actions
+  // continue rendering today's Title-only section until Phase 2.
+  const showContentSection = actionName === "purchase";
+  const tokenGroups = TOKEN_GROUPS_BY_ACTION[actionName] ?? [];
+  const insertTokenInto =
+    (which: "title" | "description") => (token: string) => {
+      if (which === "title") setTitle((t) => `${t}${token}`);
+      else setDescription((d) => `${d}${token}`);
+    };
 
   const dirty =
     title !== rule.title ||
+    description !== rule.description ||
     points !== rule.points ||
     perDollar !== rule.perDollar ||
     enabled !== rule.enabled ||
@@ -524,6 +621,7 @@ export default function EarnRuleEditor() {
   const save = useCallback(() => {
     const fd = new FormData();
     fd.set("title", title);
+    fd.set("description", description);
     fd.set("points", String(points));
     if (perDollar) fd.set("perDollar", "on");
     if (enabled) fd.set("enabled", "on");
@@ -536,6 +634,7 @@ export default function EarnRuleEditor() {
     submit(fd, { method: "POST" });
   }, [
     title,
+    description,
     points,
     perDollar,
     enabled,
@@ -548,6 +647,7 @@ export default function EarnRuleEditor() {
 
   const discard = useCallback(() => {
     setTitle(rule.title);
+    setDescription(rule.description);
     setPoints(rule.points);
     setPerDollar(rule.perDollar);
     setEnabled(rule.enabled);
@@ -631,13 +731,98 @@ export default function EarnRuleEditor() {
 
       {/* ───── Main column ───── */}
 
-      <s-section heading="Title">
-        <s-text-field
-          label="Title"
-          value={title}
-          onChange={(e: any) => setTitle(String(e.target.value ?? ""))}
-        />
-      </s-section>
+      {showContentSection ? (
+        <s-section heading="Content">
+          <s-stack direction="block" gap="base">
+            <s-paragraph>
+              <s-text tone="subdued">
+                Customize what shoppers see in the launcher's "Earn points"
+                list. Click <strong>{"{ }"}</strong> to insert a value that
+                gets filled in at render time.
+              </s-text>
+            </s-paragraph>
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{ fontSize: 13, color: "#202223" }}>
+                  Card title
+                </span>
+                <VariablePicker
+                  groups={tokenGroups}
+                  disabled={!paid}
+                  onPick={insertTokenInto("title")}
+                />
+              </div>
+              <s-text-field
+                label=""
+                value={title}
+                disabled={!paid ? true : undefined}
+                onChange={(e: any) =>
+                  setTitle(String(e.target.value ?? ""))
+                }
+              />
+            </div>
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{ fontSize: 13, color: "#202223" }}>
+                  Card description
+                </span>
+                <VariablePicker
+                  groups={tokenGroups}
+                  disabled={!paid}
+                  onPick={insertTokenInto("description")}
+                />
+              </div>
+              <s-text-field
+                label=""
+                value={description}
+                disabled={!paid ? true : undefined}
+                placeholder={rule.defaultDescription}
+                onChange={(e: any) =>
+                  setDescription(String(e.target.value ?? ""))
+                }
+              />
+            </div>
+            <ContentPreview
+              title={title}
+              description={description || rule.defaultDescription}
+              points={points}
+              perAmount={perAmount}
+              currencyCode={currencyCode}
+              locale={moneyCtx.locale}
+            />
+            {!paid ? (
+              <s-paragraph>
+                <s-text tone="subdued">
+                  Title and description customization is available on paid
+                  plans. Free shops render the defaults shown above.
+                </s-text>
+              </s-paragraph>
+            ) : null}
+          </s-stack>
+        </s-section>
+      ) : (
+        <s-section heading="Title">
+          <s-text-field
+            label="Title"
+            value={title}
+            onChange={(e: any) => setTitle(String(e.target.value ?? ""))}
+          />
+        </s-section>
+      )}
 
       {isSocial ? (
         <s-section heading="Social platforms">
