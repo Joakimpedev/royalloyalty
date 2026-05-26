@@ -1,9 +1,12 @@
 // Localization page — one place to edit every customer-facing string in
-// the storefront extension + POS. Language picker at the top; switching
-// language re-fills every field with that locale's baked defaults
-// (merchant-overrides preserved when present). Save persists ONLY the
-// merchant's overrides (diff against the baked default) so storage stays
-// small.
+// the storefront extension + POS.
+//
+// Model: one Storefront language picker at the top. Picking a language
+// reseeds every field with that locale's baked defaults (no leftover
+// overrides from a previously-edited language; that data is dropped on
+// save). Edits below the picker layer on top of the chosen baseline.
+// Save persists ONLY the diff against the baked defaults so storage
+// stays small and "clear field" effectively resets to default.
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type {
@@ -31,7 +34,6 @@ import {
 import {
   LOCALES,
   LOCALE_INDEX,
-  DEFAULT_LOCALE,
   isLocaleCode,
   type LocaleCode,
 } from "../lib/localization-locales";
@@ -78,26 +80,17 @@ export const action = async ({
     if (typeof dl !== "string" || !isLocaleCode(dl)) {
       throw new Error("invalid defaultLocale");
     }
-    const bundles: LocalizationConfig["bundles"] = {};
-    if (parsed.bundles && typeof parsed.bundles === "object") {
-      for (const [code, bundle] of Object.entries(parsed.bundles)) {
-        if (!isLocaleCode(code)) continue;
-        if (!bundle || typeof bundle !== "object") continue;
-        const clean: Record<string, string> = {};
-        for (const [k, v] of Object.entries(
-          bundle as Record<string, unknown>,
-        )) {
-          if (typeof v === "string") clean[k] = v.slice(0, 500);
-        }
-        bundles[code as LocaleCode] = clean;
+    const overrides: Record<string, string> = {};
+    if (parsed.overrides && typeof parsed.overrides === "object") {
+      for (const [k, v] of Object.entries(
+        parsed.overrides as Record<string, unknown>,
+      )) {
+        if (typeof v === "string") overrides[k] = v.slice(0, 500);
       }
     }
-    next = { defaultLocale: dl as LocaleCode, bundles };
+    next = { defaultLocale: dl as LocaleCode, overrides };
   } catch (e) {
-    return {
-      ok: false,
-      message: "Could not parse localization payload.",
-    };
+    return { ok: false, message: "Could not parse localization payload." };
   }
   const nextSnapshot = writeLocalization(shop.aiConfigSnapshot, next);
   await prisma.shop.update({
@@ -107,7 +100,6 @@ export const action = async ({
   return { ok: true };
 };
 
-/** Group the catalog by section, preserving declaration order. */
 function groupBySection(): Record<LocalizationSection, LocalizationKey[]> {
   const out = {} as Record<LocalizationSection, LocalizationKey[]>;
   for (const entry of KEY_CATALOG) {
@@ -124,86 +116,64 @@ export default function LocalizationPage() {
   const submit = useSubmit();
   const saveBarRef = useRef<HTMLElement | null>(null);
 
-  // The "view bundle" is what's shown in the form. It's the merged result
-  // of the baked default for the active locale + any merchant overrides.
-  // When the merchant edits a field, we store their value in
-  // `overrides[locale][key]`. When they switch language, the form repopulates
-  // from buildResolvedBundle for the new locale.
+  // Local form state: the active locale + the overrides that apply on
+  // top of its baked defaults. Switching locale CLEARS overrides — the
+  // merchant gets the new locale's defaults as their baseline.
   const [defaultLocale, setDefaultLocale] = useState<LocaleCode>(
     config.defaultLocale,
   );
-  const [editingLocale, setEditingLocale] = useState<LocaleCode>(
-    config.defaultLocale,
+  const [overrides, setOverrides] = useState<Record<string, string>>(
+    () => ({ ...config.overrides }),
   );
-  const [overrides, setOverrides] = useState<
-    Partial<Record<LocaleCode, Record<string, string>>>
-  >(() => {
-    const seed: Partial<Record<LocaleCode, Record<string, string>>> = {};
-    for (const [code, bundle] of Object.entries(config.bundles)) {
-      seed[code as LocaleCode] = { ...(bundle as Record<string, string>) };
-    }
-    return seed;
-  });
 
   const grouped = useMemo(() => groupBySection(), []);
 
-  // Build the values displayed in the form: merchant override > baked default.
-  const liveBundle = useMemo(() => {
-    return buildResolvedBundle(
-      { defaultLocale, bundles: overrides },
-      editingLocale,
-    );
-  }, [defaultLocale, overrides, editingLocale]);
+  // Values shown in the form: baked defaults for the active locale,
+  // then merchant overrides on top.
+  const liveBundle = useMemo(
+    () =>
+      buildResolvedBundle(
+        { defaultLocale, overrides },
+        defaultLocale,
+      ),
+    [defaultLocale, overrides],
+  );
 
   const dirty = useMemo(() => {
     if (defaultLocale !== config.defaultLocale) return true;
-    const a = JSON.stringify(overrides);
-    const b = JSON.stringify(config.bundles);
-    return a !== b;
+    return JSON.stringify(overrides) !== JSON.stringify(config.overrides);
   }, [defaultLocale, overrides, config]);
 
   const saving = nav.state === "submitting";
   useSaveBar(saveBarRef, dirty);
 
-  useEffect(() => {
-    if (actionData && actionData.ok) {
-      // The reload will pick up the new baseline; no further action.
-    }
-  }, [actionData]);
+  const setField = useCallback((key: string, value: string) => {
+    setOverrides((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
-  const setField = useCallback(
-    (key: string, value: string) => {
-      setOverrides((prev) => {
-        const next = { ...prev };
-        const cur = { ...(next[editingLocale] ?? {}) };
-        cur[key] = value;
-        next[editingLocale] = cur;
-        return next;
-      });
+  const onLocaleChange = useCallback(
+    (next: LocaleCode) => {
+      if (next === defaultLocale) return;
+      // Wipe overrides — the new locale is the new baseline. (Saved
+      // overrides for the previous locale are still in the DB until the
+      // merchant hits Save; clicking Discard restores everything.)
+      setDefaultLocale(next);
+      setOverrides({});
     },
-    [editingLocale],
+    [defaultLocale],
   );
 
   const save = useCallback(() => {
     const fd = new FormData();
-    fd.set(
-      "config",
-      JSON.stringify({ defaultLocale, bundles: overrides }),
-    );
+    fd.set("config", JSON.stringify({ defaultLocale, overrides }));
     submit(fd, { method: "POST" });
   }, [defaultLocale, overrides, submit]);
 
   const discard = useCallback(() => {
     setDefaultLocale(config.defaultLocale);
-    setEditingLocale(config.defaultLocale);
-    const seed: Partial<Record<LocaleCode, Record<string, string>>> = {};
-    for (const [code, bundle] of Object.entries(config.bundles)) {
-      seed[code as LocaleCode] = { ...(bundle as Record<string, string>) };
-    }
-    setOverrides(seed);
+    setOverrides({ ...config.overrides });
   }, [config]);
 
-  const editingLocaleMeta = LOCALE_INDEX.get(editingLocale);
   const sectionOrder: LocalizationSection[] = [
     "launcher",
     "loyaltyPage",
@@ -221,9 +191,9 @@ export default function LocalizationPage() {
   ];
 
   return (
-    // @ts-expect-error - s-page custom element JSX types
+    // @ts-expect-error - s-page
     <s-page heading="Localization">
-      {/* @ts-expect-error - ui-save-bar */}
+      {/* @ts-expect-error */}
       <ui-save-bar id="localization-save-bar" ref={saveBarRef}>
         <button
           variant="primary"
@@ -234,7 +204,7 @@ export default function LocalizationPage() {
           Save
         </button>
         <button onClick={discard}>Discard</button>
-        {/* @ts-expect-error - ui-save-bar */}
+        {/* @ts-expect-error */}
       </ui-save-bar>
 
       {actionData && !actionData.ok ? (
@@ -258,10 +228,12 @@ export default function LocalizationPage() {
           <s-paragraph>
             {/* @ts-expect-error */}
             <s-text tone="subdued">
-              Pick the language your customers see on the storefront. Every
-              field below pre-fills with that language's defaults; edit any
-              value to customize. Switching languages doesn't lose your work
-              — each language stores its own values.
+              Pick a language to set the baseline copy. Edit any field below
+              to customize. Per-rule copy (Place an order, Sign up, etc.)
+              lives on{" "}
+              {/* @ts-expect-error - s-link */}
+              <s-link href="/app/program">Program</s-link>.
+              {/* @ts-expect-error */}
             </s-text>
             {/* @ts-expect-error */}
           </s-paragraph>
@@ -279,58 +251,19 @@ export default function LocalizationPage() {
               </span>
               {!paid ? <LockedHint /> : null}
             </div>
-            {/* @ts-expect-error */}
+            {/* @ts-expect-error - s-select */}
             <s-select
               value={defaultLocale}
               disabled={!paid ? true : undefined}
               onChange={(e: { target: { value: string } }) => {
                 const v = e.target.value;
-                if (isLocaleCode(v)) {
-                  setDefaultLocale(v);
-                  setEditingLocale(v);
-                }
+                if (isLocaleCode(v)) onLocaleChange(v);
               }}
             >
               {LOCALES.map((l) => (
                 // @ts-expect-error - s-option
                 <s-option key={l.code} value={l.code}>
-                  {l.displayName}
-                  {/* @ts-expect-error */}
-                </s-option>
-              ))}
-              {/* @ts-expect-error */}
-            </s-select>
-          </div>
-          {editingLocale !== defaultLocale ? (
-            // @ts-expect-error
-            <s-banner tone="info">
-              {/* @ts-expect-error */}
-              <s-paragraph>
-                You're editing the <strong>{editingLocaleMeta?.label}</strong>{" "}
-                bundle. The active storefront language is{" "}
-                <strong>{LOCALE_INDEX.get(defaultLocale)?.label}</strong>.
-                {/* @ts-expect-error */}
-              </s-paragraph>
-              {/* @ts-expect-error */}
-            </s-banner>
-          ) : null}
-          <div>
-            <span style={{ fontSize: 13, color: "#202223" }}>
-              Edit bundle for
-            </span>
-            {/* @ts-expect-error */}
-            <s-select
-              value={editingLocale}
-              disabled={!paid ? true : undefined}
-              onChange={(e: { target: { value: string } }) => {
-                const v = e.target.value;
-                if (isLocaleCode(v)) setEditingLocale(v);
-              }}
-            >
-              {LOCALES.map((l) => (
-                // @ts-expect-error
-                <s-option key={l.code} value={l.code}>
-                  {l.displayName}
+                  {l.flag} {l.displayName}
                   {/* @ts-expect-error */}
                 </s-option>
               ))}
@@ -345,16 +278,27 @@ export default function LocalizationPage() {
       {sectionOrder.map((section) => {
         const items = grouped[section];
         if (!items || items.length === 0) return null;
+        const sectionHint = SECTION_HINTS[section];
         return (
           // @ts-expect-error
           <s-section key={section} heading={SECTION_LABELS[section]}>
             {/* @ts-expect-error */}
             <s-stack direction="block" gap="base">
+              {sectionHint ? (
+                // @ts-expect-error
+                <s-paragraph>
+                  {/* @ts-expect-error */}
+                  <s-text tone="subdued">{sectionHint}</s-text>
+                  {/* @ts-expect-error */}
+                </s-paragraph>
+              ) : null}
               {items.map((entry) => (
                 <LocalizationField
                   key={entry.key}
                   entry={entry}
-                  value={liveBundle[entry.key] ?? entry.defaultEn}
+                  value={
+                    overrides[entry.key] ?? liveBundle[entry.key] ?? entry.defaultEn
+                  }
                   onChange={(v) => setField(entry.key, v)}
                   paid={paid}
                 />
@@ -369,6 +313,19 @@ export default function LocalizationPage() {
     </s-page>
   );
 }
+
+/** Per-section intro line, rendered above the fields. Empty = no intro. */
+const SECTION_HINTS: Partial<Record<LocalizationSection, React.ReactNode>> = {
+  ruleDefaults: (
+    <>
+      These are the placeholder defaults shown on each earn rule's editor
+      when you haven't customized that specific rule yet. To customize a
+      rule's actual title or description, edit it on{" "}
+      {/* @ts-expect-error - s-link */}
+      <s-link href="/app/program">Program</s-link>.
+    </>
+  ),
+};
 
 function LocalizationField({
   entry,
