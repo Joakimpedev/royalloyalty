@@ -264,12 +264,46 @@
     });
   }
 
-  /* Substitute {points} {balance} {more} placeholders in a string. */
+  /* Substitute {points} {balance} {more} placeholders in a string.
+   * Legacy single-brace form used by the Branding-page productHeading /
+   * productSubtext fields. New earn-rule injection fields use the
+   * substituteTokens function below (double-brace form, matches the
+   * server-side substituter in app/lib/tokens.ts). */
   function fillTemplate(tpl, vars) {
     return String(tpl || "")
       .replace(/\{points\}/g, vars.points == null ? "0" : vars.points)
       .replace(/\{balance\}/g, vars.balance == null ? "0" : vars.balance)
       .replace(/\{more\}/g, vars.more == null ? "0" : vars.more);
+  }
+
+  /* Mirror of app/lib/tokens.ts::substituteTokens — resolves {{token_name}}
+   * placeholders against the provided ctx. Unknown tokens are left literal
+   * so the merchant sees which name didn't resolve. */
+  function substituteTokens(input, ctx) {
+    return String(input == null ? "" : input).replace(
+      /\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}/gi,
+      function (m, name) {
+        var key = String(name).toLowerCase();
+        if (ctx && Object.prototype.hasOwnProperty.call(ctx, key)) {
+          return ctx[key];
+        }
+        return m;
+      }
+    );
+  }
+
+  /* Look up the purchase rule out of the payload's earn rules — used by
+   * the product-page and cart injections to read the merchant-edited
+   * productLine / cartLine templates. Returns null when the purchase rule
+   * isn't configured (in which case the injections fall back to the
+   * Branding-page heading or skip rendering). */
+  function findPurchaseRule(payload) {
+    if (!payload || !payload.earnRules) return null;
+    for (var i = 0; i < payload.earnRules.length; i++) {
+      if (payload.earnRules[i].action === "purchase")
+        return payload.earnRules[i];
+    }
+    return null;
   }
 
   /* Calculate points earned for a given money amount using the shop's first
@@ -334,19 +368,38 @@
     var earned = pointsForAmount(price, payload.earnRules);
     var pointsName =
       (b.pointsName && b.pointsName.toLowerCase()) || "points";
-    var heading = fillTemplate(b.productHeading, {
-      points: earned,
-      balance: payload.balance || 0,
-      more: Math.max(0, (payload.rewards && payload.rewards[0]
+    var balance = payload.balance || 0;
+    var more = Math.max(
+      0,
+      (payload.rewards && payload.rewards[0]
         ? payload.rewards[0].pointsCost
-        : 0) - (payload.balance || 0)),
-    });
+        : 0) - balance
+    );
+    // Heading source priority:
+    //   1. Purchase earn rule's productLine (new, merchant-edits on the
+    //      "Place an order" page)
+    //   2. Legacy Branding.product.heading
+    //   3. Built-in default
+    var purchaseRule = findPurchaseRule(payload);
+    var headingTemplate =
+      (purchaseRule && purchaseRule.productLine) ||
+      b.productHeading ||
+      "Earn {points} points with this purchase";
+    var heading = /\{\{/.test(headingTemplate)
+      ? substituteTokens(headingTemplate, {
+          points: String(earned),
+          balance: String(balance),
+          more: String(more),
+        })
+      : fillTemplate(headingTemplate, {
+          points: earned,
+          balance: balance,
+          more: more,
+        });
     var subtext = fillTemplate(b.productSubtext, {
       points: earned,
-      balance: payload.balance || 0,
-      more: Math.max(0, (payload.rewards && payload.rewards[0]
-        ? payload.rewards[0].pointsCost
-        : 0) - (payload.balance || 0)),
+      balance: balance,
+      more: more,
     });
     var card = document.createElement("div");
     card.id = "royal-injected-product";
@@ -503,7 +556,11 @@
           });
         });
 
-      // Populate "+X points for this order" once we know the cart total.
+      // Populate the cart earn-line once we know the cart total. The
+      // line text comes from the merchant-editable cartLine template on
+      // the purchase rule (with a built-in default if blank). Cashback
+      // callout is appended after the rule's line, since it's a separate
+      // surface controlled elsewhere.
       if (b.cartShowEarnLine) {
         fetch("/cart.js", { credentials: "same-origin" })
           .then(function (r) {
@@ -515,11 +572,15 @@
             var line = card.querySelector("#royal-injected-cart-earn");
             var pieces = [];
             if (earn > 0) {
+              var purchaseRule = findPurchaseRule(payload);
+              var template =
+                (purchaseRule && purchaseRule.cartLine) ||
+                "+{{points}} pts for this order";
               pieces.push(
-                "+" +
-                  earn +
-                  " " +
-                  ((b.pointsName && b.pointsName.toLowerCase()) || "points")
+                substituteTokens(template, {
+                  points: String(earn),
+                  balance: String(payload.balance || 0),
+                })
               );
             }
             // Cashback callout — encourage repeat purchases by surfacing
@@ -542,7 +603,7 @@
             }
             if (line) {
               if (pieces.length) {
-                line.textContent = pieces.join(" · ") + " for this order";
+                line.textContent = pieces.join(" · ");
               } else {
                 line.remove();
               }

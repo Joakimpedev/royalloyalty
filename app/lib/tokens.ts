@@ -26,7 +26,12 @@ const UNIVERSAL_TOKENS: VariableToken[] = [
   { label: "Currency symbol", token: "{{currency_symbol}}" },
 ];
 
-/** Per-action token catalogs. The picker shows universal + action-specific. */
+/** Per-action token catalogs. The picker shows universal + action-specific.
+ *  The catalog returned here is for the Card title / Card description fields
+ *  (launcher earn-list row), where only static tokens make sense.
+ *  TOKEN_GROUPS_PURCHASE_EXTRAS is layered in for the purchase-only
+ *  productLine / cartLine fields (which can resolve {{balance}} / {{more}}
+ *  client-side). */
 export const TOKEN_GROUPS_BY_ACTION: Record<string, VariableGroup[]> = {
   purchase: [
     { title: "Points", tokens: UNIVERSAL_TOKENS },
@@ -43,16 +48,23 @@ export const TOKEN_GROUPS_BY_ACTION: Record<string, VariableGroup[]> = {
   signup: [{ title: "Points", tokens: UNIVERSAL_TOKENS }],
   birthday: [{ title: "Points", tokens: UNIVERSAL_TOKENS }],
   newsletter: [{ title: "Points", tokens: UNIVERSAL_TOKENS }],
-  social: [
-    { title: "Points", tokens: UNIVERSAL_TOKENS },
-    {
-      title: "Platform",
-      tokens: [{ label: "Platform name", token: "{{platform}}" }],
-    },
-  ],
+  social: [{ title: "Points", tokens: UNIVERSAL_TOKENS }],
   review: [{ title: "Points", tokens: UNIVERSAL_TOKENS }],
   anniversary: [{ title: "Points", tokens: UNIVERSAL_TOKENS }],
 };
+
+/** Extra tokens available on the purchase rule's productLine and cartLine
+ *  fields — these get substituted client-side by the storefront JS using
+ *  the current product / cart context. */
+export const TOKEN_GROUPS_PURCHASE_EXTRAS: VariableGroup[] = [
+  {
+    title: "Customer context",
+    tokens: [
+      { label: "Current balance", token: "{{balance}}" },
+      { label: "Points needed for next reward", token: "{{more}}" },
+    ],
+  },
+];
 
 /**
  * Replace `{{token}}` placeholders with concrete values. Unknown tokens
@@ -111,16 +123,30 @@ export function currencySymbol(currencyCode: string, locale?: string): string {
   }
 }
 
-/** Default copy per action — used when the merchant hasn't customized. */
+/** Default copy per action — used when the merchant hasn't customized.
+ *  `productLine` and `cartLine` are only meaningful for the `purchase`
+ *  action (they drive the product-page and cart injections, which only
+ *  exist because the purchase rule fires earn-on-order). Server-side
+ *  substitutes the static tokens; dynamic tokens ({{points}}, {{balance}},
+ *  {{more}}) are deliberately left in the string for the storefront JS to
+ *  resolve at render time using per-product / per-cart context. */
 export const DEFAULT_EARN_COPY: Record<
   string,
-  { title: string; descriptionPerDollar?: string; description: string }
+  {
+    title: string;
+    descriptionPerDollar?: string;
+    description: string;
+    productLine?: string;
+    cartLine?: string;
+  }
 > = {
   purchase: {
     title: "Place an order",
     descriptionPerDollar:
       "Earn {{points}} pts for every {{per_amount}} spent",
     description: "Earn {{points}} pts per order",
+    productLine: "Earn {{points}} points with this purchase",
+    cartLine: "+{{points}} pts for this order",
   },
   signup: {
     title: "Create an account",
@@ -136,7 +162,7 @@ export const DEFAULT_EARN_COPY: Record<
   },
   social: {
     title: "Follow on social",
-    description: "Earn {{points}} pts when you follow on {{platform}}",
+    description: "Earn points when you follow us on social",
   },
   review: {
     title: "Leave a product review",

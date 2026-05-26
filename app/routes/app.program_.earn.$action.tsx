@@ -54,6 +54,7 @@ import LockedHint from "../components/LockedHint";
 import {
   DEFAULT_EARN_COPY,
   TOKEN_GROUPS_BY_ACTION,
+  TOKEN_GROUPS_PURCHASE_EXTRAS,
 } from "../lib/tokens";
 
 const ACTIONS = [
@@ -127,6 +128,12 @@ type ConfigBlob = {
   /** Sub-line copy shown under the title in the storefront earn list.
    *  Supports {{token}} placeholders via app/lib/tokens.ts. */
   description?: string;
+  /** Purchase only: copy injected on the product page above the
+   *  add-to-cart button. {{points}} resolves to per-product points. */
+  productLine?: string;
+  /** Purchase only: copy injected on the cart page / drawer above the
+   *  checkout button. {{points}} resolves to per-cart points. */
+  cartLine?: string;
   completionLimit?: number | null; // null = unlimited
   /** "X points per Y currency units"; 1 = points-per-1-unit. */
   perAmount?: number;
@@ -213,6 +220,11 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const money = await loadShopMoneyContext(admin, session.shop);
   const paid = shop.plan !== "FREE";
 
+  const defaultProductLine =
+    action === "purchase" ? defaults?.productLine ?? "" : "";
+  const defaultCartLine =
+    action === "purchase" ? defaults?.cartLine ?? "" : "";
+
   return {
     action,
     money,
@@ -220,7 +232,11 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     rule: {
       title: config?.title ?? defaultTitle,
       description: config?.description ?? defaultDescription,
+      productLine: config?.productLine ?? defaultProductLine,
+      cartLine: config?.cartLine ?? defaultCartLine,
       defaultDescription,
+      defaultProductLine,
+      defaultCartLine,
       points: existing?.points ?? (action === "purchase" ? 1 : 50),
       perDollar,
       enabled:
@@ -268,6 +284,16 @@ export const action = async ({
     : LABELS[a].title;
   const descriptionRaw = String(form.get("description") ?? "");
   const description = paid ? descriptionRaw.slice(0, 200) : "";
+  // Purchase-only fields (saved on every action's submit but only ever
+  // populated by the purchase rule's editor — non-purchase rules don't
+  // include these in their form so they end up empty and are ignored at
+  // render time).
+  const productLineRaw = String(form.get("productLine") ?? "");
+  const productLine =
+    a === "purchase" && paid ? productLineRaw.slice(0, 200) : "";
+  const cartLineRaw = String(form.get("cartLine") ?? "");
+  const cartLine =
+    a === "purchase" && paid ? cartLineRaw.slice(0, 200) : "";
   const limitRaw = String(form.get("completionLimit") ?? "").trim();
   const completionLimit =
     limitRaw === "" || limitRaw.toLowerCase() === "unlimited"
@@ -281,6 +307,8 @@ export const action = async ({
   const config: ConfigBlob = {
     title,
     description: description || undefined,
+    productLine: productLine || undefined,
+    cartLine: cartLine || undefined,
     completionLimit,
     perAmount,
   };
@@ -509,6 +537,66 @@ function SocialPlatformsEditor({
   );
 }
 
+/** Label row + LockedHint + variable picker + text field. Used for every
+ *  copy field inside the Content section so the markup stays uniform. */
+function ContentField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  paid,
+  tokens,
+  onPickToken,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  paid: boolean;
+  tokens: { title: string; tokens: { label: string; token: string }[] }[];
+  onPickToken: (token: string) => void;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          marginBottom: 4,
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 13,
+            color: "#202223",
+          }}
+        >
+          {label}
+          {!paid ? <LockedHint /> : null}
+        </span>
+        <VariablePicker
+          groups={tokens}
+          disabled={!paid}
+          onPick={onPickToken}
+        />
+      </div>
+      {/* @ts-expect-error - s-text-field custom element */}
+      <s-text-field
+        label=""
+        value={value}
+        disabled={!paid ? true : undefined}
+        placeholder={placeholder}
+        onChange={(e: any) => onChange(String(e.target.value ?? ""))}
+      />
+    </div>
+  );
+}
+
 export default function EarnRuleEditor() {
   const { action: actionName, rule, money: moneyCtx, paid } =
     useLoaderData<typeof loader>();
@@ -536,6 +624,8 @@ export default function EarnRuleEditor() {
 
   const [title, setTitle] = useState(rule.title);
   const [description, setDescription] = useState(rule.description);
+  const [productLine, setProductLine] = useState(rule.productLine);
+  const [cartLine, setCartLine] = useState(rule.cartLine);
   const [points, setPoints] = useState(rule.points);
   const [perDollar, setPerDollar] = useState(rule.perDollar);
   const [enabled, setEnabled] = useState(rule.enabled);
@@ -546,19 +636,29 @@ export default function EarnRuleEditor() {
   const [platforms, setPlatforms] = useState<SocialPlatform[]>(rule.platforms);
 
   const isSocial = actionName === "social";
-  // Phase 1: Content section is wired for `purchase` only. Other actions
-  // continue rendering today's Title-only section until Phase 2.
-  const showContentSection = actionName === "purchase";
-  const tokenGroups = TOKEN_GROUPS_BY_ACTION[actionName] ?? [];
+  // Token groups for the title + description fields. Purchase gets the
+  // productLine / cartLine fields too, which have an extended token set
+  // (balance + more) on top of the universal/per_amount tokens.
+  const titleDescGroups = TOKEN_GROUPS_BY_ACTION[actionName] ?? [];
+  const purchaseInjectionGroups = [
+    ...titleDescGroups,
+    ...TOKEN_GROUPS_PURCHASE_EXTRAS,
+  ];
   const insertTokenInto =
-    (which: "title" | "description") => (token: string) => {
+    (which: "title" | "description" | "productLine" | "cartLine") =>
+    (token: string) => {
       if (which === "title") setTitle((t) => `${t}${token}`);
-      else setDescription((d) => `${d}${token}`);
+      else if (which === "description") setDescription((d) => `${d}${token}`);
+      else if (which === "productLine")
+        setProductLine((p) => `${p}${token}`);
+      else setCartLine((c) => `${c}${token}`);
     };
 
   const dirty =
     title !== rule.title ||
     description !== rule.description ||
+    productLine !== rule.productLine ||
+    cartLine !== rule.cartLine ||
     points !== rule.points ||
     perDollar !== rule.perDollar ||
     enabled !== rule.enabled ||
@@ -573,6 +673,8 @@ export default function EarnRuleEditor() {
     const fd = new FormData();
     fd.set("title", title);
     fd.set("description", description);
+    fd.set("productLine", productLine);
+    fd.set("cartLine", cartLine);
     fd.set("points", String(points));
     if (perDollar) fd.set("perDollar", "on");
     if (enabled) fd.set("enabled", "on");
@@ -586,6 +688,8 @@ export default function EarnRuleEditor() {
   }, [
     title,
     description,
+    productLine,
+    cartLine,
     points,
     perDollar,
     enabled,
@@ -599,6 +703,8 @@ export default function EarnRuleEditor() {
   const discard = useCallback(() => {
     setTitle(rule.title);
     setDescription(rule.description);
+    setProductLine(rule.productLine);
+    setCartLine(rule.cartLine);
     setPoints(rule.points);
     setPerDollar(rule.perDollar);
     setEnabled(rule.enabled);
@@ -681,16 +787,6 @@ export default function EarnRuleEditor() {
       )}
 
       {/* ───── Main column ───── */}
-
-      {showContentSection ? null : (
-        <s-section heading="Title">
-          <s-text-field
-            label="Title"
-            value={title}
-            onChange={(e: any) => setTitle(String(e.target.value ?? ""))}
-          />
-        </s-section>
-      )}
 
       {isSocial ? (
         <s-section heading="Social platforms">
@@ -783,87 +879,50 @@ export default function EarnRuleEditor() {
       </s-section>
       )}
 
-      {showContentSection ? (
-        <s-section heading="Content">
-          <s-stack direction="block" gap="base">
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  marginBottom: 4,
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "#202223",
-                  }}
-                >
-                  Card title
-                  {!paid ? <LockedHint /> : null}
-                </span>
-                <VariablePicker
-                  groups={tokenGroups}
-                  disabled={!paid}
-                  onPick={insertTokenInto("title")}
-                />
-              </div>
-              <s-text-field
-                label=""
-                value={title}
-                disabled={!paid ? true : undefined}
-                onChange={(e: any) =>
-                  setTitle(String(e.target.value ?? ""))
-                }
+      <s-section heading="Content">
+        <s-stack direction="block" gap="base">
+          <ContentField
+            label="Card title"
+            value={title}
+            onChange={setTitle}
+            placeholder={rule.title}
+            paid={paid}
+            tokens={titleDescGroups}
+            onPickToken={insertTokenInto("title")}
+          />
+          <ContentField
+            label="Card description"
+            value={description}
+            onChange={setDescription}
+            placeholder={rule.defaultDescription}
+            paid={paid}
+            tokens={titleDescGroups}
+            onPickToken={insertTokenInto("description")}
+          />
+          {isPurchase ? (
+            <>
+              <ContentField
+                label="Product page line"
+                value={productLine}
+                onChange={setProductLine}
+                placeholder={rule.defaultProductLine}
+                paid={paid}
+                tokens={purchaseInjectionGroups}
+                onPickToken={insertTokenInto("productLine")}
               />
-            </div>
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  marginBottom: 4,
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "#202223",
-                  }}
-                >
-                  Card description
-                  {!paid ? <LockedHint /> : null}
-                </span>
-                <VariablePicker
-                  groups={tokenGroups}
-                  disabled={!paid}
-                  onPick={insertTokenInto("description")}
-                />
-              </div>
-              <s-text-field
-                label=""
-                value={description}
-                disabled={!paid ? true : undefined}
-                placeholder={rule.defaultDescription}
-                onChange={(e: any) =>
-                  setDescription(String(e.target.value ?? ""))
-                }
+              <ContentField
+                label="Cart line"
+                value={cartLine}
+                onChange={setCartLine}
+                placeholder={rule.defaultCartLine}
+                paid={paid}
+                tokens={purchaseInjectionGroups}
+                onPickToken={insertTokenInto("cartLine")}
               />
-            </div>
-          </s-stack>
-        </s-section>
-      ) : null}
+            </>
+          ) : null}
+        </s-stack>
+      </s-section>
 
       {/* ───── Right rail (Polaris page aside) ───── */}
 

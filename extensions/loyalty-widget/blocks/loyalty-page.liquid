@@ -133,7 +133,16 @@
         if (earn) {
           earn.innerHTML = (d.earnRules && d.earnRules.length)
             ? d.earnRules.map(function (e) {
-                return '<div class="royal-card">' + (e.label || e.action) + ' — ' + e.points + ' pts</div>';
+                // Render the merchant-edited title (e.label) + description
+                // (e.description) from each rule's Content section. Both
+                // are pre-substituted on the server, so we just render
+                // them as-is. Description is optional — omit when empty.
+                var t = e.label || e.action;
+                var d2 = e.description || '';
+                return '<div class="royal-card">' +
+                  '<div class="royal-card__label">' + t + '</div>' +
+                  (d2 ? '<div class="royal-muted">' + d2 + '</div>' : '') +
+                  '</div>';
               }).join('')
             : '<p class="royal-muted">Earn rules will appear here soon.</p>';
         }

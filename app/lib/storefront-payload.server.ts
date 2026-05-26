@@ -61,6 +61,15 @@ export interface StorefrontEarnRule {
   /** Pre-substituted card description (sub-line) shown under the title.
    *  Empty string if the merchant cleared it and no default applies. */
   description: string;
+  /** Purchase only: copy shown on the product page above add-to-cart.
+   *  Static tokens (currency_*, per_amount) are pre-substituted here;
+   *  dynamic tokens ({{points}}, {{balance}}, {{more}}) are left intact
+   *  for the storefront JS to resolve using the current product context. */
+  productLine?: string;
+  /** Purchase only: copy shown in the cart card. Same substitution rule
+   *  as productLine — static tokens resolved here, {{points}} resolved
+   *  client-side once the cart total is known. */
+  cartLine?: string;
   points: number;
   perDollar: boolean;
   /** Only meaningful when perDollar=true; "X points per perAmount currency". */
@@ -309,13 +318,19 @@ export async function buildStorefrontLoyaltyPayload(params: {
   const shopCurrency = shop.currencyCode ?? "USD";
   const earnRules: StorefrontEarnRule[] = earnRulesRows.map((r) => {
     const cfg = (r.config ?? null) as
-      | { title?: string; description?: string; perAmount?: number }
+      | {
+          title?: string;
+          description?: string;
+          productLine?: string;
+          cartLine?: string;
+          perAmount?: number;
+        }
       | null;
     const perAmount = Math.max(1, cfg?.perAmount ?? 1);
-    // Token substitution context. Mirrors app/lib/tokens.ts and the
-    // admin-side ContentPreview so the storefront renders identical
-    // output to the admin's live preview.
-    const ctx: Record<string, string> = {
+    // Static substitution context — values that don't depend on the
+    // current shopper/cart/product. Both the title/description and the
+    // productLine/cartLine fields share these.
+    const staticCtx: Record<string, string> = {
       points: String(r.points),
       currency_code: shopCurrency,
       currency_symbol: currencySymbol(shopCurrency),
@@ -331,14 +346,31 @@ export async function buildStorefrontLoyaltyPayload(params: {
         : defaults?.description ?? "";
     const rawTitle = cfg?.title || defaultTitle;
     const rawDescription = cfg?.description || defaultDescription;
-    return {
+    const out: StorefrontEarnRule = {
       action: r.action,
-      label: substituteTokens(rawTitle, ctx),
-      description: substituteTokens(rawDescription, ctx),
+      label: substituteTokens(rawTitle, staticCtx),
+      description: substituteTokens(rawDescription, staticCtx),
       points: r.points,
       perDollar: r.perDollar,
       perAmount,
     };
+    if (r.action === "purchase") {
+      // Purchase-only client injection templates. {{points}} (per product
+      // / per cart), {{balance}}, {{more}} are intentionally left
+      // unresolved so the storefront JS can fill them with the live
+      // value at render time. Currency / per_amount get substituted now.
+      const dynamicCtx: Record<string, string> = {
+        currency_code: shopCurrency,
+        currency_symbol: currencySymbol(shopCurrency),
+        per_amount: formatMoneyAmount(perAmount, shopCurrency),
+      };
+      const rawProductLine =
+        cfg?.productLine || defaults?.productLine || "";
+      const rawCartLine = cfg?.cartLine || defaults?.cartLine || "";
+      out.productLine = substituteTokens(rawProductLine, dynamicCtx);
+      out.cartLine = substituteTokens(rawCartLine, dynamicCtx);
+    }
+    return out;
   });
 
   // Reward model has no per-row config field, so labels are computed from
