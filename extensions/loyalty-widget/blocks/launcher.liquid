@@ -166,15 +166,12 @@
         var b = d.branding || {};
         if (b.programName) titleEl.textContent = b.programName;
         // Subtitle: logged-in member shows balance; otherwise the hero copy.
-        if (cfg.loggedIn && d.enrolled) {
-          var pname = (b.pointsName || 'points').toLowerCase();
-          subtitleEl.textContent = (d.balance || 0) + ' ' + pname +
-            (d.tier ? ' · ' + d.tier : '');
-        } else if (cfg.loggedIn) {
-          subtitleEl.textContent = 'Sign up to start earning';
-        } else {
-          subtitleEl.textContent = b.heroSubtitle || 'Earn points on every order — redeem for rewards.';
-        }
+        // Subtitle always comes from the merchant-editable Branding →
+        // Widget subtitle field. Balance/tier are surfaced in the Redeem
+        // sub-view, not the hero, so the hero copy stays identical to
+        // what the admin live-preview shows.
+        subtitleEl.textContent =
+          b.widgetSubtitle || 'Earn points on every order — redeem for rewards.';
         // Launcher pill label
         if (b.launcherText) {
           var pill = document.querySelector('#royal-launcher-btn .royal-launcher__text');
@@ -183,9 +180,13 @@
       }
 
       function buildHub(d) {
+        // Row visibility mirrors the admin live-preview exactly: driven
+        // only by the merchant's section toggles, not by content. Empty
+        // states are handled inside each sub-view, so the hub always
+        // looks identical to what the admin shows.
         var b = d.branding || {};
-        var hasEarn = b.showEarn !== false && (d.earnRules || []).length > 0;
-        var hasRewards = b.showRewards !== false && (d.rewards || []).length > 0;
+        var hasEarn = b.showEarn !== false;
+        var hasRewards = b.showRewards !== false;
         var hasReferral = b.showReferral !== false;
         document.getElementById('royal-row-earn').hidden = !hasEarn;
         document.getElementById('royal-row-rewards').hidden = !hasRewards;

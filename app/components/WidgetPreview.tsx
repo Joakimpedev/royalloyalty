@@ -12,11 +12,24 @@ export type WidgetPreviewConfig = {
   primaryColor: string;
   secondaryColor: string;
   title: string;
+  subtitle: string;
   launcherText: string;
+  showEarn: boolean;
+  showRewards: boolean;
+  showReferral: boolean;
 };
 
 export function WidgetPreview({ config }: { config: WidgetPreviewConfig }) {
-  const { primaryColor, secondaryColor, title, launcherText } = config;
+  const {
+    primaryColor,
+    secondaryColor,
+    title,
+    subtitle,
+    launcherText,
+    showEarn,
+    showRewards,
+    showReferral,
+  } = config;
   return (
     <div
       aria-label="Widget preview"
@@ -41,14 +54,16 @@ export function WidgetPreview({ config }: { config: WidgetPreviewConfig }) {
         }}
       >
         <div style={{ fontWeight: 600, fontSize: 16 }}>{title}</div>
-        <div style={{ opacity: 0.85, marginTop: 4, fontSize: 13 }}>
-          Earn points on every order — redeem for rewards.
-        </div>
+        {subtitle ? (
+          <div style={{ opacity: 0.85, marginTop: 4, fontSize: 13 }}>
+            {subtitle}
+          </div>
+        ) : null}
       </div>
       <div style={{ padding: 16 }}>
-        <Row label="Earn points" />
-        <Row label="Redeem rewards" />
-        <Row label="Refer a friend" />
+        {showEarn ? <Row label="Earn points" /> : null}
+        {showRewards ? <Row label="Redeem rewards" /> : null}
+        {showReferral ? <Row label="Refer a friend" /> : null}
       </div>
       <div
         aria-hidden="true"

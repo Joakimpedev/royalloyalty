@@ -461,7 +461,12 @@ function ProgramPreview({
                     primaryColor: program.branding.primaryColor,
                     secondaryColor: program.branding.secondaryColor,
                     title: program.branding.programName,
+                    subtitle:
+                      "Earn points on every order — redeem for rewards.",
                     launcherText: program.branding.pointsName,
+                    showEarn: true,
+                    showRewards: true,
+                    showReferral: true,
                   }}
                 />
               </div>

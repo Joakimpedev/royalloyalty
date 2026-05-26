@@ -25,6 +25,10 @@ export interface StorefrontBranding {
   pointsName: string;
   launcherText: string;
   launcherPosition: "bottom-right" | "bottom-left";
+  /** Widget panel subtitle, shown under the title in the launcher hero.
+   *  Merchant-editable in admin Branding → Widget → "Widget subtitle".
+   *  Distinct from heroSubtitle (which is the dedicated loyalty page). */
+  widgetSubtitle: string;
   heroTitle: string;
   heroSubtitle: string;
   showEarn: boolean;
@@ -127,6 +131,7 @@ const DEFAULT_BRANDING: StorefrontBranding = {
   pointsName: "Points",
   launcherText: "Rewards",
   launcherPosition: "bottom-right",
+  widgetSubtitle: "Earn points on every order — redeem for rewards.",
   heroTitle: "Earn points. Get rewards.",
   heroSubtitle: "Join the program and earn on every order.",
   showEarn: true,
@@ -177,6 +182,10 @@ function readBranding(snapshot: unknown): StorefrontBranding {
       (widget.position as "bottom-right" | "bottom-left") ??
       flat.launcherPosition ??
       DEFAULT_BRANDING.launcherPosition,
+    widgetSubtitle:
+      widget.subtitle ??
+      flat.widgetSubtitle ??
+      DEFAULT_BRANDING.widgetSubtitle,
     heroTitle: page.heroTitle ?? DEFAULT_BRANDING.heroTitle,
     heroSubtitle: page.heroSubtitle ?? DEFAULT_BRANDING.heroSubtitle,
     showEarn: page.showEarn ?? DEFAULT_BRANDING.showEarn,

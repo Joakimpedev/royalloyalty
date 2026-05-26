@@ -292,6 +292,7 @@ export interface BrandingConfig {
     icon: string;
     launcherText: string;
     title: string;
+    subtitle: string;
   };
   page: {
     heroTitle: string;
@@ -329,6 +330,7 @@ const DEFAULTS: BrandingConfig = {
     icon: "crown",
     launcherText: "Rewards",
     title: "Your rewards",
+    subtitle: "Earn points on every order — redeem for rewards.",
   },
   page: {
     heroTitle: "Earn points. Get rewards.",
@@ -638,6 +640,18 @@ export default function BrandingPage() {
                   }
                 />
               </Gated>
+              <Gated
+                locked={!paid}
+                label="Widget subtitle"
+              >
+                <s-text-field
+                  value={form.widget.subtitle}
+                  disabled={!paid ? true : undefined}
+                  onChange={(e: { target: { value: string } }) =>
+                    setW("subtitle", e.target.value)
+                  }
+                />
+              </Gated>
             </s-stack>
             <div style={{ position: "sticky", top: 16 }}>
               <s-text tone="subdued">Live preview</s-text>
@@ -647,7 +661,11 @@ export default function BrandingPage() {
                     primaryColor: form.widget.primaryColor,
                     secondaryColor: form.widget.secondaryColor,
                     title: form.widget.title,
+                    subtitle: form.widget.subtitle,
                     launcherText: form.widget.launcherText,
+                    showEarn: form.page.showEarn,
+                    showRewards: form.page.showRewards,
+                    showReferral: form.page.showReferral,
                   }}
                 />
               </div>
