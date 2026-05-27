@@ -16,8 +16,18 @@
   the theme-editor block setting (and then a hardcoded default) so an
   unsaved shop or a shop on an older app version still renders something.
 {%- endcomment -%}
-{%- assign primary = shop.metafields.royal_loyalty.primary_color | default: block.settings.primary_color | default: '#2C2A29' -%}
-{%- assign secondary = shop.metafields.royal_loyalty.secondary_color | default: block.settings.secondary_color | default: '#FFFFFF' -%}
+{%- assign mf_primary = shop.metafields.royal_loyalty.primary_color -%}
+{%- assign mf_secondary = shop.metafields.royal_loyalty.secondary_color -%}
+{%- if mf_primary != blank -%}
+  {%- assign primary = mf_primary -%}
+{%- else -%}
+  {%- assign primary = block.settings.primary_color | default: '#2C2A29' -%}
+{%- endif -%}
+{%- if mf_secondary != blank -%}
+  {%- assign secondary = mf_secondary -%}
+{%- else -%}
+  {%- assign secondary = block.settings.secondary_color | default: '#FFFFFF' -%}
+{%- endif -%}
 
 <div
   id="royal-launcher-root"
@@ -26,6 +36,14 @@
     "proxy": {{ block.settings.proxy_base | default: "/apps/royal" | json }},
     "loggedIn": {% if customer %}true{% else %}false{% endif %},
     "customerId": {{ customer.id | json }}
+  }'
+  data-royal-ssr='{
+    "metafieldPrimary":   {{ mf_primary | json }},
+    "metafieldSecondary": {{ mf_secondary | json }},
+    "blockPrimary":       {{ block.settings.primary_color | json }},
+    "blockSecondary":     {{ block.settings.secondary_color | json }},
+    "renderedPrimary":    {{ primary | json }},
+    "renderedSecondary":  {{ secondary | json }}
   }'
 >
   <button

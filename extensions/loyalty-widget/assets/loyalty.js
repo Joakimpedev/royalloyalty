@@ -103,6 +103,10 @@
         var cs = root ? getComputedStyle(root) : null;
         var pill = document.getElementById("royal-launcher-btn");
         var pillCs = pill ? getComputedStyle(pill) : null;
+        var ssr = null;
+        if (root) {
+          try { ssr = JSON.parse(root.getAttribute("data-royal-ssr") || "null"); } catch (e) {}
+        }
         var lines = [
           "Royal Loyalty diagnostics  (t+" + elapsed + "s)",
           "loyalty.js loaded:        " + (__royalDiag.loyaltyJsLoaded ? "yes" : "NO"),
@@ -110,6 +114,16 @@
           "launcher block in DOM:    " + (root ? "yes" : "NO"),
           "/loyalty/balance:         " + __royalDiag.payloadStatus,
         ];
+        if (ssr) {
+          lines.push("--- Liquid SSR (first paint) ---");
+          lines.push("ssr.metafieldPrimary:     " + JSON.stringify(ssr.metafieldPrimary));
+          lines.push("ssr.metafieldSecondary:   " + JSON.stringify(ssr.metafieldSecondary));
+          lines.push("ssr.blockPrimary:         " + JSON.stringify(ssr.blockPrimary));
+          lines.push("ssr.blockSecondary:       " + JSON.stringify(ssr.blockSecondary));
+          lines.push("ssr.renderedPrimary:      " + JSON.stringify(ssr.renderedPrimary));
+          lines.push("ssr.renderedSecondary:    " + JSON.stringify(ssr.renderedSecondary));
+          lines.push("--- runtime ---");
+        }
         if (__royalDiag.lastFetchUrl) {
           lines.push("  last url:               " + __royalDiag.lastFetchUrl);
         }
