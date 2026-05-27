@@ -157,6 +157,61 @@
 .royal-row[hidden],
 .royal-view[hidden] { display: none !important; }
 
+/* State-aware status card between hero and hub. Visible on the hub view
+   only; sub-views (Earn / Redeem / Refer) hide it via the .royal-view
+   visibility logic — the card lives outside .royal-view so it's only ever
+   shown when hub is the active view (we toggle [hidden] on it in JS).
+   - Visitor variant: sign-in CTA (SSR'd by Liquid).
+   - Non-member: join prompt (set by JS).
+   - Member: balance display (set by JS). */
+.royal-status-card {
+  margin: 14px 14px 0;
+  padding: 16px 16px 18px;
+  border: 1px solid #e1e3e5;
+  border-radius: 10px;
+  background: #fff;
+  text-align: center;
+}
+.royal-status-card[hidden] { display: none !important; }
+.royal-status-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #202223;
+  margin-bottom: 4px;
+}
+.royal-status-card__desc {
+  font-size: 13px;
+  color: #6d7175;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.royal-status-card .royal-btn {
+  display: inline-block;
+  text-decoration: none;
+}
+.royal-status-card__balance {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--royal-primary, #2C2A29);
+}
+.royal-status-card__pointsname {
+  font-size: 13px;
+  color: #6d7175;
+  margin-top: 4px;
+  text-transform: lowercase;
+}
+.royal-status-card__tier {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--royal-primary, #2C2A29);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+}
+
 .royal-panel__body {
   padding: 8px 16px 16px;
   overflow: auto;

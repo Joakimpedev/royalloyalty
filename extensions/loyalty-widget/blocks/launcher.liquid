@@ -106,6 +106,23 @@
     </div>
 
     <div class="royal-panel__body">
+      {%- comment -%}
+        State-aware status card between hero and hub. Visitor copy is SSR'd
+        so logged-out shoppers see the sign-in CTA on first paint without a
+        JS roundtrip. Logged-in users get a hidden placeholder that JS fills
+        with their balance (member) or a join prompt (non-member) once the
+        /loyalty/balance payload arrives.
+      {%- endcomment -%}
+      {%- if customer -%}
+        <div id="royal-status-card" class="royal-status-card" hidden></div>
+      {%- else -%}
+        <div id="royal-status-card" class="royal-status-card royal-status-card--visitor">
+          <div class="royal-status-card__title" data-loc-key="hub.visitor.title">Sign in to start earning</div>
+          <div class="royal-status-card__desc" data-loc-key="hub.visitor.desc">Sign in to track your points and unlock rewards.</div>
+          <a class="royal-btn" href="/account/login" data-loc-key="hub.visitor.cta">Sign in</a>
+        </div>
+      {%- endif -%}
+
       {%- comment -%} Hub: the default landing view inside the panel.
         Row labels are initially the English defaults; once the JS payload
         lands with the merchant-edited localization bundle, they get
@@ -186,6 +203,21 @@
           v.hidden = v.getAttribute('data-view') !== name;
         });
         backBtn.hidden = name === 'hub';
+        // Status card belongs to the hub only — hide it on sub-views so the
+        // sub-view content sits flush below the hero like before.
+        var sc = document.getElementById('royal-status-card');
+        if (sc) {
+          if (name !== 'hub') {
+            sc.hidden = true;
+          } else if (cfg.loggedIn) {
+            // Logged-in: visibility depends on whether buildStatusCard
+            // filled the card. The fill function sets it visible.
+            if (sc.innerHTML.trim()) sc.hidden = false;
+          } else {
+            // Visitor: SSR populated it; always show on hub.
+            sc.hidden = false;
+          }
+        }
       }
 
       function open() {
@@ -245,6 +277,7 @@
           R.applyBranding(root, d.branding);
           applyCopy(d);
           buildHub(d);
+          buildStatusCard(d);
           applyLocaleDom();
           // Pre-inject product / cart cards while we have the payload.
           try { R.injectProduct(cfg, d); } catch (e) { /* non-fatal */ }
@@ -271,6 +304,37 @@
         if (pill) {
           pill.textContent = b.launcherText || R.t('launcher.text', 'Rewards');
         }
+      }
+
+      function buildStatusCard(d) {
+        var card = document.getElementById('royal-status-card');
+        if (!card) return;
+        // Visitor card was rendered by Liquid (SSR) — leave it alone.
+        if (!cfg.loggedIn) { card.hidden = false; return; }
+        var b = d.branding || {};
+        var pointsName = b.pointsName || R.t('points.name', 'points');
+        if (d.enrolled) {
+          // Member: big balance + points name. Tier badge if the payload
+          // included a tier (the storefront-payload helper sets currentTier).
+          var bal = d.balance || 0;
+          var tier = d.currentTier && d.currentTier.name ? d.currentTier.name : '';
+          card.innerHTML =
+            '<div class="royal-status-card__balance">' + bal + '</div>' +
+            '<div class="royal-status-card__pointsname">' + escapeHtml(pointsName) + '</div>' +
+            (tier ? '<div class="royal-status-card__tier">' + escapeHtml(tier) + '</div>' : '');
+        } else {
+          // Logged-in non-member: shows up automatically when they place
+          // an order or trigger any earn rule. No explicit Join button —
+          // matches the auto-enroll flow.
+          card.innerHTML =
+            '<div class="royal-status-card__title">' +
+            R.t('hub.nonMember.title', 'Start earning ' + pointsName) +
+            '</div>' +
+            '<div class="royal-status-card__desc">' +
+            R.t('hub.nonMember.desc', 'Place your first order or complete a way to earn below — we’ll enroll you automatically.') +
+            '</div>';
+        }
+        card.hidden = false;
       }
 
       function buildHub(d) {
