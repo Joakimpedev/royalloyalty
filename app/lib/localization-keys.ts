@@ -114,6 +114,18 @@ export const KEY_CATALOG: LocalizationKey[] = [
     defaultEn: "Sign in to track your points and unlock rewards.",
   },
   {
+    key: "hub.member.nextReward",
+    section: "launcher",
+    label: "Hub status card — next reward label",
+    defaultEn: "Next reward",
+  },
+  {
+    key: "hub.member.readyToRedeem",
+    section: "launcher",
+    label: "Hub status card — ready to redeem",
+    defaultEn: "Ready to redeem",
+  },
+  {
     key: "launcher.loadingRewards",
     section: "launcher",
     label: "Loading rewards placeholder",

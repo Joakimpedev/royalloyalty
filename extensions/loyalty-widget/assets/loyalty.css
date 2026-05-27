@@ -211,6 +211,49 @@
   background: rgba(0, 0, 0, 0.05);
   border-radius: 999px;
 }
+.royal-status-card__balanceWrap {
+  margin-bottom: 4px;
+}
+.royal-status-card__divider {
+  height: 1px;
+  background: #e1e3e5;
+  margin: 14px 0 12px;
+}
+.royal-status-card__nextLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6d7175;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.royal-status-card__nextName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #202223;
+  margin-bottom: 8px;
+}
+.royal-status-card__bar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.royal-status-card__barFill {
+  height: 100%;
+  background: var(--royal-primary, #2C2A29);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.royal-status-card__nextMeta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6d7175;
+}
+.royal-status-card__ready {
+  color: var(--royal-primary, #2C2A29);
+  font-weight: 600;
+}
 
 .royal-panel__body {
   padding: 8px 16px 16px;

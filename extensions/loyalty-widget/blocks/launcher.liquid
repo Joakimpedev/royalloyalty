@@ -319,10 +319,48 @@
         var pointsName = b.pointsName || 'points';
         var bal = d.balance || 0;
         var tier = d.currentTier && d.currentTier.name ? d.currentTier.name : '';
-        card.innerHTML =
-          '<div class="royal-status-card__balance">' + bal + '</div>' +
-          '<div class="royal-status-card__pointsname">' + escapeHtml(pointsName) + '</div>' +
-          (tier ? '<div class="royal-status-card__tier">' + escapeHtml(tier) + '</div>' : '');
+
+        var html =
+          '<div class="royal-status-card__balanceWrap">' +
+            '<div class="royal-status-card__balance">' + bal + '</div>' +
+            '<div class="royal-status-card__pointsname">' + escapeHtml(pointsName) + '</div>' +
+            (tier ? '<div class="royal-status-card__tier">' + escapeHtml(tier) + '</div>' : '') +
+          '</div>';
+
+        // "Next reward" section — shows the cheapest reward to give the
+        // dashboard purpose beyond a static number. If the cheapest is
+        // affordable, swap the progress bar for a Ready badge. Skipped
+        // entirely when no rewards are configured.
+        var rewards = (d.rewards || []).slice().sort(function (a, b) {
+          return (a.pointsCost || 0) - (b.pointsCost || 0);
+        });
+        if (rewards.length) {
+          var next = rewards[0];
+          for (var i = 0; i < rewards.length; i++) {
+            if ((rewards[i].pointsCost || 0) > bal) { next = rewards[i]; break; }
+          }
+          var canAfford = bal >= (next.pointsCost || 0);
+          var pct = canAfford
+            ? 100
+            : Math.max(2, Math.min(100, Math.floor((bal / (next.pointsCost || 1)) * 100)));
+          var label = R.rewardLabel(next, d.currencyCode);
+          html +=
+            '<div class="royal-status-card__divider"></div>' +
+            '<div class="royal-status-card__nextLabel">' +
+              R.t('hub.member.nextReward', 'Next reward') +
+            '</div>' +
+            '<div class="royal-status-card__nextName">' + escapeHtml(label) + '</div>' +
+            '<div class="royal-status-card__bar"><div class="royal-status-card__barFill" style="width:' + pct + '%"></div></div>' +
+            '<div class="royal-status-card__nextMeta">' +
+              (canAfford
+                ? '<span class="royal-status-card__ready">' +
+                    R.t('hub.member.readyToRedeem', 'Ready to redeem') +
+                  '</span>'
+                : bal + ' / ' + next.pointsCost) +
+            '</div>';
+        }
+
+        card.innerHTML = html;
         card.hidden = false;
       }
 
