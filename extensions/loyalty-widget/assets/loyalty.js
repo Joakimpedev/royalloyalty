@@ -24,13 +24,39 @@
   // Always-on visible diagnostic. Survives even if the launcher block isn't
   // on the page or if /loyalty/balance never resolves — so we can tell the
   // difference between "block missing" and "block silent".
+  // Track interesting failures so the overlay can surface them.
+  var __royalDiag = {
+    startedAt: Date.now(),
+    loyaltyJsLoaded: true,
+    royalLoyaltyDefined: false,
+    payloadStatus: "(waiting…)",
+    payloadBranding: null,
+    lastFetchUrl: null,
+    lastFetchStatus: null,
+    errors: [],
+  };
+  try {
+    window.addEventListener("error", function (e) {
+      try {
+        var m = (e && e.message) || "error";
+        var src = e && e.filename ? " @ " + e.filename + ":" + e.lineno : "";
+        __royalDiag.errors.push(m + src);
+      } catch (_) {}
+    });
+    window.addEventListener("unhandledrejection", function (e) {
+      try {
+        __royalDiag.errors.push("unhandled: " + ((e && e.reason && e.reason.message) || e.reason || "rejection"));
+      } catch (_) {}
+    });
+  } catch (e) {}
+
   try {
     var earlyBox = document.createElement("div");
     earlyBox.id = "royal-debug-overlay";
     earlyBox.style.cssText =
       "position:fixed;top:8px;left:8px;z-index:2147483647;" +
       "background:#111;color:#fff;font:12px/1.4 ui-monospace,monospace;" +
-      "padding:10px 12px;border-radius:8px;max-width:360px;" +
+      "padding:10px 12px;border-radius:8px;max-width:380px;" +
       "box-shadow:0 6px 24px rgba(0,0,0,.35);";
     var earlyText = document.createElement("pre");
     earlyText.id = "royal-debug-overlay__text";
@@ -63,25 +89,61 @@
     }
     earlyBox.appendChild(earlyText);
     earlyBox.appendChild(earlyCopy);
-    earlyText.textContent =
-      "Royal Loyalty diagnostics\n" +
-      "loyalty.js: loaded\n" +
-      "launcher block: (checking…)\n" +
-      "payload: (waiting…)";
     var mount = function () {
       if (document.body) document.body.appendChild(earlyBox);
       else setTimeout(mount, 50);
     };
     mount();
-    setTimeout(function () {
-      if (document.getElementById("royal-launcher-root")) return;
-      earlyText.textContent =
-        "Royal Loyalty diagnostics\n" +
-        "loyalty.js: loaded\n" +
-        "launcher block: NOT FOUND on page\n" +
-        "  → Theme app embed is disabled, OR this page template\n" +
-        "    doesn't render <body> blocks (rare).";
-    }, 1500);
+
+    var refresh = function () {
+      try {
+        var elapsed = ((Date.now() - __royalDiag.startedAt) / 1000).toFixed(1);
+        var root = document.getElementById("royal-launcher-root");
+        __royalDiag.royalLoyaltyDefined = !!window.RoyalLoyalty;
+        var cs = root ? getComputedStyle(root) : null;
+        var pill = document.getElementById("royal-launcher-btn");
+        var pillCs = pill ? getComputedStyle(pill) : null;
+        var lines = [
+          "Royal Loyalty diagnostics  (t+" + elapsed + "s)",
+          "loyalty.js loaded:        " + (__royalDiag.loyaltyJsLoaded ? "yes" : "NO"),
+          "window.RoyalLoyalty:      " + (__royalDiag.royalLoyaltyDefined ? "yes" : "NO"),
+          "launcher block in DOM:    " + (root ? "yes" : "NO"),
+          "/loyalty/balance:         " + __royalDiag.payloadStatus,
+        ];
+        if (__royalDiag.lastFetchUrl) {
+          lines.push("  last url:               " + __royalDiag.lastFetchUrl);
+        }
+        if (__royalDiag.lastFetchStatus != null) {
+          lines.push("  last http status:       " + __royalDiag.lastFetchStatus);
+        }
+        if (__royalDiag.payloadBranding) {
+          var b = __royalDiag.payloadBranding;
+          lines.push("payload.primaryColor:     " + (b.primaryColor || "(none)"));
+          lines.push("payload.secondaryColor:   " + (b.secondaryColor || "(none)"));
+        }
+        if (cs) {
+          lines.push("css --royal-primary:      " + cs.getPropertyValue("--royal-primary").trim());
+          lines.push("css --royal-secondary:    " + cs.getPropertyValue("--royal-secondary").trim());
+        }
+        if (pillCs) {
+          lines.push("pill bg (computed):       " + pillCs.backgroundColor);
+          lines.push("pill color (computed):    " + pillCs.color);
+        }
+        if (__royalDiag.errors.length) {
+          lines.push("errors (" + __royalDiag.errors.length + "):");
+          for (var i = 0; i < Math.min(__royalDiag.errors.length, 5); i++) {
+            lines.push("  - " + __royalDiag.errors[i]);
+          }
+        }
+        earlyText.textContent = lines.join("\n");
+      } catch (e) { /* non-fatal */ }
+    };
+    refresh();
+    var diagTimer = setInterval(refresh, 500);
+    // Stop polling after 30s to save CPU; the overlay stays visible.
+    setTimeout(function () { clearInterval(diagTimer); }, 30000);
+    // Expose for the launcher block's inline init + loadBalance to update.
+    window.__royalDiag = __royalDiag;
   } catch (e) { /* non-fatal */ }
 
   function readConfig(el) {
@@ -300,8 +362,17 @@
    * referral link + activity + branding). Anonymous visitors get the
    * shop-wide bits (earn rules, rewards, branding) but no balance/tier. */
   function loadBalance(cfg, onData, onError) {
+    if (window.__royalDiag) {
+      window.__royalDiag.lastFetchUrl = (cfg.proxy || "").replace(/\/$/, "") + "/loyalty/balance";
+      window.__royalDiag.payloadStatus = "fetching…";
+    }
     api(cfg.proxy, "/loyalty/balance", { method: "GET" })
       .then(function (d) {
+        if (window.__royalDiag) {
+          window.__royalDiag.payloadStatus = "ok (200)";
+          window.__royalDiag.lastFetchStatus = 200;
+          window.__royalDiag.payloadBranding = d && d.branding ? d.branding : null;
+        }
         // Cache the localization bundle so t() can resolve keys without
         // needing the payload passed in everywhere. RTL locales
         // (ar/he/ur) get a global flag the renderers consult before
@@ -322,6 +393,12 @@
         onData(d);
       })
       .catch(function (err) {
+        if (window.__royalDiag) {
+          var d = err && err.royalDiag ? err.royalDiag : { note: "unknown" };
+          window.__royalDiag.payloadStatus =
+            "FAILED — " + (d.status ? "HTTP " + d.status : d.note || "error");
+          window.__royalDiag.lastFetchStatus = d.status || null;
+        }
         if (typeof onError === "function") onError(err && err.royalDiag ? err.royalDiag : { note: "unknown" });
       });
   }
