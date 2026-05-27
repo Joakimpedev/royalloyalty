@@ -70,7 +70,7 @@ function hsvToRgb({ h, s, v }: HSV): RGB {
   else if (h < 120) { rp = x; gp = c; }
   else if (h < 180) { gp = c; bp = x; }
   else if (h < 240) { gp = x; bp = c; }
-  else if (h < 300) { rp = c; bp = x; }
+  else if (h < 300) { rp = x; bp = c; }
   else { rp = c; bp = x; }
   return {
     r: Math.round((rp + m) * 255),

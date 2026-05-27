@@ -28,7 +28,13 @@ import {
 
 function jsonCors(payload: unknown, status = 200) {
   // App Proxy responses are same-origin to the storefront; no wildcard CORS.
-  return data(payload as any, { status });
+  // no-store: Shopify's app proxy will otherwise cache the JSON, so a freshly
+  // saved branding / rewards change won't show up on the storefront until the
+  // edge cache expires.
+  return data(payload as any, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 async function memberFor(shopDomain: string, customerId: string | null) {
