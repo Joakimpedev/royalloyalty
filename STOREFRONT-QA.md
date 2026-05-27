@@ -6,27 +6,27 @@ Customer-facing test pass. Walk through this on a real store with the app instal
 
 ## Launcher (floating widget)
 
-- [ ] Appears on every storefront page once theme app embed is enabled
-- [ ] Position matches branding setting (bottom-right / bottom-left)
-- [ ] Bubble color + text color match branding
-- [ ] Crown icon + launcher text render correctly
-- [ ] Hover lifts the pill slightly (no jank)
-- [ ] Click opens the panel
-- [ ] Close (X) button closes the panel
-- [ ] Escape key closes the panel
-- [ ] Click outside doesn't accidentally trigger checkout / other theme buttons
+- [x] Appears on every storefront page once theme app embed is enabled
+- [x] Position matches branding setting (bottom-right / bottom-left)
+- [x] Bubble color + text color match branding
+- [x] Crown icon + launcher text render correctly
+- [x] Hover lifts the pill slightly (no jank)
+- [x] Click opens the panel
+- [x] Close (X) button closes the panel
+- [x] Escape key closes the panel
+- [x] Click outside doesn't accidentally trigger checkout / other theme buttons
 
 ## Panel (modal)
 
-- [ ] Typography looks consistent with the panel design, NOT the host theme (no giant serif headings bleeding in)
-- [ ] Logged-out: shows "Sign in to see your points and rewards." + Sign-in link
-- [ ] Sign-in link goes to `/account/login`
-- [ ] Logged-in non-member: shows "Sign up to start earning" prompt
-- [ ] Logged-in member: shows current balance + points name
+- [x] Typography looks consistent with the panel design, NOT the host theme (no giant serif headings bleeding in)
+- [x] Logged-out: shows the visitor status card with sign-in CTA (SSR'd, paints on first frame)
+- [x] Sign-in link goes to `/account/login`
+- [x] Logged-in non-member: shows the same balance dashboard as members, at 0 (auto-enrolls on first earn event — no separate prompt)
+- [x] Logged-in member: shows current balance + points name + tier pill + Next Reward progress bar
 - [ ] Cashback line shows if cashback enabled ("Earn X% back as store credit on every order.")
-- [ ] Custom panel title from branding admin applies (overrides theme-editor default)
-- [ ] Custom launcher text from branding admin applies
-- [ ] No console errors
+- [x] Custom panel title from branding admin applies (overrides theme-editor default, SSR'd via shop metafield)
+- [x] Custom launcher text from branding admin applies (SSR'd via shop metafield)
+- [x] No console errors
 
 ## Rewards list (in panel)
 
