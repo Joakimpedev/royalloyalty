@@ -91,9 +91,23 @@
 <script src="{{ 'loyalty.js' | asset_url }}" defer></script>
 <script>
   (function () {
+    try { console.log('[RoyalLoyalty] launcher block rendered'); } catch (e) {}
+    var tries = 0;
     function init() {
       var root = document.getElementById('royal-launcher-root');
-      if (!root || !window.RoyalLoyalty) { return setTimeout(init, 50); }
+      if (!root || !window.RoyalLoyalty) {
+        tries++;
+        if (tries === 40) {
+          // ~2s in: warn loudly if loyalty.js never showed up.
+          try {
+            console.warn(
+              '[RoyalLoyalty] still waiting for window.RoyalLoyalty after 2s — ' +
+              'loyalty.js probably failed to load. Check Network tab for loyalty.js.'
+            );
+          } catch (e) {}
+        }
+        return setTimeout(init, 50);
+      }
       var R = window.RoyalLoyalty;
       var cfg = R.readConfig(root);
       var btn = document.getElementById('royal-launcher-btn');

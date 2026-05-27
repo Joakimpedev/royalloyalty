@@ -16,6 +16,43 @@
 (function () {
   "use strict";
 
+  // Loud breadcrumb: if you don't see this in the console, loyalty.js never
+  // executed on this page (extension not deployed, theme app embed off, or
+  // CDN serving an older bundle).
+  try { console.log("[RoyalLoyalty] loyalty.js loaded"); } catch (e) {}
+
+  // Always-on visible diagnostic. Survives even if the launcher block isn't
+  // on the page or if /loyalty/balance never resolves — so we can tell the
+  // difference between "block missing" and "block silent".
+  try {
+    var earlyBox = document.createElement("div");
+    earlyBox.id = "royal-debug-overlay";
+    earlyBox.style.cssText =
+      "position:fixed;top:8px;left:8px;z-index:2147483647;" +
+      "background:#111;color:#fff;font:12px/1.4 ui-monospace,monospace;" +
+      "padding:10px 12px;border-radius:8px;max-width:360px;" +
+      "box-shadow:0 6px 24px rgba(0,0,0,.35);white-space:pre-wrap;";
+    earlyBox.textContent =
+      "Royal Loyalty diagnostics\n" +
+      "loyalty.js: loaded\n" +
+      "launcher block: (checking…)\n" +
+      "payload: (waiting…)";
+    var mount = function () {
+      if (document.body) document.body.appendChild(earlyBox);
+      else setTimeout(mount, 50);
+    };
+    mount();
+    setTimeout(function () {
+      if (document.getElementById("royal-launcher-root")) return;
+      earlyBox.textContent =
+        "Royal Loyalty diagnostics\n" +
+        "loyalty.js: loaded\n" +
+        "launcher block: NOT FOUND on page\n" +
+        "  → Theme app embed is disabled, OR this page template\n" +
+        "    doesn't render <body> blocks (rare).";
+    }, 1500);
+  } catch (e) { /* non-fatal */ }
+
   function readConfig(el) {
     try {
       return JSON.parse(el.getAttribute("data-royal-config") || "{}");
@@ -170,12 +207,7 @@
       /* non-fatal */
     }
     try {
-      if (
-        typeof location !== "undefined" &&
-        /[?&]royal_debug=1\b/.test(location.search)
-      ) {
-        renderDebugOverlay(branding, root);
-      }
+      renderDebugOverlay(branding, root);
     } catch (e) {
       /* non-fatal */
     }
@@ -212,9 +244,10 @@
       "pill color (computed):  " + (pillCs ? pillCs.color : "?");
   }
 
-  /* Format a currency amount client-side using the shop's currency code
-   * returned in the loyalty payload. Used to relabel rewards that came
-   * back as "5 off" → "$5 off" / "kr 5 off" depending on shop currency. */
+  /* Format a currency amount client-side using the shop's ISO 4217 currency
+   * code from the loyalty payload. Delegates to Intl.NumberFormat so every
+   * currency the browser knows is supported (USD → $5, EUR → €5, JPY → ¥500,
+   * NOK → kr 5, INR → ₹5, …) with locale-appropriate separators. */
   function formatMoney(amount, currencyCode) {
     try {
       return new Intl.NumberFormat(undefined, {
