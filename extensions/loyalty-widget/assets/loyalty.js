@@ -154,6 +154,62 @@
     if (branding.secondaryColor) {
       root.style.setProperty("--royal-secondary", branding.secondaryColor);
     }
+    try {
+      // Always log so we can verify what the storefront actually received vs.
+      // what the admin Branding page is showing. If primaryColor here doesn't
+      // match the admin, the bug is server/cache; if it does match but the
+      // pill is still default-colored, the bug is CSS/override.
+      var cs = getComputedStyle(root);
+      console.log("[RoyalLoyalty] branding applied", {
+        primaryColor: branding.primaryColor,
+        secondaryColor: branding.secondaryColor,
+        computedPrimary: cs.getPropertyValue("--royal-primary").trim(),
+        computedSecondary: cs.getPropertyValue("--royal-secondary").trim(),
+      });
+    } catch (e) {
+      /* non-fatal */
+    }
+    try {
+      if (
+        typeof location !== "undefined" &&
+        /[?&]royal_debug=1\b/.test(location.search)
+      ) {
+        renderDebugOverlay(branding, root);
+      }
+    } catch (e) {
+      /* non-fatal */
+    }
+  }
+
+  /* Floating overlay shown when the storefront URL has ?royal_debug=1. Surfaces
+   * the resolved branding payload + the CSS vars actually applied, so we can
+   * diagnose "admin shows orange, storefront stays default" without DevTools. */
+  function renderDebugOverlay(branding, root) {
+    var id = "royal-debug-overlay";
+    var box = document.getElementById(id);
+    if (!box) {
+      box = document.createElement("div");
+      box.id = id;
+      box.style.cssText =
+        "position:fixed;top:8px;left:8px;z-index:2147483647;" +
+        "background:#111;color:#fff;font:12px/1.4 ui-monospace,monospace;" +
+        "padding:10px 12px;border-radius:8px;max-width:360px;" +
+        "box-shadow:0 6px 24px rgba(0,0,0,.35);white-space:pre-wrap;";
+      document.body.appendChild(box);
+    }
+    var cs = root ? getComputedStyle(root) : null;
+    var pillCs = (function () {
+      var pill = document.getElementById("royal-launcher-btn");
+      return pill ? getComputedStyle(pill) : null;
+    })();
+    box.textContent =
+      "Royal Loyalty diagnostics\n" +
+      "payload.primaryColor:   " + (branding.primaryColor || "(none)") + "\n" +
+      "payload.secondaryColor: " + (branding.secondaryColor || "(none)") + "\n" +
+      "css --royal-primary:    " + (cs ? cs.getPropertyValue("--royal-primary").trim() : "?") + "\n" +
+      "css --royal-secondary:  " + (cs ? cs.getPropertyValue("--royal-secondary").trim() : "?") + "\n" +
+      "pill bg (computed):     " + (pillCs ? pillCs.backgroundColor : "?") + "\n" +
+      "pill color (computed):  " + (pillCs ? pillCs.color : "?");
   }
 
   /* Format a currency amount client-side using the shop's currency code

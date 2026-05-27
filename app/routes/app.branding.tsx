@@ -424,7 +424,18 @@ export default function BrandingPage() {
   useSaveBar(saveBarRef, dirty);
 
   useEffect(() => {
-    if (actionData?.ok) setBaseline(form);
+    if (!actionData?.ok) return;
+    setBaseline(form);
+    try {
+      const sh = (window as unknown as {
+        shopify?: { toast?: { show?: (msg: string, opts?: object) => void } };
+      }).shopify;
+      sh?.toast?.show?.(actionData.message ?? "Branding saved.", {
+        duration: 3000,
+      });
+    } catch {
+      /* App Bridge not available — banner fallback still renders below */
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionData]);
 
@@ -484,15 +495,6 @@ export default function BrandingPage() {
         <button onClick={() => setForm(baseline)}>Discard</button>
         {/* @ts-expect-error - ui-save-bar custom element */}
       </ui-save-bar>
-
-      {actionData && actionData.ok && (
-        <s-section>
-          <s-banner tone="success">
-            <s-paragraph>{actionData.message}</s-paragraph>
-          </s-banner>
-        </s-section>
-      )}
-
 
       {!paid && (
         <s-section>
