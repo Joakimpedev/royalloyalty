@@ -274,19 +274,13 @@
     }
   }
 
-  /* Reveal the launcher pill once branding is applied (or after a short
-   * fallback timeout if the fetch fails). Prevents a flash of the Liquid
-   * default color before the merchant's saved color lands. */
-  function revealLauncher() {
-    var btn = document.getElementById("royal-launcher-btn");
-    if (btn) btn.style.visibility = "visible";
-  }
-  // Hard fallback: never leave the pill invisible forever, even if
-  // /loyalty/balance fails outright.
-  setTimeout(revealLauncher, 3000);
-
   /* Apply branding (colors + copy) from the /loyalty/balance response onto a
-   * widget's root element. Idempotent — safe to call on every reload. */
+   * widget's root element. Idempotent — safe to call on every reload.
+   *
+   * The launcher pill is server-rendered with the colors from shop metafields
+   * (see launcher.liquid), so this is only re-applying for live drift — eg.
+   * the merchant just saved a new color in another tab and the storefront
+   * payload has the fresh value before the metafield write has propagated. */
   function applyBranding(root, branding) {
     if (!root || !branding) return;
     if (branding.primaryColor) {
@@ -295,7 +289,6 @@
     if (branding.secondaryColor) {
       root.style.setProperty("--royal-secondary", branding.secondaryColor);
     }
-    revealLauncher();
     try {
       // Always log so we can verify what the storefront actually received vs.
       // what the admin Branding page is showing. If primaryColor here doesn't

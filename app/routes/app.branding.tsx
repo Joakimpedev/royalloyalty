@@ -22,6 +22,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { checkAppEmbedEnabled } from "../lib/theme-embed.server";
+import { writeBrandingMetafields } from "../lib/branding-metafields.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
@@ -353,7 +354,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
   const paid = shop.plan !== "FREE";
   const form = await request.formData();
@@ -399,6 +400,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     where: { id: shop.id },
     data: { aiConfigSnapshot: { ...base, branding: next } },
   });
+
+  // Mirror the widget colors into shop metafields so the storefront Liquid
+  // block renders the saved color on first paint (no JS flash). DB stays the
+  // source of truth — metafield write failures are logged, not thrown, so a
+  // Shopify API hiccup doesn't fail the save the merchant just confirmed.
+  await writeBrandingMetafields(admin, {
+    primaryColor: next.widget.primaryColor,
+    secondaryColor: next.widget.secondaryColor,
+  });
+
   return { ok: true, message: "Branding saved." };
 };
 

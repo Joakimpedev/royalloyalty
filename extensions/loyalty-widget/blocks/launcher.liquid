@@ -8,8 +8,16 @@
 <link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
 
 {%- assign pos = block.settings.position | default: 'bottom-right' -%}
-{%- assign primary = block.settings.primary_color | default: '#2C2A29' -%}
-{%- assign secondary = block.settings.secondary_color | default: '#FFFFFF' -%}
+{%- comment -%}
+  Primary/secondary colors are read from the shop metafields written by the
+  admin Branding page (app/lib/branding-metafields.server.ts). This is what
+  lets the launcher pill render with the merchant's saved color on first
+  paint — before /loyalty/balance has even responded. We still fall back to
+  the theme-editor block setting (and then a hardcoded default) so an
+  unsaved shop or a shop on an older app version still renders something.
+{%- endcomment -%}
+{%- assign primary = shop.metafields.royal_loyalty.primary_color | default: block.settings.primary_color | default: '#2C2A29' -%}
+{%- assign secondary = shop.metafields.royal_loyalty.secondary_color | default: block.settings.secondary_color | default: '#FFFFFF' -%}
 
 <div
   id="royal-launcher-root"
@@ -27,7 +35,6 @@
     aria-expanded="false"
     aria-controls="royal-panel"
     id="royal-launcher-btn"
-    style="visibility:hidden"
   >
     <span class="royal-launcher__icon" aria-hidden="true">&#9819;</span>
     <span class="royal-launcher__text">{{ block.settings.launcher_text | default: 'Rewards' | escape }}</span>
