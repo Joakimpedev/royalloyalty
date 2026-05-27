@@ -26,6 +26,21 @@ const DEFINITIONS: Array<{
     name: "Royal Loyalty launcher position",
     type: "single_line_text_field",
   },
+  {
+    key: "launcher_text",
+    name: "Royal Loyalty launcher text",
+    type: "single_line_text_field",
+  },
+  {
+    key: "panel_title",
+    name: "Royal Loyalty panel title",
+    type: "single_line_text_field",
+  },
+  {
+    key: "panel_subtitle",
+    name: "Royal Loyalty panel subtitle",
+    type: "single_line_text_field",
+  },
 ];
 
 async function ensureDefinitions(
@@ -194,6 +209,9 @@ export async function writeBrandingMetafields(
     primaryColor: string;
     secondaryColor: string;
     launcherPosition: "bottom-right" | "bottom-left";
+    launcherText: string;
+    panelTitle: string;
+    panelSubtitle: string;
   },
 ): Promise<BrandingMetafieldsResult> {
   const result: BrandingMetafieldsResult = {
@@ -242,6 +260,27 @@ export async function writeBrandingMetafields(
               type: "single_line_text_field",
               value: values.launcherPosition,
             },
+            {
+              ownerId,
+              namespace: NAMESPACE,
+              key: "launcher_text",
+              type: "single_line_text_field",
+              value: values.launcherText,
+            },
+            {
+              ownerId,
+              namespace: NAMESPACE,
+              key: "panel_title",
+              type: "single_line_text_field",
+              value: values.panelTitle,
+            },
+            {
+              ownerId,
+              namespace: NAMESPACE,
+              key: "panel_subtitle",
+              type: "single_line_text_field",
+              value: values.panelSubtitle,
+            },
           ],
         },
       });
@@ -272,7 +311,7 @@ export async function writeBrandingMetafields(
       if (errs.length) {
         console.warn("[branding-metafields] metafieldsSet userErrors", errs);
       }
-      result.ok = errs.length === 0 && result.setMetafields.length === 3;
+      result.ok = errs.length === 0 && result.setMetafields.length === 6;
     } catch (e) {
       console.warn("[branding-metafields] metafieldsSet threw", e);
       result.threw = e instanceof Error ? e.message : String(e);

@@ -34,6 +34,25 @@
   {%- assign secondary = block.settings.secondary_color | default: '#FFFFFF' -%}
 {%- endif -%}
 
+{%- assign mf_launcher_text = shop.metafields.royal_loyalty.launcher_text -%}
+{%- assign mf_panel_title = shop.metafields.royal_loyalty.panel_title -%}
+{%- assign mf_panel_subtitle = shop.metafields.royal_loyalty.panel_subtitle -%}
+{%- if mf_launcher_text != blank -%}
+  {%- assign launcher_text = mf_launcher_text -%}
+{%- else -%}
+  {%- assign launcher_text = block.settings.launcher_text | default: 'Rewards' -%}
+{%- endif -%}
+{%- if mf_panel_title != blank -%}
+  {%- assign panel_title = mf_panel_title -%}
+{%- else -%}
+  {%- assign panel_title = block.settings.title | default: 'Your rewards' -%}
+{%- endif -%}
+{%- if mf_panel_subtitle != blank -%}
+  {%- assign panel_subtitle = mf_panel_subtitle -%}
+{%- else -%}
+  {%- assign panel_subtitle = 'Earn points on every order — redeem for rewards.' -%}
+{%- endif -%}
+
 <div
   id="royal-launcher-root"
   style="--royal-primary: {{ primary }}; --royal-secondary: {{ secondary }};"
@@ -43,15 +62,21 @@
     "customerId": {{ customer.id | json }}
   }'
   data-royal-ssr='{
-    "metafieldPrimary":   {{ mf_primary | json }},
-    "metafieldSecondary": {{ mf_secondary | json }},
-    "metafieldPosition":  {{ mf_position | json }},
-    "blockPrimary":       {{ block.settings.primary_color | json }},
-    "blockSecondary":     {{ block.settings.secondary_color | json }},
-    "blockPosition":      {{ block.settings.position | json }},
-    "renderedPrimary":    {{ primary | json }},
-    "renderedSecondary":  {{ secondary | json }},
-    "renderedPosition":   {{ pos | json }}
+    "metafieldPrimary":        {{ mf_primary | json }},
+    "metafieldSecondary":      {{ mf_secondary | json }},
+    "metafieldPosition":       {{ mf_position | json }},
+    "metafieldLauncherText":   {{ mf_launcher_text | json }},
+    "metafieldPanelTitle":     {{ mf_panel_title | json }},
+    "metafieldPanelSubtitle":  {{ mf_panel_subtitle | json }},
+    "blockPrimary":            {{ block.settings.primary_color | json }},
+    "blockSecondary":          {{ block.settings.secondary_color | json }},
+    "blockPosition":           {{ block.settings.position | json }},
+    "renderedPrimary":         {{ primary | json }},
+    "renderedSecondary":       {{ secondary | json }},
+    "renderedPosition":        {{ pos | json }},
+    "renderedLauncherText":    {{ launcher_text | json }},
+    "renderedPanelTitle":      {{ panel_title | json }},
+    "renderedPanelSubtitle":   {{ panel_subtitle | json }}
   }'
 >
   <button
@@ -63,21 +88,21 @@
     id="royal-launcher-btn"
   >
     <span class="royal-launcher__icon" aria-hidden="true">&#9819;</span>
-    <span class="royal-launcher__text">{{ block.settings.launcher_text | default: 'Rewards' | escape }}</span>
+    <span class="royal-launcher__text">{{ launcher_text | escape }}</span>
   </button>
 
   <div
     id="royal-panel"
     class="royal-panel {% if pos == 'bottom-left' %}royal-panel--left{% endif %}"
     role="dialog"
-    aria-label="{{ block.settings.title | default: 'Your rewards' | escape }}"
+    aria-label="{{ panel_title | escape }}"
     hidden
   >
     <div class="royal-panel__hero">
       <button type="button" id="royal-panel-back" class="royal-panel__back" aria-label="Back" hidden>&#8249;</button>
       <button type="button" id="royal-panel-close" class="royal-panel__close" aria-label="Close">&times;</button>
-      <div class="royal-panel__title" id="royal-panel-title">{{ block.settings.title | default: 'Your rewards' | escape }}</div>
-      <div class="royal-panel__subtitle" id="royal-panel-subtitle">Earn points on every order — redeem for rewards.</div>
+      <div class="royal-panel__title" id="royal-panel-title">{{ panel_title | escape }}</div>
+      <div class="royal-panel__subtitle" id="royal-panel-subtitle">{{ panel_subtitle | escape }}</div>
     </div>
 
     <div class="royal-panel__body">

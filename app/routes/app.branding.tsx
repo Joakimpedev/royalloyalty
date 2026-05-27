@@ -409,6 +409,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     primaryColor: next.widget.primaryColor,
     secondaryColor: next.widget.secondaryColor,
     launcherPosition: next.widget.position,
+    launcherText: next.widget.launcherText,
+    panelTitle: next.widget.title,
+    panelSubtitle: next.widget.subtitle,
   });
 
   return {

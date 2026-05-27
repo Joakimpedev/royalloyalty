@@ -118,10 +118,16 @@
           lines.push("--- Liquid SSR (first paint) ---");
           lines.push("ssr.metafieldPrimary:     " + JSON.stringify(ssr.metafieldPrimary));
           lines.push("ssr.metafieldSecondary:   " + JSON.stringify(ssr.metafieldSecondary));
-          lines.push("ssr.blockPrimary:         " + JSON.stringify(ssr.blockPrimary));
-          lines.push("ssr.blockSecondary:       " + JSON.stringify(ssr.blockSecondary));
+          lines.push("ssr.metafieldPosition:    " + JSON.stringify(ssr.metafieldPosition));
+          lines.push("ssr.metafieldLauncherText:" + JSON.stringify(ssr.metafieldLauncherText));
+          lines.push("ssr.metafieldPanelTitle:  " + JSON.stringify(ssr.metafieldPanelTitle));
+          lines.push("ssr.metafieldPanelSub:    " + JSON.stringify(ssr.metafieldPanelSubtitle));
           lines.push("ssr.renderedPrimary:      " + JSON.stringify(ssr.renderedPrimary));
           lines.push("ssr.renderedSecondary:    " + JSON.stringify(ssr.renderedSecondary));
+          lines.push("ssr.renderedPosition:     " + JSON.stringify(ssr.renderedPosition));
+          lines.push("ssr.renderedLauncherText: " + JSON.stringify(ssr.renderedLauncherText));
+          lines.push("ssr.renderedPanelTitle:   " + JSON.stringify(ssr.renderedPanelTitle));
+          lines.push("ssr.renderedPanelSub:     " + JSON.stringify(ssr.renderedPanelSubtitle));
           lines.push("--- runtime ---");
         }
         if (__royalDiag.lastFetchUrl) {
