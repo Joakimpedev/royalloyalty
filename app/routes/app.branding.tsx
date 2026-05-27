@@ -465,7 +465,9 @@ export default function BrandingPage() {
           "owner=" + (mf.ownerId ?? "null") +
             " mfs=" + (mf.setMetafields?.length ?? 0),
         );
-        if (mf.setRawSnippet) bits.push("raw=" + mf.setRawSnippet);
+        if (mf.shopIdError) bits.push("shopIdErr: " + mf.shopIdError);
+        if (mf.shopIdRawSnippet) bits.push("shopIdRaw=" + mf.shopIdRawSnippet);
+        if (mf.setRawSnippet) bits.push("setRaw=" + mf.setRawSnippet);
         const msg =
           "Branding saved (metafield mirror FAILED). " +
           (bits.join(" / ") || "no error details");

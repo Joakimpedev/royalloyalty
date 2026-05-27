@@ -135,12 +135,33 @@ async function ensureDefinitions(
   }
 }
 
-async function getShopGid(admin: AdminClient): Promise<string | null> {
+async function getShopGid(
+  admin: AdminClient,
+  result: BrandingMetafieldsResult,
+): Promise<string | null> {
   try {
-    const res = await admin.graphql(`#graphql { shop { id } }`);
-    const json = (await res.json()) as { data?: { shop?: { id?: string } } };
-    return json?.data?.shop?.id ?? null;
+    const res = await admin.graphql(`#graphql
+      query GetShopId { shop { id } }
+    `);
+    const raw = await res.text();
+    result.shopIdRawSnippet = raw.slice(0, 400);
+    let json: { data?: { shop?: { id?: string } }; errors?: Array<{ message?: string }> } = {};
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      result.shopIdError = "response was not valid JSON";
+      return null;
+    }
+    if (json.errors?.length) {
+      result.shopIdError = json.errors.map((e) => e.message ?? "?").join(" | ");
+      return null;
+    }
+    const id = json?.data?.shop?.id ?? null;
+    if (!id) result.shopIdError = "shop.id missing in response";
+    return id;
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    result.shopIdError = "threw: " + msg;
     console.warn("[branding-metafields] getShopGid threw", e);
     return null;
   }
@@ -153,6 +174,8 @@ export interface BrandingMetafieldsResult {
   setErrors: string[];
   setMetafields: Array<{ namespace: string; key: string; value: string }>;
   setRawSnippet?: string;
+  shopIdError?: string;
+  shopIdRawSnippet?: string;
   threw?: string;
 }
 
@@ -169,7 +192,7 @@ export async function writeBrandingMetafields(
   };
   try {
     await ensureDefinitions(admin, result.defSteps);
-    const ownerId = await getShopGid(admin);
+    const ownerId = await getShopGid(admin, result);
     result.ownerId = ownerId;
     if (!ownerId) return result;
 
