@@ -405,12 +405,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // block renders the saved color on first paint (no JS flash). DB stays the
   // source of truth — metafield write failures are logged, not thrown, so a
   // Shopify API hiccup doesn't fail the save the merchant just confirmed.
-  await writeBrandingMetafields(admin, {
+  const metafieldsResult = await writeBrandingMetafields(admin, {
     primaryColor: next.widget.primaryColor,
     secondaryColor: next.widget.secondaryColor,
   });
 
-  return { ok: true, message: "Branding saved." };
+  return {
+    ok: true,
+    message: "Branding saved.",
+    metafields: metafieldsResult,
+  };
 };
 
 export default function BrandingPage() {
@@ -439,11 +443,34 @@ export default function BrandingPage() {
     setBaseline(form);
     try {
       const sh = (window as unknown as {
-        shopify?: { toast?: { show?: (msg: string, opts?: object) => void } };
+        shopify?: {
+          toast?: {
+            show?: (msg: string, opts?: object) => void;
+          };
+        };
       }).shopify;
-      sh?.toast?.show?.(actionData.message ?? "Branding saved.", {
-        duration: 3000,
-      });
+      // If the metafield mirror failed we want to know — the storefront
+      // pill will fall back to JS-applied colors (delayed paint) instead
+      // of SSR colors (instant). Surface it as an isError toast so the
+      // merchant + dev catch it immediately.
+      const mf = actionData.metafields;
+      if (mf && !mf.ok) {
+        const bits: string[] = [];
+        if (mf.threw) bits.push("threw: " + mf.threw);
+        for (const s of mf.defSteps ?? []) {
+          if (s.errors?.length) bits.push(s.key + ": " + s.errors.join(" | "));
+        }
+        if (mf.setErrors?.length) bits.push("set: " + mf.setErrors.join(" | "));
+        sh?.toast?.show?.(
+          "Branding saved (metafield mirror FAILED — storefront will use JS fallback). " +
+            (bits.join(" / ") || "no error details"),
+          { duration: 8000, isError: true },
+        );
+      } else {
+        sh?.toast?.show?.(actionData.message ?? "Branding saved.", {
+          duration: 3000,
+        });
+      }
     } catch {
       /* App Bridge not available — banner fallback still renders below */
     }
