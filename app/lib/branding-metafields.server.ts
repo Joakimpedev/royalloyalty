@@ -14,9 +14,18 @@ type AdminClient = {
 };
 
 const NAMESPACE = "royal_loyalty";
-const DEFINITIONS = [
-  { key: "primary_color", name: "Royal Loyalty primary color" },
-  { key: "secondary_color", name: "Royal Loyalty secondary color" },
+const DEFINITIONS: Array<{
+  key: string;
+  name: string;
+  type: "color" | "single_line_text_field";
+}> = [
+  { key: "primary_color", name: "Royal Loyalty primary color", type: "color" },
+  { key: "secondary_color", name: "Royal Loyalty secondary color", type: "color" },
+  {
+    key: "launcher_position",
+    name: "Royal Loyalty launcher position",
+    type: "single_line_text_field",
+  },
 ];
 
 async function ensureDefinitions(
@@ -49,7 +58,7 @@ async function ensureDefinitions(
             name: d.name,
             namespace: NAMESPACE,
             key: d.key,
-            type: "color",
+            type: d.type,
             ownerType: "SHOP",
             access: { storefront: "PUBLIC_READ" },
           },
@@ -181,7 +190,11 @@ export interface BrandingMetafieldsResult {
 
 export async function writeBrandingMetafields(
   admin: AdminClient,
-  colors: { primaryColor: string; secondaryColor: string },
+  values: {
+    primaryColor: string;
+    secondaryColor: string;
+    launcherPosition: "bottom-right" | "bottom-left";
+  },
 ): Promise<BrandingMetafieldsResult> {
   const result: BrandingMetafieldsResult = {
     ok: false,
@@ -213,14 +226,21 @@ export async function writeBrandingMetafields(
               namespace: NAMESPACE,
               key: "primary_color",
               type: "color",
-              value: colors.primaryColor,
+              value: values.primaryColor,
             },
             {
               ownerId,
               namespace: NAMESPACE,
               key: "secondary_color",
               type: "color",
-              value: colors.secondaryColor,
+              value: values.secondaryColor,
+            },
+            {
+              ownerId,
+              namespace: NAMESPACE,
+              key: "launcher_position",
+              type: "single_line_text_field",
+              value: values.launcherPosition,
             },
           ],
         },
@@ -252,7 +272,7 @@ export async function writeBrandingMetafields(
       if (errs.length) {
         console.warn("[branding-metafields] metafieldsSet userErrors", errs);
       }
-      result.ok = errs.length === 0 && result.setMetafields.length === 2;
+      result.ok = errs.length === 0 && result.setMetafields.length === 3;
     } catch (e) {
       console.warn("[branding-metafields] metafieldsSet threw", e);
       result.threw = e instanceof Error ? e.message : String(e);

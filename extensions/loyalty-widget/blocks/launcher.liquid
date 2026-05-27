@@ -7,7 +7,12 @@
 
 <link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
 
-{%- assign pos = block.settings.position | default: 'bottom-right' -%}
+{%- assign mf_position = shop.metafields.royal_loyalty.launcher_position -%}
+{%- if mf_position != blank -%}
+  {%- assign pos = mf_position -%}
+{%- else -%}
+  {%- assign pos = block.settings.position | default: 'bottom-right' -%}
+{%- endif -%}
 {%- comment -%}
   Primary/secondary colors are read from the shop metafields written by the
   admin Branding page (app/lib/branding-metafields.server.ts). This is what
@@ -40,10 +45,13 @@
   data-royal-ssr='{
     "metafieldPrimary":   {{ mf_primary | json }},
     "metafieldSecondary": {{ mf_secondary | json }},
+    "metafieldPosition":  {{ mf_position | json }},
     "blockPrimary":       {{ block.settings.primary_color | json }},
     "blockSecondary":     {{ block.settings.secondary_color | json }},
+    "blockPosition":      {{ block.settings.position | json }},
     "renderedPrimary":    {{ primary | json }},
-    "renderedSecondary":  {{ secondary | json }}
+    "renderedSecondary":  {{ secondary | json }},
+    "renderedPosition":   {{ pos | json }}
   }'
 >
   <button

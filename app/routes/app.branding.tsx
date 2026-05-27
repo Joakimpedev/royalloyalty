@@ -408,6 +408,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const metafieldsResult = await writeBrandingMetafields(admin, {
     primaryColor: next.widget.primaryColor,
     secondaryColor: next.widget.secondaryColor,
+    launcherPosition: next.widget.position,
   });
 
   return {
