@@ -152,6 +152,7 @@ export interface BrandingMetafieldsResult {
   defSteps: Array<{ key: string; created: boolean; updated: boolean; errors: string[] }>;
   setErrors: string[];
   setMetafields: Array<{ namespace: string; key: string; value: string }>;
+  setRawSnippet?: string;
   threw?: string;
 }
 
@@ -201,14 +202,27 @@ export async function writeBrandingMetafields(
           ],
         },
       });
-      const json = (await res.json()) as {
+      const rawText = await res.text();
+      result.setRawSnippet = rawText.slice(0, 600);
+      let json: {
         data?: {
           metafieldsSet?: {
             metafields?: Array<{ namespace: string; key: string; value: string }>;
             userErrors?: Array<{ message?: string; code?: string }>;
           };
         };
-      };
+        errors?: Array<{ message?: string }>;
+      } = {};
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        result.setErrors.push("response was not valid JSON");
+      }
+      if (json.errors?.length) {
+        result.setErrors.push(
+          ...json.errors.map((e) => "graphql: " + (e.message ?? "unknown")),
+        );
+      }
       const errs = json?.data?.metafieldsSet?.userErrors ?? [];
       result.setErrors = errs.map((e) => `${e.code ?? ""} ${e.message ?? ""}`.trim());
       result.setMetafields = json?.data?.metafieldsSet?.metafields ?? [];

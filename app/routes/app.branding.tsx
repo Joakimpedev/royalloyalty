@@ -461,11 +461,16 @@ export default function BrandingPage() {
           if (s.errors?.length) bits.push(s.key + ": " + s.errors.join(" | "));
         }
         if (mf.setErrors?.length) bits.push("set: " + mf.setErrors.join(" | "));
-        sh?.toast?.show?.(
-          "Branding saved (metafield mirror FAILED — storefront will use JS fallback). " +
-            (bits.join(" / ") || "no error details"),
-          { duration: 8000, isError: true },
+        bits.push(
+          "owner=" + (mf.ownerId ?? "null") +
+            " mfs=" + (mf.setMetafields?.length ?? 0),
         );
+        if (mf.setRawSnippet) bits.push("raw=" + mf.setRawSnippet);
+        const msg =
+          "Branding saved (metafield mirror FAILED). " +
+          (bits.join(" / ") || "no error details");
+        sh?.toast?.show?.(msg, { duration: 12000, isError: true });
+        try { console.warn("[branding-metafields]", mf); } catch {}
       } else {
         sh?.toast?.show?.(actionData.message ?? "Branding saved.", {
           duration: 3000,
