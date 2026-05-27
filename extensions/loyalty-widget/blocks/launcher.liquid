@@ -136,6 +136,12 @@
         showView('hub');
         if (!fetched) { fetched = true; load(); }
       }
+
+      // Fetch on page load so the launcher pill gets the merchant's branding
+      // (colors + custom label) immediately — without it, the pill renders
+      // the Liquid defaults until the visitor actually clicks it open.
+      if (!fetched) { fetched = true; load(); }
+
       function close() {
         panel.hidden = true;
         btn.setAttribute('aria-expanded', 'false');
