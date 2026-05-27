@@ -311,29 +311,18 @@
         if (!card) return;
         // Visitor card was rendered by Liquid (SSR) — leave it alone.
         if (!cfg.loggedIn) { card.hidden = false; return; }
+        // Logged-in (member OR not-yet-enrolled): always show the balance
+        // dashboard. Non-members render as 0 balance — they get enrolled
+        // automatically on first earn event, at which point this same card
+        // just starts showing the real number.
         var b = d.branding || {};
-        var pointsName = b.pointsName || R.t('points.name', 'points');
-        if (d.enrolled) {
-          // Member: big balance + points name. Tier badge if the payload
-          // included a tier (the storefront-payload helper sets currentTier).
-          var bal = d.balance || 0;
-          var tier = d.currentTier && d.currentTier.name ? d.currentTier.name : '';
-          card.innerHTML =
-            '<div class="royal-status-card__balance">' + bal + '</div>' +
-            '<div class="royal-status-card__pointsname">' + escapeHtml(pointsName) + '</div>' +
-            (tier ? '<div class="royal-status-card__tier">' + escapeHtml(tier) + '</div>' : '');
-        } else {
-          // Logged-in non-member: shows up automatically when they place
-          // an order or trigger any earn rule. No explicit Join button —
-          // matches the auto-enroll flow.
-          card.innerHTML =
-            '<div class="royal-status-card__title">' +
-            R.t('hub.nonMember.title', 'Start earning') +
-            '</div>' +
-            '<div class="royal-status-card__desc">' +
-            R.t('hub.nonMember.desc', "Place your first order or complete a way to earn — we'll enroll you automatically.") +
-            '</div>';
-        }
+        var pointsName = b.pointsName || 'points';
+        var bal = d.balance || 0;
+        var tier = d.currentTier && d.currentTier.name ? d.currentTier.name : '';
+        card.innerHTML =
+          '<div class="royal-status-card__balance">' + bal + '</div>' +
+          '<div class="royal-status-card__pointsname">' + escapeHtml(pointsName) + '</div>' +
+          (tier ? '<div class="royal-status-card__tier">' + escapeHtml(tier) + '</div>' : '');
         card.hidden = false;
       }
 
