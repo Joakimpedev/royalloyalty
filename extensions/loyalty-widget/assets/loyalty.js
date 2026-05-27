@@ -31,8 +31,39 @@
       "position:fixed;top:8px;left:8px;z-index:2147483647;" +
       "background:#111;color:#fff;font:12px/1.4 ui-monospace,monospace;" +
       "padding:10px 12px;border-radius:8px;max-width:360px;" +
-      "box-shadow:0 6px 24px rgba(0,0,0,.35);white-space:pre-wrap;";
-    earlyBox.textContent =
+      "box-shadow:0 6px 24px rgba(0,0,0,.35);";
+    var earlyText = document.createElement("pre");
+    earlyText.id = "royal-debug-overlay__text";
+    earlyText.style.cssText = "margin:0;white-space:pre-wrap;font:inherit;color:inherit;";
+    var earlyCopy = document.createElement("button");
+    earlyCopy.type = "button";
+    earlyCopy.textContent = "Copy";
+    earlyCopy.style.cssText =
+      "margin-top:8px;background:#fff;color:#111;border:none;" +
+      "border-radius:4px;padding:4px 10px;font:inherit;cursor:pointer;";
+    earlyCopy.addEventListener("click", function () {
+      var txt = (document.getElementById("royal-debug-overlay__text") || {}).textContent || "";
+      var done = function () {
+        var orig = earlyCopy.textContent;
+        earlyCopy.textContent = "Copied!";
+        setTimeout(function () { earlyCopy.textContent = orig; }, 1200);
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt).then(done, function () { fallbackCopy(txt); done(); });
+        } else { fallbackCopy(txt); done(); }
+      } catch (e) { fallbackCopy(txt); done(); }
+    });
+    function fallbackCopy(t) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = t; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+      } catch (e) { /* give up */ }
+    }
+    earlyBox.appendChild(earlyText);
+    earlyBox.appendChild(earlyCopy);
+    earlyText.textContent =
       "Royal Loyalty diagnostics\n" +
       "loyalty.js: loaded\n" +
       "launcher block: (checking…)\n" +
@@ -44,7 +75,7 @@
     mount();
     setTimeout(function () {
       if (document.getElementById("royal-launcher-root")) return;
-      earlyBox.textContent =
+      earlyText.textContent =
         "Royal Loyalty diagnostics\n" +
         "loyalty.js: loaded\n" +
         "launcher block: NOT FOUND on page\n" +
@@ -217,24 +248,14 @@
    * the resolved branding payload + the CSS vars actually applied, so we can
    * diagnose "admin shows orange, storefront stays default" without DevTools. */
   function renderDebugOverlay(branding, root) {
-    var id = "royal-debug-overlay";
-    var box = document.getElementById(id);
-    if (!box) {
-      box = document.createElement("div");
-      box.id = id;
-      box.style.cssText =
-        "position:fixed;top:8px;left:8px;z-index:2147483647;" +
-        "background:#111;color:#fff;font:12px/1.4 ui-monospace,monospace;" +
-        "padding:10px 12px;border-radius:8px;max-width:360px;" +
-        "box-shadow:0 6px 24px rgba(0,0,0,.35);white-space:pre-wrap;";
-      document.body.appendChild(box);
-    }
+    var textEl = document.getElementById("royal-debug-overlay__text");
+    if (!textEl) return; // early overlay didn't mount — nothing to update
     var cs = root ? getComputedStyle(root) : null;
     var pillCs = (function () {
       var pill = document.getElementById("royal-launcher-btn");
       return pill ? getComputedStyle(pill) : null;
     })();
-    box.textContent =
+    textEl.textContent =
       "Royal Loyalty diagnostics\n" +
       "payload.primaryColor:   " + (branding.primaryColor || "(none)") + "\n" +
       "payload.secondaryColor: " + (branding.secondaryColor || "(none)") + "\n" +
