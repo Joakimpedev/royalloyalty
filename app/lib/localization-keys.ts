@@ -102,6 +102,31 @@ export const KEY_CATALOG: LocalizationKey[] = [
     defaultEn: "Your active codes",
   },
   {
+    key: "hub.visitor.title",
+    section: "launcher",
+    label: "Hub status card — visitor title",
+    defaultEn: "Sign in to start earning",
+  },
+  {
+    key: "hub.visitor.desc",
+    section: "launcher",
+    label: "Hub status card — visitor description",
+    defaultEn: "Sign in to track your points and unlock rewards.",
+  },
+  {
+    key: "hub.nonMember.title",
+    section: "launcher",
+    label: "Hub status card — non-member title",
+    defaultEn: "Start earning",
+  },
+  {
+    key: "hub.nonMember.desc",
+    section: "launcher",
+    label: "Hub status card — non-member description",
+    defaultEn:
+      "Place your first order or complete a way to earn — we'll enroll you automatically.",
+  },
+  {
     key: "launcher.loadingRewards",
     section: "launcher",
     label: "Loading rewards placeholder",

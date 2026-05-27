@@ -23,6 +23,11 @@ const en: Bundle = {
   "launcher.hub.refer": "Refer a friend",
   "launcher.activeCodesHeading": "Your active codes",
   "launcher.loadingRewards": "Loading rewards…",
+  "hub.visitor.title": "Sign in to start earning",
+  "hub.visitor.desc": "Sign in to track your points and unlock rewards.",
+  "hub.nonMember.title": "Start earning",
+  "hub.nonMember.desc":
+    "Place your first order or complete a way to earn — we'll enroll you automatically.",
   "page.heroTitle": "Earn points. Get rewards.",
   "page.heroSubtitle": "Join the program and earn on every order.",
   "page.balanceLabel": "Your balance:",
@@ -148,6 +153,11 @@ const es: Bundle = {
   "launcher.hub.refer": "Recomendar a un amigo",
   "launcher.activeCodesHeading": "Tus códigos activos",
   "launcher.loadingRewards": "Cargando recompensas…",
+  "hub.visitor.title": "Inicia sesión para empezar a ganar",
+  "hub.visitor.desc": "Inicia sesión para seguir tus puntos y desbloquear recompensas.",
+  "hub.nonMember.title": "Empieza a ganar",
+  "hub.nonMember.desc":
+    "Realiza tu primer pedido o completa una forma de ganar — te inscribiremos automáticamente.",
   "page.heroTitle": "Gana puntos. Obtén recompensas.",
   "page.heroSubtitle": "Únete al programa y gana en cada compra.",
   "page.balanceLabel": "Tu saldo:",
@@ -282,6 +292,11 @@ const fr: Bundle = {
   "launcher.hub.refer": "Parrainer un ami",
   "launcher.activeCodesHeading": "Vos codes actifs",
   "launcher.loadingRewards": "Chargement des récompenses…",
+  "hub.visitor.title": "Connectez-vous pour commencer à gagner",
+  "hub.visitor.desc": "Connectez-vous pour suivre vos points et débloquer des récompenses.",
+  "hub.nonMember.title": "Commencez à gagner",
+  "hub.nonMember.desc":
+    "Passez votre première commande ou complétez une action pour gagner — nous vous inscrirons automatiquement.",
   "page.heroTitle": "Gagnez des points. Obtenez des récompenses.",
   "page.heroSubtitle":
     "Rejoignez le programme et gagnez à chaque commande.",
@@ -422,6 +437,11 @@ const de: Bundle = {
   "launcher.hub.refer": "Freunde werben",
   "launcher.activeCodesHeading": "Deine aktiven Codes",
   "launcher.loadingRewards": "Prämien werden geladen…",
+  "hub.visitor.title": "Melde dich an, um zu starten",
+  "hub.visitor.desc": "Melde dich an, um deine Punkte zu verfolgen und Prämien freizuschalten.",
+  "hub.nonMember.title": "Punkte sammeln",
+  "hub.nonMember.desc":
+    "Gib deine erste Bestellung auf oder erledige eine Aktion — wir melden dich automatisch an.",
   "page.heroTitle": "Punkte sammeln. Prämien erhalten.",
   "page.heroSubtitle":
     "Mach beim Programm mit und verdiene bei jeder Bestellung.",
@@ -568,6 +588,11 @@ const it: Bundle = {
   "launcher.hub.refer": "Invita un amico",
   "launcher.activeCodesHeading": "I tuoi codici attivi",
   "launcher.loadingRewards": "Caricamento premi…",
+  "hub.visitor.title": "Accedi per iniziare a guadagnare",
+  "hub.visitor.desc": "Accedi per tracciare i tuoi punti e sbloccare premi.",
+  "hub.nonMember.title": "Inizia a guadagnare",
+  "hub.nonMember.desc":
+    "Effettua il tuo primo ordine o completa un modo per guadagnare — ti iscriveremo automaticamente.",
   "page.heroTitle": "Guadagna punti. Ottieni premi.",
   "page.heroSubtitle":
     "Iscriviti al programma e guadagna ad ogni ordine.",
@@ -711,6 +736,11 @@ const ptBR: Bundle = {
   "launcher.hub.refer": "Indicar um amigo",
   "launcher.activeCodesHeading": "Seus códigos ativos",
   "launcher.loadingRewards": "Carregando recompensas…",
+  "hub.visitor.title": "Faça login para começar a ganhar",
+  "hub.visitor.desc": "Faça login para acompanhar seus pontos e desbloquear recompensas.",
+  "hub.nonMember.title": "Comece a ganhar",
+  "hub.nonMember.desc":
+    "Faça seu primeiro pedido ou complete uma forma de ganhar — vamos inscrevê-lo automaticamente.",
   "page.heroTitle": "Ganhe pontos. Receba recompensas.",
   "page.heroSubtitle":
     "Participe do programa e ganhe a cada pedido.",
@@ -855,6 +885,11 @@ const nl: Bundle = {
   "launcher.hub.refer": "Verwijs een vriend",
   "launcher.activeCodesHeading": "Jouw actieve codes",
   "launcher.loadingRewards": "Beloningen laden…",
+  "hub.visitor.title": "Log in om te beginnen met sparen",
+  "hub.visitor.desc": "Log in om je punten te volgen en beloningen vrij te spelen.",
+  "hub.nonMember.title": "Begin met sparen",
+  "hub.nonMember.desc":
+    "Plaats je eerste bestelling of voltooi een actie — we schrijven je automatisch in.",
   "page.heroTitle": "Verdien punten. Krijg beloningen.",
   "page.heroSubtitle":
     "Doe mee aan het programma en verdien bij elke bestelling.",
@@ -1008,6 +1043,11 @@ const pl: Bundle = {
   "launcher.hub.refer": "Poleć znajomego",
   "launcher.activeCodesHeading": "Twoje aktywne kody",
   "launcher.loadingRewards": "Ładowanie nagród…",
+  "hub.visitor.title": "Zaloguj się, aby zacząć zarabiać",
+  "hub.visitor.desc": "Zaloguj się, aby śledzić swoje punkty i odblokować nagrody.",
+  "hub.nonMember.title": "Zacznij zarabiać",
+  "hub.nonMember.desc":
+    "Złóż swoje pierwsze zamówienie lub wykonaj sposób na zdobycie punktów — zapiszemy cię automatycznie.",
   "page.heroTitle": "Zdobywaj punkty. Odbieraj nagrody.",
   "page.heroSubtitle":
     "Dołącz do programu i zdobywaj punkty przy każdym zamówieniu.",
@@ -1154,6 +1194,11 @@ const nb: Bundle = {
   "launcher.hub.refer": "Inviter en venn",
   "launcher.activeCodesHeading": "Dine aktive koder",
   "launcher.loadingRewards": "Laster belønninger…",
+  "hub.visitor.title": "Logg inn for å begynne å tjene",
+  "hub.visitor.desc": "Logg inn for å spore poengene dine og låse opp belønninger.",
+  "hub.nonMember.title": "Begynn å tjene",
+  "hub.nonMember.desc":
+    "Legg inn din første bestilling eller fullfør en måte å tjene på — vi melder deg inn automatisk.",
   "page.heroTitle": "Tjen poeng. Få belønninger.",
   "page.heroSubtitle":
     "Bli med i programmet og tjen på hver bestilling.",
@@ -1311,6 +1356,11 @@ const sv: Bundle = {
   "launcher.hub.refer": "Bjud in en vän",
   "launcher.activeCodesHeading": "Dina aktiva koder",
   "launcher.loadingRewards": "Laddar belöningar…",
+  "hub.visitor.title": "Logga in för att börja tjäna",
+  "hub.visitor.desc": "Logga in för att följa dina poäng och låsa upp belöningar.",
+  "hub.nonMember.title": "Börja tjäna",
+  "hub.nonMember.desc":
+    "Lägg din första order eller slutför ett sätt att tjäna — vi anmäler dig automatiskt.",
   "page.heroTitle": "Tjäna poäng. Få belöningar.",
   "page.heroSubtitle": "Gå med i programmet och tjäna på varje beställning.",
   "page.balanceLabel": "Ditt saldo:",
@@ -1436,6 +1486,11 @@ const da: Bundle = {
   "launcher.hub.refer": "Henvis en ven",
   "launcher.activeCodesHeading": "Dine aktive koder",
   "launcher.loadingRewards": "Indlæser belønninger…",
+  "hub.visitor.title": "Log ind for at begynde at tjene",
+  "hub.visitor.desc": "Log ind for at følge dine point og låse op for belønninger.",
+  "hub.nonMember.title": "Begynd at tjene",
+  "hub.nonMember.desc":
+    "Afgiv din første ordre eller fuldfør en måde at tjene på — vi tilmelder dig automatisk.",
   "page.heroTitle": "Optjen point. Få belønninger.",
   "page.heroSubtitle": "Deltag i programmet og optjen ved hver bestilling.",
   "page.balanceLabel": "Din saldo:",
@@ -1562,6 +1617,11 @@ const fi: Bundle = {
   "launcher.hub.refer": "Suosittele kaverille",
   "launcher.activeCodesHeading": "Aktiiviset koodisi",
   "launcher.loadingRewards": "Ladataan palkintoja…",
+  "hub.visitor.title": "Kirjaudu sisään aloittaaksesi keräämisen",
+  "hub.visitor.desc": "Kirjaudu sisään seurataksesi pisteitäsi ja avataksesi palkintoja.",
+  "hub.nonMember.title": "Aloita kerääminen",
+  "hub.nonMember.desc":
+    "Tee ensimmäinen tilauksesi tai suorita ansaintatapa — ilmoitamme sinut automaattisesti.",
   "page.heroTitle": "Ansaitse pisteitä. Saa palkintoja.",
   "page.heroSubtitle":
     "Liity ohjelmaan ja ansaitse jokaisesta tilauksesta.",
@@ -1699,6 +1759,11 @@ const ja: Bundle = {
   "launcher.hub.refer": "友達を紹介",
   "launcher.activeCodesHeading": "利用可能なコード",
   "launcher.loadingRewards": "特典を読み込み中…",
+  "hub.visitor.title": "サインインしてポイントを貯めよう",
+  "hub.visitor.desc": "サインインしてポイントを追跡し、特典をアンロックしましょう。",
+  "hub.nonMember.title": "ポイントを貯め始める",
+  "hub.nonMember.desc":
+    "最初のご注文または獲得方法を完了すると、自動的に登録されます。",
   "page.heroTitle": "ポイントを獲得して特典をゲット。",
   "page.heroSubtitle": "プログラムに参加して、ご注文ごとに獲得。",
   "page.balanceLabel": "残高:",
@@ -1813,6 +1878,11 @@ const zhCN: Bundle = {
   "launcher.hub.refer": "推荐朋友",
   "launcher.activeCodesHeading": "您的有效代码",
   "launcher.loadingRewards": "正在加载奖励…",
+  "hub.visitor.title": "登录以开始赚取积分",
+  "hub.visitor.desc": "登录以跟踪您的积分并解锁奖励。",
+  "hub.nonMember.title": "开始赚取积分",
+  "hub.nonMember.desc":
+    "下您的第一笔订单或完成一种赚取方式 — 我们会自动为您注册。",
   "page.heroTitle": "赚取积分。获得奖励。",
   "page.heroSubtitle": "加入计划,每次下单都能赚取积分。",
   "page.balanceLabel": "您的余额:",

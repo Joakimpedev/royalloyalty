@@ -119,7 +119,7 @@
         <div id="royal-status-card" class="royal-status-card royal-status-card--visitor">
           <div class="royal-status-card__title" data-loc-key="hub.visitor.title">Sign in to start earning</div>
           <div class="royal-status-card__desc" data-loc-key="hub.visitor.desc">Sign in to track your points and unlock rewards.</div>
-          <a class="royal-btn" href="/account/login" data-loc-key="hub.visitor.cta">Sign in</a>
+          <a class="royal-btn" href="/account/login" data-loc-key="empty.earnSignInButton">Sign in to earn</a>
         </div>
       {%- endif -%}
 
@@ -328,10 +328,10 @@
           // matches the auto-enroll flow.
           card.innerHTML =
             '<div class="royal-status-card__title">' +
-            R.t('hub.nonMember.title', 'Start earning ' + pointsName) +
+            R.t('hub.nonMember.title', 'Start earning') +
             '</div>' +
             '<div class="royal-status-card__desc">' +
-            R.t('hub.nonMember.desc', 'Place your first order or complete a way to earn below — we’ll enroll you automatically.') +
+            R.t('hub.nonMember.desc', "Place your first order or complete a way to earn — we'll enroll you automatically.") +
             '</div>';
         }
         card.hidden = false;
