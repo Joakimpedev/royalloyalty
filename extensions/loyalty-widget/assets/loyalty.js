@@ -141,6 +141,24 @@
           lines.push("payload.primaryColor:     " + (b.primaryColor || "(none)"));
           lines.push("payload.secondaryColor:   " + (b.secondaryColor || "(none)"));
         }
+        if (__royalDiag.payloadBalance != null) {
+          lines.push("payload.balance:          " + __royalDiag.payloadBalance + " pts");
+        }
+        if (__royalDiag.payloadStoreCredit) {
+          var sc = __royalDiag.payloadStoreCredit;
+          lines.push(
+            "payload.storeCredit:      " +
+              (sc.balance != null ? sc.balance : "(missing)") +
+              " " + (sc.currency || "")
+          );
+        }
+        if (__royalDiag.payloadCashback) {
+          var cb = __royalDiag.payloadCashback;
+          lines.push(
+            "payload.cashback:         " +
+              (cb.enabled ? "enabled " + (cb.percent || 0) + "%" : "disabled")
+          );
+        }
         if (cs) {
           lines.push("css --royal-primary:      " + cs.getPropertyValue("--royal-primary").trim());
           lines.push("css --royal-secondary:    " + cs.getPropertyValue("--royal-secondary").trim());
@@ -397,6 +415,14 @@
           window.__royalDiag.payloadStatus = "ok (200)";
           window.__royalDiag.lastFetchStatus = 200;
           window.__royalDiag.payloadBranding = d && d.branding ? d.branding : null;
+          window.__royalDiag.payloadBalance = d && d.balance != null ? d.balance : null;
+          window.__royalDiag.payloadStoreCredit = d
+            ? {
+                balance: d.storeCreditBalance,
+                currency: d.storeCreditCurrency,
+              }
+            : null;
+          window.__royalDiag.payloadCashback = d ? d.cashback : null;
         }
         // Cache the localization bundle so t() can resolve keys without
         // needing the payload passed in everywhere. RTL locales
