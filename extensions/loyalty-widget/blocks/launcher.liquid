@@ -327,6 +327,24 @@
             (tier ? '<div class="royal-status-card__tier">' + escapeHtml(tier) + '</div>' : '') +
           '</div>';
 
+        // Cashback callout — appears between balance and Next Reward whenever
+        // the merchant has cashback turned on. Tells the member what they'll
+        // get *back* on every order on top of points.
+        if (d.cashback && d.cashback.enabled && (d.cashback.percent || 0) > 0) {
+          var cbTemplate = R.t(
+            'hub.member.cashbackLine',
+            'Earn {percent}% back as store credit on every order.'
+          );
+          var cbLine = String(cbTemplate).replace(
+            /\{percent\}/g,
+            String(d.cashback.percent)
+          );
+          html +=
+            '<div class="royal-status-card__cashback">' +
+              escapeHtml(cbLine) +
+            '</div>';
+        }
+
         // "Next reward" section — shows the cheapest reward to give the
         // dashboard purpose beyond a static number. If the cheapest is
         // affordable, swap the progress bar for a Ready badge. Skipped

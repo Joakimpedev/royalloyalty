@@ -18,6 +18,7 @@ import { getBalance } from "../lib/points.server";
 import { canAwardLoyalty } from "../lib/quota.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { normalizeCustomerId } from "../lib/gdpr.server";
+import { getStoreCreditAccounts } from "../lib/storecredit.server";
 
 const PAGE_SIZE = 50;
 
@@ -105,6 +106,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         : [];
       const balance = mem ? await getBalance(shop.id, mem.id) : 0;
       const redacted = !!mem?.redactedAt;
+
+      // Store credit / cashback — sum the live Shopify account balance(s) for
+      // this customer, plus the last N mirrored ledger rows for activity.
+      // Both can throw (missing scope, dead token); on failure we fall back
+      // to "no info" rather than crashing the whole slide-over.
+      let storeCreditBalance = 0;
+      let storeCreditCurrency = "USD";
+      try {
+        const accounts = await getStoreCreditAccounts(
+          admin.graphql,
+          memberId,
+        );
+        storeCreditBalance = accounts.reduce((s, a) => s + a.amount, 0);
+        storeCreditCurrency = accounts[0]?.currencyCode ?? "USD";
+      } catch {
+        /* no-op — section just won't show a balance */
+      }
+      const storeCreditLedger: any[] = await prisma.storeCreditLedger.findMany({
+        where: { shopId: shop.id, shopifyCustomerId: memberId },
+        orderBy: { createdAt: "desc" },
+        take: 25,
+      });
+
       detail = {
         id: memberId,
         name: redacted ? "[redacted]" : customer.displayName ?? "—",
@@ -122,6 +146,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           reason: t.reason,
           createdAt: t.createdAt.toISOString(),
         })),
+        storeCredit: {
+          balance: storeCreditBalance,
+          currency: storeCreditCurrency,
+          ledger: storeCreditLedger.map((l) => ({
+            id: l.id,
+            amount: l.amount,
+            direction: l.direction,
+            reason: l.reason,
+            reconcileState: l.reconcileState,
+            createdAt: l.createdAt.toISOString(),
+          })),
+        },
       };
     } else {
       detail = { notFound: true, id: memberId };
@@ -575,6 +611,15 @@ function DetailSlideOver({
                 )}
               </s-stack>
 
+              {/* Store credit / cashback — only render when the merchant has
+                  either issued any credit OR Shopify shows a live balance.
+                  Pre-cashback merchants get a clean slide-over. */}
+              {detail.storeCredit &&
+                (detail.storeCredit.balance > 0 ||
+                  detail.storeCredit.ledger.length > 0) && (
+                  <StoreCreditSection sc={detail.storeCredit} />
+                )}
+
               {/* Point history */}
               <div>
                 <div
@@ -669,6 +714,138 @@ const tdStyle: React.CSSProperties = {
   color: "#202223",
   verticalAlign: "top",
 };
+
+function StoreCreditSection({
+  sc,
+}: {
+  sc: {
+    balance: number;
+    currency: string;
+    ledger: Array<{
+      id: string;
+      amount: number;
+      direction: string;
+      reason: string;
+      reconcileState: string;
+      createdAt: string;
+    }>;
+  };
+}) {
+  const money = (n: number) =>
+    n.toLocaleString(undefined, { style: "currency", currency: sc.currency });
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#202223",
+          marginBottom: 10,
+        }}
+      >
+        Store credit / cashback
+      </div>
+      <div
+        style={{
+          border: "1px solid #e1e3e5",
+          borderRadius: 10,
+          padding: 16,
+          background: "#fff",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+          }}
+        >
+          <span style={{ fontSize: 12, color: "#6d7175" }}>
+            Live Shopify balance
+          </span>
+          <strong style={{ fontSize: 16 }}>{money(sc.balance)}</strong>
+        </div>
+        {sc.ledger.length === 0 ? (
+          <s-paragraph>No cashback activity yet.</s-paragraph>
+        ) : (
+          <div style={{ borderTop: "1px solid #f1f2f3" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#fafbfb" }}>
+                  {["Date", "Type", "Amount", "Reason", "Sync"].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: "8px 12px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "#6d7175",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        textAlign: "left",
+                        borderBottom: "1px solid #e1e3e5",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sc.ledger.map((l, i) => (
+                  <tr
+                    key={l.id}
+                    style={{
+                      borderBottom:
+                        i === sc.ledger.length - 1
+                          ? "none"
+                          : "1px solid #f1f2f3",
+                    }}
+                  >
+                    <td style={tdStyle}>
+                      {new Date(l.createdAt).toLocaleDateString()}
+                    </td>
+                    <td style={tdStyle}>
+                      {l.direction === "credit" ? "Credit" : "Debit"}
+                    </td>
+                    <td
+                      style={{
+                        ...tdStyle,
+                        color: l.direction === "credit" ? "#008060" : "#202223",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {l.direction === "credit" ? "+" : "−"}
+                      {money(l.amount)}
+                    </td>
+                    <td style={tdStyle}>{l.reason}</td>
+                    <td style={tdStyle}>
+                      <s-badge
+                        tone={
+                          l.reconcileState === "OK" ||
+                          l.reconcileState === "REPAIRED"
+                            ? "success"
+                            : l.reconcileState === "DRIFT"
+                              ? "critical"
+                              : "neutral"
+                        }
+                      >
+                        {l.reconcileState}
+                      </s-badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Card({ children }: { children: React.ReactNode }) {
   return (

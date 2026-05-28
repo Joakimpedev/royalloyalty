@@ -126,6 +126,12 @@ export const KEY_CATALOG: LocalizationKey[] = [
     defaultEn: "Ready to redeem",
   },
   {
+    key: "hub.member.cashbackLine",
+    section: "launcher",
+    label: "Hub status card — cashback callout (use {percent} for the value)",
+    defaultEn: "Earn {percent}% back as store credit on every order.",
+  },
+  {
     key: "launcher.loadingRewards",
     section: "launcher",
     label: "Loading rewards placeholder",
