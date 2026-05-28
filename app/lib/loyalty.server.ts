@@ -574,6 +574,19 @@ async function createDiscountCode(
     customerGets = { value: { percentage: 0 }, items: { all: true } };
   }
 
+  // Allow our reward codes to stack with whatever other discounts the
+  // merchant runs (auto-discounts for logged-in customers, sale codes,
+  // etc.). Shopify silently DROPS a code at checkout if its combinesWith
+  // is false against another already-applied discount, which is what
+  // caused redeemed codes to "disappear" when a logged-in 10% auto-code
+  // was already active. Stacking only works if BOTH discounts allow it;
+  // the merchant can still set their other discounts to be exclusive.
+  const combinesWith = {
+    orderDiscounts: true,
+    productDiscounts: true,
+    shippingDiscounts: true,
+  };
+
   const basicCodeDiscount: Record<string, unknown> = {
     title: `Royal Loyalty reward (${reward.type})`,
     code,
@@ -582,15 +595,11 @@ async function createDiscountCode(
     customerGets,
     appliesOncePerCustomer: true,
     usageLimit: 1,
+    combinesWith,
   };
 
   if (reward.type === "free_shipping") {
     basicCodeDiscount.customerGets = { items: { all: true }, value: { percentage: 0 } };
-    basicCodeDiscount.combinesWith = {
-      orderDiscounts: false,
-      productDiscounts: false,
-      shippingDiscounts: true,
-    };
   }
 
   const MUTATION = `#graphql
