@@ -151,31 +151,17 @@ export function useSuccessToast(
 // are typically 2–4 digits.
 
 
-// Decide whether the currency symbol leads (USD "$1") or trails ("1 kr")
-// based on the shop's locale + currency. Uses Intl.NumberFormat parts so
-// it picks up the locale's actual convention rather than hardcoding rules.
+// Always show the 3-letter ISO currency code as a trailing suffix (USD,
+// NOK, EUR, JPY, …). The earlier attempt at locale-aware symbol placement
+// — leading "$" for USD vs trailing "kr" for NOK via Intl.NumberFormat
+// parts — was confusing in practice; merchants told us the consistent
+// 3-letter code is clearer than guessing where the glyph belongs per
+// locale.
 export function moneyAffix(
   currencyCode: string,
-  locale: string,
+  _locale: string,
 ): { prefix?: string; suffix?: string } {
-  try {
-    const parts = new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: currencyCode,
-      currencyDisplay: "narrowSymbol",
-    }).formatToParts(1);
-    const idxCurrency = parts.findIndex((p) => p.type === "currency");
-    const idxNumber = parts.findIndex(
-      (p) => p.type === "integer" || p.type === "decimal",
-    );
-    const symbol = parts[idxCurrency]?.value ?? currencyCode;
-    if (idxCurrency >= 0 && idxNumber >= 0 && idxCurrency < idxNumber) {
-      return { prefix: symbol };
-    }
-    return { suffix: symbol };
-  } catch {
-    return { suffix: currencyCode };
-  }
+  return { suffix: currencyCode };
 }
 
 function NarrowFieldShell({
