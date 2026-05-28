@@ -144,6 +144,12 @@ export const KEY_CATALOG: LocalizationKey[] = [
     defaultEn: "Store credit balance",
   },
   {
+    key: "cart.rewardApplied",
+    section: "launcher",
+    label: "Cart card — reward applied success status",
+    defaultEn: "Reward applied — you'll see the discount at checkout.",
+  },
+  {
     key: "launcher.loadingRewards",
     section: "launcher",
     label: "Loading rewards placeholder",

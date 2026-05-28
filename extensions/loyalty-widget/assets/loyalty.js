@@ -840,31 +840,19 @@
         list += "</div>";
       }
 
-      var activeCodesBlock =
-        payload.activeCodes && payload.activeCodes.length
-          ? '<div class="royal-injected__active-codes-wrap">' +
-            '<div class="royal-injected__sub" style="margin-bottom:6px;"><strong>' +
-            t("cart.activeCodesHeading", "Your active codes") +
-            "</strong></div>" +
-            '<div id="royal-injected-cart-active-codes"></div>' +
-            "</div>"
-          : "";
+      // Active codes block intentionally NOT rendered in the cart. The
+      // panel still shows the customer their unused codes with Copy/Apply
+      // buttons; here we want the cart card to look clean and only ever
+      // offer one action — click a reward, it applies silently and is
+      // ready at checkout. The launcher panel remains the place to manage
+      // codes when the customer wants to.
 
       var status =
         '<div class="royal-status" id="royal-injected-cart-status" aria-live="polite"></div>';
 
       card.innerHTML =
-        head + creditBalanceLine + earnLine + activeCodesBlock + list + status;
+        head + creditBalanceLine + earnLine + list + status;
       insertIntoForm(form, card);
-
-      // Render active-code cards into the placeholder container.
-      if (payload.activeCodes && payload.activeCodes.length) {
-        renderActiveCodes(
-          null,
-          card.querySelector("#royal-injected-cart-active-codes"),
-          payload.activeCodes
-        );
-      }
 
       // Wire reward buttons.
       var statusEl = card.querySelector("#royal-injected-cart-status");
@@ -897,10 +885,50 @@
                 }
                 var code = inner.discountCode || res.discountCode;
                 if (code) {
-                  window.location.href =
-                    "/discount/" +
-                    encodeURIComponent(code) +
-                    "?redirect=/cart";
+                  // Apply the discount silently via Shopify's /discount/CODE
+                  // endpoint — it sets the discount cookie on the session
+                  // so the code is automatically applied at checkout. We
+                  // redirect to /cart.js (tiny JSON) instead of /cart so
+                  // fetch follows the redirect without dragging the user
+                  // off the current page. No copy/paste, no jank.
+                  fetch(
+                    "/discount/" + encodeURIComponent(code) + "?redirect=/cart.js",
+                    { credentials: "same-origin" }
+                  )
+                    .then(function () {
+                      setStatus(
+                        statusEl,
+                        "success",
+                        t(
+                          "cart.rewardApplied",
+                          "Reward applied — you'll see the discount at checkout."
+                        )
+                      );
+                      // Let any theme cart drawer that listens for these
+                      // events know to refresh its totals.
+                      try {
+                        document.dispatchEvent(
+                          new CustomEvent("royal:cart:discountApplied", {
+                            detail: { code: code },
+                          })
+                        );
+                        document.dispatchEvent(
+                          new CustomEvent("cart:refresh")
+                        );
+                      } catch (e) { /* old browser, no CustomEvent */ }
+                      rb.disabled = false;
+                    })
+                    .catch(function () {
+                      setStatus(
+                        statusEl,
+                        "error",
+                        t(
+                          "error.couldNotApplyReward",
+                          "We couldn't apply that reward. Please try again."
+                        )
+                      );
+                      rb.disabled = false;
+                    });
                 } else {
                   // Store-credit reward: no code to apply, points already
                   // debited, Shopify store-credit account already credited.

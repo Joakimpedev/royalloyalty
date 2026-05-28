@@ -73,6 +73,7 @@ const en: Bundle = {
     "Keep shopping to unlock your first reward ({points} points).",
   "cart.activeCodesHeading": "Your active codes",
   "cart.cashbackSuffix": "store credit",
+  "cart.rewardApplied": "Reward applied — you'll see the discount at checkout.",
   "product.subtext":
     "You have {balance} points. Earn {more} more with this order!",
   "social.platform.instagram": "Instagram",
