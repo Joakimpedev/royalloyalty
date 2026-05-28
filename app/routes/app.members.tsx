@@ -772,10 +772,22 @@ function StoreCreditSection({
           <s-paragraph>No cashback activity yet.</s-paragraph>
         ) : (
           <div style={{ borderTop: "1px solid #f1f2f3" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                tableLayout: "fixed",
+              }}
+            >
+              <colgroup>
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "36%" }} />
+                <col style={{ width: "20%" }} />
+              </colgroup>
               <thead>
                 <tr style={{ background: "#fafbfb" }}>
-                  {["Date", "Type", "Amount", "Reason", "Sync"].map((h) => (
+                  {["Date", "Amount", "Reason", "Sync"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -808,9 +820,6 @@ function StoreCreditSection({
                     <td style={tdStyle}>
                       {new Date(l.createdAt).toLocaleDateString()}
                     </td>
-                    <td style={tdStyle}>
-                      {l.direction === "credit" ? "Credit" : "Debit"}
-                    </td>
                     <td
                       style={{
                         ...tdStyle,
@@ -821,7 +830,12 @@ function StoreCreditSection({
                       {l.direction === "credit" ? "+" : "−"}
                       {money(l.amount)}
                     </td>
-                    <td style={tdStyle}>{l.reason}</td>
+                    <td style={tdStyle}>
+                      {l.reason
+                        .replace(/\s+on order\s+\S+/i, "")
+                        .replace(/\s*\[[^\]]+\]\s*$/, "")
+                        .trim()}
+                    </td>
                     <td style={tdStyle}>
                       <s-badge
                         tone={

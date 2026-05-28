@@ -23,119 +23,115 @@ Customer-facing test pass. Walk through this on a real store with the app instal
 - [x] Sign-in link goes to `/account/login`
 - [x] Logged-in non-member: shows the same balance dashboard as members, at 0 (auto-enrolls on first earn event — no separate prompt)
 - [x] Logged-in member: shows current balance + points name + tier pill + Next Reward progress bar
-- [ ] Cashback line shows if cashback enabled ("Earn X% back as store credit on every order.")
+- [x] Cashback line shows if cashback enabled ("Earn X% back as store credit on every order.")
 - [x] Custom panel title from branding admin applies (overrides theme-editor default, SSR'd via shop metafield)
 - [x] Custom launcher text from branding admin applies (SSR'd via shop metafield)
+- [x] Live store credit balance pill shows when customer has any (between points and cashback line)
 - [x] No console errors
 
 ## Rewards list (in panel)
 
-- [ ] Rewards load (no red diagnostic block)
-- [ ] Each reward shows label + point cost
-- [ ] Currency in labels matches the shop's currency (e.g. `$5 off`, `kr 5 off`)
-- [ ] Rewards above current balance show Redeem button disabled with "Not enough points yet" tooltip
-- [ ] Affordable rewards show Redeem enabled
-- [ ] Click Redeem on an affordable reward:
-  - [ ] Button disables, status shows "Redeeming…"
-  - [ ] On success: status shows code (if discount code reward)
-  - [ ] Points deducted from balance after refresh
-  - [ ] Code appears under "Your active codes"
-- [ ] If no rewards configured: "No rewards available yet — check back soon."
+- [x] Rewards load (no red diagnostic block)
+- [x] Each reward shows label + point cost
+- [x] Currency in labels matches the shop's currency (e.g. `$5 off`, `kr 5 off`)
+- [x] Rewards above current balance show Redeem button disabled with "Not enough points yet" tooltip
+- [x] Affordable rewards show Redeem enabled
+- [x] Click Redeem on an affordable reward:
+  - [x] Button disables, status shows "Redeeming…"
+  - [x] On success: status shows "Reward applied — store credit added to your account."
+  - [x] Points deducted from balance after refresh
+  - [x] Customer's Shopify store credit balance increases by the reward value
+- [x] If no rewards configured: "No rewards available yet — check back soon."
 
 ## Active codes (in panel)
 
-- [ ] Shows after a redemption
-- [ ] Each card shows: reward label, points spent, the code
-- [ ] Copy button copies code to clipboard, briefly says "Copied!"
-- [ ] Apply to cart button navigates to `/discount/CODE?redirect=/cart`
-- [ ] Hidden when no active codes
+**REMOVED**: rewards now deliver as Shopify store credit, no discount codes are minted.
+Section retained in source as historical reference only.
 
 ## Earn — order
 
-- [ ] Place a test order while signed in
-- [ ] Order points appear on the member's balance after webhook fires (give it a few seconds)
-- [ ] Amount matches earn rule (flat or per-$)
-- [ ] If member is in a tier: multiplier applied
+- [x] Place a test order while signed in
+- [x] Order points appear on the member's balance after webhook fires (give it a few seconds)
+- [x] Amount matches earn rule (flat or per-$)
+- [ ] If member is in a tier: multiplier applied  *(tier promotion untested overall)*
 
 ## Earn — signup
 
-- [ ] Sign up as a new customer
-- [ ] Signup bonus lands in balance on first panel open
+- [x] Sign up as a new customer
+- [x] Signup bonus lands in balance on first panel open
 
 ## Earn — birthday / anniversary / newsletter / social / review
 
 For each rule the merchant has enabled in admin:
 
-- [ ] Trigger the action (e.g. follow on social and click the Follow button)
-- [ ] Points awarded once
-- [ ] Second click does NOT double-award
-- [ ] Disabled rules don't award and don't appear in the widget
+- [x] Trigger the action (e.g. follow on social and click the Follow button)
+- [x] Points awarded once
+- [x] Second click does NOT double-award
+- [x] Disabled rules don't award and don't appear in the widget
 
 ## Earn — refund / cancel
 
-- [ ] Cancel a paid order → points reverse on the member
-- [ ] Refund part of an order → points partially reverse
+- [x] Cancel a paid order → points reverse on the member
+- [x] Refund part of an order → points partially reverse
 
-## Redeem — by type
+## Redeem — store credit only (post-rewrite)
 
-- [ ] **Amount off** → discount code reduces order by $ at checkout
-- [ ] **Percent off** → discount code reduces order by % at checkout
-- [ ] **Free shipping** → shipping is $0 at checkout
-- [ ] **Free product** → correct product added free
-- [ ] **Store credit** → balance appears in customer's Shopify account and applies at checkout
-- [ ] Insufficient balance: Redeem button cannot fire
+- [x] **Store credit** → customer's Shopify store credit balance increases by the reward value, applies at checkout as a payment method
+- [x] Insufficient balance: Redeem button cannot fire
+- [x] No new entry created in Shopify admin → Discounts (no more discount-code minting)
+- [x] Reward stacks with other discounts at checkout (store credit is a payment method, not subject to combinesWith)
 
 ## Loyalty page block (dedicated /loyalty page if you've added the block)
 
-- [ ] Page renders the full program: earn rules list, rewards list, tier progress, referral section
-- [ ] Earn rules show titles + point values
-- [ ] Rewards sorted by point cost ascending
-- [ ] Tier section shows current tier + progress to next tier (if tiers configured)
-- [ ] Referral section shows the customer's unique link + share buttons (if referrals enabled)
-- [ ] "Points" wording matches the custom points name from branding
+- [x] Page renders the full program: earn rules list, rewards list, tier progress, referral section
+- [x] Earn rules show titles + point values
+- [x] Rewards sorted by point cost ascending
+- [ ] Tier section shows current tier + progress to next tier (if tiers configured)  *(tier promotion untested overall)*
+- [x] Referral section shows the customer's unique link + share buttons (if referrals enabled)
+- [x] "Points" wording matches the custom points name from branding
 
 ## Customer account block (Shopify /account)
 
-- [ ] Loyalty block visible on the account page
-- [ ] Shows balance + tier badge
-- [ ] Shows recent activity (earns + redemptions)
-- [ ] Link through to the full loyalty page works
+- [x] Loyalty block visible on the account page
+- [x] Shows balance + tier badge
+- [x] Shows recent activity (earns + redemptions)
+- [x] Link through to the full loyalty page works
 
 ## Product page injection (if `productEnabled` in branding)
 
-- [ ] On a PDP, a "Earn X points with this purchase" card renders above Add to Cart
-- [ ] Point count matches the product price × purchase earn rule
-- [ ] Card uses the configured accent color
-- [ ] Heading + subtext use the configured templates (`{points}` / `{balance}` / `{more}`)
-- [ ] No duplicate card if the page re-renders
+- [x] On a PDP, a "Earn X points with this purchase" card renders above Add to Cart
+- [x] Point count matches the product price × purchase earn rule
+- [x] Card uses the configured accent color
+- [x] Heading + subtext use the configured templates (`{points}` / `{balance}` / `{more}`)
+- [x] No duplicate card if the page re-renders
 
 ## Cart injection (if `cartEnabled` in branding)
 
-- [ ] On `/cart` and in the cart drawer, a "Use your points" card renders above the Checkout button
-- [ ] Logged-out: shows "Sign in to apply your points to this order." with sign-in link
-- [ ] Logged-in: shows balance, "+X points for this order", "+X store credit" if cashback enabled
-- [ ] Affordable rewards listed as clickable buttons
-- [ ] Click a reward → applies discount and redirects to `/cart` with code applied
-- [ ] Active codes (if any) show above the reward list with Copy + Apply
-- [ ] Card survives cart drawer re-render (MutationObserver re-inject)
+- [x] On `/cart` and in the cart drawer, a "Use your points" card renders above the Checkout button
+- [x] Logged-out: shows "Sign in to apply your points to this order." with sign-in link
+- [x] Logged-in: shows balance, "+X points for this order", "+X store credit" if cashback enabled
+- [x] Live store credit balance line shows when customer has any
+- [x] Affordable rewards listed as clickable buttons
+- [x] Click a reward → store credit applied silently, no redirect, no code; status reads "Reward applied — store credit added to your account."
+- [x] Card survives cart drawer re-render (MutationObserver re-inject)
 
 ## Referrals
 
-- [ ] Open the referral link from the widget while signed in
-- [ ] Copy it to another browser / incognito
-- [ ] Visit storefront with `?ref=CODE` → cookie `royal_ref` set for 30 days
-- [ ] Sign up as a new customer in that session
-- [ ] Place a qualifying order (above holdback if configured)
-- [ ] After holdback elapses (or merchant approves): both referrer and referee get points
-- [ ] Self-referral (same email) is rejected
-- [ ] Same-IP behavior matches setting (block vs flag-for-review)
+- [x] Open the referral link from the widget while signed in
+- [x] Copy it to another browser / incognito
+- [x] Visit storefront with `?ref=CODE` → cookie `royal_ref` set for 30 days
+- [x] Sign up as a new customer in that session
+- [x] Place a qualifying order (above holdback if configured)
+- [x] After holdback elapses (or merchant approves): both referrer and referee get points
+- [x] Self-referral (same email) is rejected
+- [x] Same-IP behavior matches setting (block vs flag-for-review)
 
 ## Cashback
 
-- [ ] Place a test order
-- [ ] Store credit issued at the configured % of the order
-- [ ] Credit visible in the Shopify customer account
-- [ ] Credit usable at next checkout
+- [x] Place a test order
+- [x] Store credit issued at the configured % of the order
+- [x] Credit visible in the Shopify customer account
+- [x] Credit usable at next checkout
 
 ## Tier promotion
 
@@ -153,12 +149,12 @@ For each rule the merchant has enabled in admin:
 
 ## Sanity
 
-- [ ] No console errors on any storefront page
-- [ ] Widget loads within ~500ms, no layout shift
-- [ ] Disabling theme app embed → widget cleanly disappears, no broken markup
-- [ ] Mobile width: launcher + panel render without overflow
-- [ ] Reduced-motion preference honored (no large animations)
-- [ ] If `/loyalty/balance` ever 4xx/5xx: red diagnostic block surfaces the URL + status + body snippet inside the panel (debug aid — should not appear in normal use)
+- [x] No console errors on any storefront page
+- [x] Widget loads within ~500ms, no layout shift
+- [x] Disabling theme app embed → widget cleanly disappears, no broken markup
+- [x] Mobile width: launcher + panel render without overflow
+- [x] Reduced-motion preference honored (no large animations)
+- [x] If `/loyalty/balance` ever 4xx/5xx: red diagnostic block surfaces the URL + status + body snippet inside the panel (debug aid — should not appear in normal use)
 
 ---
 

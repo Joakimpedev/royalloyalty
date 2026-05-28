@@ -32,8 +32,27 @@ async function requireShop(shopDomain: string) {
   return shop;
 }
 
+// Batch-fetch order names + customer names from Shopify for the ledger so
+// the admin sees human-readable "#1042" / "Arve Nordahl" instead of opaque
+// numeric IDs. We do this once per page load with two GraphQL queries (one
+// for orders, one for customers) keyed on the unique IDs in the ledger
+// page, then merge the results into each row.
+const ORDERS_BY_ID_QUERY = `#graphql
+  query OrdersByIds($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Order { id name }
+    }
+  }`;
+
+const CUSTOMERS_BY_ID_QUERY = `#graphql
+  query CustomersByIds($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Customer { id displayName }
+    }
+  }`;
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
   const settings = await getCashbackSettings(shop.id);
 
@@ -46,6 +65,71 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     driftCount(shop.id),
   ]);
 
+  // Collect the unique order + customer IDs we need to resolve. Cap at the
+  // page size to keep the GraphQL request small. Missing IDs simply render
+  // as the numeric value, so a failed lookup degrades gracefully.
+  const orderIds = Array.from(
+    new Set(
+      ledger
+        .map((l) => l.orderId)
+        .filter((id): id is string => !!id && /^\d+$/.test(id)),
+    ),
+  );
+  const customerIds = Array.from(
+    new Set(ledger.map((l) => l.shopifyCustomerId).filter(Boolean)),
+  );
+
+  const orderNameById = new Map<string, string>();
+  const customerNameById = new Map<string, string>();
+
+  if (orderIds.length) {
+    try {
+      const res = await admin.graphql(ORDERS_BY_ID_QUERY, {
+        variables: {
+          ids: orderIds.map((id) => `gid://shopify/Order/${id}`),
+        },
+      });
+      const json: any = await res.json();
+      const nodes: any[] = json?.data?.nodes ?? [];
+      for (const n of nodes) {
+        if (!n?.id || !n?.name) continue;
+        const numericId = String(n.id).split("/").pop()!;
+        orderNameById.set(numericId, n.name);
+      }
+    } catch {
+      /* fall back to numeric IDs */
+    }
+  }
+  if (customerIds.length) {
+    try {
+      const res = await admin.graphql(CUSTOMERS_BY_ID_QUERY, {
+        variables: {
+          ids: customerIds.map((id) => `gid://shopify/Customer/${id}`),
+        },
+      });
+      const json: any = await res.json();
+      const nodes: any[] = json?.data?.nodes ?? [];
+      for (const n of nodes) {
+        if (!n?.id || !n?.displayName) continue;
+        const numericId = String(n.id).split("/").pop()!;
+        customerNameById.set(numericId, n.displayName);
+      }
+    } catch {
+      /* fall back to numeric IDs */
+    }
+  }
+
+  // Strip the trailing "on order <id> [tag]" boilerplate the engine appends
+  // to ledger reasons — the Order column already tells the merchant which
+  // order, the tag is internal noise. What remains is the human-meaningful
+  // bit ("Cashback 5%", "Store credit reward", "Clawback for order ...").
+  function cleanReason(raw: string): string {
+    return raw
+      .replace(/\s+on order\s+\S+/i, "")
+      .replace(/\s*\[[^\]]+\]\s*$/, "")
+      .trim();
+  }
+
   return {
     settings,
     drift,
@@ -53,8 +137,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       id: l.id,
       amount: l.amount,
       direction: l.direction,
-      reason: l.reason,
-      orderId: l.orderId ?? "—",
+      reason: cleanReason(l.reason),
+      orderId: l.orderId ?? null,
+      orderName: l.orderId ? orderNameById.get(l.orderId) ?? null : null,
+      customerId: l.shopifyCustomerId,
+      customerName: customerNameById.get(l.shopifyCustomerId) ?? null,
       state: l.reconcileState,
       createdAt: l.createdAt.toISOString().slice(0, 10),
     })),
@@ -220,20 +307,52 @@ export default function StoreCreditPage() {
         ) : (
           <s-table>
             <s-table-header-row>
-              <s-table-header>Date</s-table-header>
-              <s-table-header>Direction</s-table-header>
-              <s-table-header>Amount</s-table-header>
               <s-table-header>Order</s-table-header>
+              <s-table-header>Date</s-table-header>
+              <s-table-header>Customer</s-table-header>
+              <s-table-header>Amount</s-table-header>
               <s-table-header>Reason</s-table-header>
               <s-table-header>Sync</s-table-header>
             </s-table-header-row>
             <s-table-body>
               {ledger.map((l) => (
                 <s-table-row key={l.id}>
+                  <s-table-cell>
+                    {l.orderId ? (
+                      <a
+                        href={`shopify:admin/orders/${l.orderId}`}
+                        style={{ color: "#2C6ECB", textDecoration: "none" }}
+                      >
+                        {l.orderName ?? `…${l.orderId.slice(-9)}`}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </s-table-cell>
                   <s-table-cell>{l.createdAt}</s-table-cell>
-                  <s-table-cell>{l.direction}</s-table-cell>
-                  <s-table-cell>{money(l.amount)}</s-table-cell>
-                  <s-table-cell>{l.orderId}</s-table-cell>
+                  <s-table-cell>
+                    {l.customerId ? (
+                      <a
+                        href={`shopify:admin/customers/${l.customerId}`}
+                        style={{ color: "#2C6ECB", textDecoration: "none" }}
+                      >
+                        {l.customerName ?? `Customer ${l.customerId}`}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </s-table-cell>
+                  <s-table-cell>
+                    <span
+                      style={{
+                        color: l.direction === "credit" ? "#008060" : "#202223",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {l.direction === "credit" ? "+" : "−"}
+                      {money(l.amount)}
+                    </span>
+                  </s-table-cell>
                   <s-table-cell>{l.reason}</s-table-cell>
                   <s-table-cell>
                     <s-badge
