@@ -270,9 +270,13 @@ export default function StoreCreditPage() {
         </s-stack>
       </s-section>
 
-      <s-section heading="Reconciliation">
-        <s-stack direction="block" gap="base">
-          {drift > 0 ? (
+      {/* Reconciliation surface is only useful when there's drift to repair —
+          the background cron quietly handles PENDING-row follow-ups every
+          tick. Hiding the section in the happy path keeps the page clean
+          and removes a meaningless "Run" button. */}
+      {drift > 0 && (
+        <s-section heading="Reconciliation">
+          <s-stack direction="block" gap="base">
             <s-banner tone="warning" heading="Cashback needs attention">
               <s-paragraph>
                 {drift} mirrored transaction(s) are out of sync with Shopify.
@@ -280,19 +284,17 @@ export default function StoreCreditPage() {
                 stay flagged below for manual review.
               </s-paragraph>
             </s-banner>
-          ) : (
-            <s-paragraph>
-              All mirrored cashback transactions are in sync with Shopify.
-            </s-paragraph>
-          )}
-          <s-button
-            onClick={() => submit({ _intent: "reconcile" }, { method: "POST" })}
-            {...(saving ? { loading: "" } : {})}
-          >
-            Run reconciliation now
-          </s-button>
-        </s-stack>
-      </s-section>
+            <s-button
+              onClick={() =>
+                submit({ _intent: "reconcile" }, { method: "POST" })
+              }
+              {...(saving ? { loading: "" } : {})}
+            >
+              Run reconciliation now
+            </s-button>
+          </s-stack>
+        </s-section>
+      )}
 
       <s-section heading="Cashback ledger">
         {ledger.length === 0 ? (

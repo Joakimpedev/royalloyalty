@@ -5,20 +5,29 @@
 // loyalty state (points, txns) from prisma by numeric customer id. Clicking a
 // row sets ?member=<id> which the loader detects to additionally fetch detail
 // data — rendered as a slide-over so the list stays visible underneath.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type {
+  ActionFunctionArgs,
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useLoaderData, useSearchParams, useRouteError } from "react-router";
+import {
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useSearchParams,
+  useRouteError,
+  useSubmit,
+} from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { getBalance } from "../lib/points.server";
+import { getBalance, recordPointTransaction } from "../lib/points.server";
 import { canAwardLoyalty } from "../lib/quota.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { normalizeCustomerId } from "../lib/gdpr.server";
 import { getStoreCreditAccounts } from "../lib/storecredit.server";
+import { useSuccessToast } from "../lib/polaris-bindings";
 
 const PAGE_SIZE = 50;
 
@@ -70,6 +79,69 @@ interface Row {
   enrolled: boolean;
   balance: number;
 }
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const shop = await requireShop(session.shop);
+  const form = await request.formData();
+  const intent = String(form.get("_intent") ?? "");
+
+  if (intent !== "adjust-points") {
+    return { ok: false, message: "Unknown action." };
+  }
+  const memberCustomerId = String(form.get("memberCustomerId") ?? "");
+  const points = Number.parseInt(String(form.get("points") ?? ""), 10);
+  const reason = String(form.get("reason") ?? "").trim();
+
+  if (!memberCustomerId) {
+    return { ok: false, message: "Missing customer id." };
+  }
+  if (!Number.isFinite(points) || points === 0) {
+    return { ok: false, message: "Enter a non-zero number of points." };
+  }
+  if (!reason) {
+    return { ok: false, message: "Reason is required." };
+  }
+
+  // Member row is lazy — created on first earn. If the merchant is adjusting
+  // points for a customer who hasn't transacted yet, enroll them now so the
+  // ADJUST row has a valid memberId. Same shape awardForAction uses on first
+  // award.
+  const mem = await prisma.member.upsert({
+    where: {
+      shopId_shopifyCustomerId: {
+        shopId: shop.id,
+        shopifyCustomerId: memberCustomerId,
+      },
+    },
+    update: {},
+    create: {
+      shopId: shop.id,
+      shopifyCustomerId: memberCustomerId,
+      enrolledAt: new Date(),
+    },
+  });
+  if (mem.redactedAt) {
+    return {
+      ok: false,
+      message: "This member's data has been redacted; cannot adjust.",
+    };
+  }
+
+  await recordPointTransaction({
+    shopId: shop.id,
+    memberId: mem.id,
+    type: "ADJUST",
+    points,
+    reason: `Manual adjustment: ${reason}`,
+  });
+
+  return {
+    ok: true,
+    message:
+      points > 0 ? `Added ${points} points.` : `Deducted ${-points} points.`,
+  };
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -301,8 +373,22 @@ export default function MembersPage() {
   const { rows, pageInfo, segment, query, quotaOk, detail } =
     useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
+  const navigation = useNavigation();
   const nav = useAppNavigate();
   void nav;
+
+  // Detect whether the user just clicked a row and we're waiting on the
+  // loader to bring the next ?member=... detail back. The slide-over mounts
+  // immediately on click with a skeleton; the real content swaps in when
+  // detail arrives. Without this, the user sees nothing happen for ~500ms
+  // after clicking, which feels broken.
+  const pendingMemberId = (() => {
+    if (navigation.state !== "loading" || !navigation.location) return null;
+    const next = new URLSearchParams(navigation.location.search);
+    return next.get("member");
+  })();
+  const showOverlay = Boolean(detail) || Boolean(pendingMemberId);
+  const detailLoading = !detail && Boolean(pendingMemberId);
 
   const openDetail = (id: string) => {
     const next = new URLSearchParams(params);
@@ -412,6 +498,7 @@ export default function MembersPage() {
                     key={r.id}
                     {...({
                       onClick: () => openDetail(r.id),
+                      "data-clickable": "",
                       style: { cursor: "pointer" },
                     } as any)}
                   >
@@ -454,13 +541,27 @@ export default function MembersPage() {
         )}
       </s-section>
 
-      {detail && (
+      {showOverlay && (
         <DetailSlideOver
           detail={detail}
+          loading={detailLoading}
           quotaOk={quotaOk}
           onClose={closeDetail}
         />
       )}
+
+      {/* Row hover affordance — without this, the table looks static and the
+          merchant has no signal the rows are clickable. Targets every row
+          inside this page so it only applies on the members list. */}
+      <style>{`
+        s-table-row {
+          transition: background 0.12s ease;
+        }
+        s-table-row[data-clickable]:hover {
+          background: #f6f6f7 !important;
+          cursor: pointer;
+        }
+      `}</style>
     </s-page>
   );
 }
@@ -471,14 +572,26 @@ export default function MembersPage() {
 
 function DetailSlideOver({
   detail,
+  loading,
   quotaOk,
   onClose,
 }: {
-  detail: any;
+  detail: any | null;
+  loading: boolean;
   quotaOk: boolean;
   onClose: () => void;
 }) {
-  const notFound = detail.notFound === true;
+  const notFound = detail?.notFound === true;
+
+  // Slide-in animation — start off-screen on first render then flip on the
+  // next frame so the transition has something to interpolate to. Closing
+  // is handled by the parent unmounting; we don't try to animate out (would
+  // need an exit-tracking state machine for marginal payoff).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   return (
     <>
@@ -490,6 +603,8 @@ function DetailSlideOver({
           inset: 0,
           background: "rgba(0,0,0,0.35)",
           zIndex: 400,
+          opacity: mounted ? 1 : 0,
+          transition: "opacity 0.22s ease",
         }}
       />
       {/* Panel */}
@@ -501,7 +616,7 @@ function DetailSlideOver({
           top: 0,
           right: 0,
           bottom: 0,
-          width: 520,
+          width: 640,
           maxWidth: "100vw",
           background: "#fff",
           zIndex: 401,
@@ -509,6 +624,8 @@ function DetailSlideOver({
           flexDirection: "column",
           boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
           overflowY: "auto",
+          transform: mounted ? "translateX(0)" : "translateX(100%)",
+          transition: "transform 0.26s cubic-bezier(0.32, 0.72, 0, 1)",
         }}
       >
         {/* Header */}
@@ -537,7 +654,11 @@ function DetailSlideOver({
               paddingRight: 12,
             }}
           >
-            {notFound ? "Customer not found" : detail.name}
+            {notFound
+              ? "Customer not found"
+              : detail
+                ? detail.name
+                : "Loading…"}
           </div>
           <button
             type="button"
@@ -563,6 +684,8 @@ function DetailSlideOver({
               This customer no longer exists in your Shopify store, or you
               don't have access to view them.
             </s-paragraph>
+          ) : loading || !detail ? (
+            <DetailSkeleton />
           ) : (
             <s-stack direction="block" gap="large">
               {/* Identity card */}
@@ -600,16 +723,10 @@ function DetailSlideOver({
                 ]}
               />
 
-              <s-stack direction="inline" gap="base">
-                <s-button {...(quotaOk ? {} : { disabled: "" })}>
-                  Adjust points
-                </s-button>
-                {!quotaOk && (
-                  <s-text tone="subdued">
-                    Upgrade to unlock more monthly loyalty volume.
-                  </s-text>
-                )}
-              </s-stack>
+              <AdjustPointsForm
+                memberCustomerId={detail.id}
+                quotaOk={quotaOk}
+              />
 
               {/* Store credit / cashback — only render when the merchant has
                   either issued any credit OR Shopify shows a live balance.
@@ -858,6 +975,153 @@ function StoreCreditSection({
         )}
       </div>
     </div>
+  );
+}
+
+// Adjust Points — manual ±N credit/debit on a member, recorded as ADJUST in
+// the ledger. Form-state is collapsed by default so the slide-over doesn't
+// look cluttered; clicking the button reveals the two inputs. Submit
+// re-runs the loader so the points history + balance refresh in place.
+function AdjustPointsForm({
+  memberCustomerId,
+  quotaOk,
+}: {
+  memberCustomerId: string;
+  quotaOk: boolean;
+}) {
+  const actionData = useActionData<typeof action>();
+  const submit = useSubmit();
+  const nav = useNavigation();
+  const [open, setOpen] = useState(false);
+  const [points, setPoints] = useState("");
+  const [reason, setReason] = useState("");
+  const submitting = nav.state === "submitting";
+
+  useSuccessToast(actionData);
+
+  // Collapse the form again after a successful submit and clear the inputs
+  // so the merchant can adjust another value without re-typing.
+  useEffect(() => {
+    if (actionData?.ok) {
+      setOpen(false);
+      setPoints("");
+      setReason("");
+    }
+  }, [actionData?.ok]);
+
+  if (!open) {
+    return (
+      <s-stack direction="inline" gap="base">
+        <s-button
+          onClick={() => setOpen(true)}
+          {...(quotaOk ? {} : { disabled: "" })}
+        >
+          Adjust points
+        </s-button>
+        {!quotaOk && (
+          <s-text tone="subdued">
+            Upgrade to unlock more monthly loyalty volume.
+          </s-text>
+        )}
+      </s-stack>
+    );
+  }
+
+  const numericPoints = Number.parseInt(points, 10);
+  const valid =
+    Number.isFinite(numericPoints) && numericPoints !== 0 && reason.trim();
+
+  return (
+    <div
+      style={{
+        border: "1px solid #e1e3e5",
+        borderRadius: 10,
+        padding: 16,
+        background: "#fff",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 600, color: "#202223" }}>
+        Adjust points
+      </div>
+      <s-text-field
+        label="Points (negative to deduct)"
+        type="number"
+        value={points}
+        onChange={(e: { target: { value: string } }) =>
+          setPoints(e.target.value)
+        }
+      />
+      <s-text-field
+        label="Reason"
+        value={reason}
+        onChange={(e: { target: { value: string } }) =>
+          setReason(e.target.value)
+        }
+      />
+      {actionData && !actionData.ok && (
+        <s-banner tone="critical">
+          <s-paragraph>{actionData.message}</s-paragraph>
+        </s-banner>
+      )}
+      <s-stack direction="inline" gap="base">
+        <s-button
+          variant="primary"
+          onClick={() => {
+            const fd = new FormData();
+            fd.set("_intent", "adjust-points");
+            fd.set("memberCustomerId", memberCustomerId);
+            fd.set("points", String(numericPoints));
+            fd.set("reason", reason.trim());
+            submit(fd, { method: "POST" });
+          }}
+          {...(valid && !submitting ? {} : { disabled: "" })}
+          {...(submitting ? { loading: "" } : {})}
+        >
+          Apply adjustment
+        </s-button>
+        <s-button onClick={() => setOpen(false)}>Cancel</s-button>
+      </s-stack>
+    </div>
+  );
+}
+
+// Skeleton blocks rendered while the loader is fetching detail. Stylistically
+// matches the real layout (identity card → KPI strip → button row → history
+// table) so the layout doesn't jump when content arrives.
+function DetailSkeleton() {
+  return (
+    <s-stack direction="block" gap="large">
+      <SkBlock height={160} />
+      <SkBlock height={80} />
+      <SkBlock height={36} width={140} />
+      <SkBlock height={220} />
+      <style>{`
+        @keyframes royal-skeleton-pulse {
+          0% { opacity: 0.55; }
+          50% { opacity: 0.9; }
+          100% { opacity: 0.55; }
+        }
+      `}</style>
+    </s-stack>
+  );
+}
+
+function SkBlock({ height, width }: { height: number; width?: number }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        height,
+        width: width ?? "100%",
+        borderRadius: 8,
+        background:
+          "linear-gradient(90deg, #f1f2f3 0%, #e6e7e8 50%, #f1f2f3 100%)",
+        animation: "royal-skeleton-pulse 1.4s ease-in-out infinite",
+      }}
+    />
   );
 }
 
