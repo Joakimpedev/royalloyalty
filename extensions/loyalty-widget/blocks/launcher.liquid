@@ -525,13 +525,27 @@
               rb.disabled = true;
               R.setStatus(status, 'loading', R.t('status.redeeming', 'Redeeming…'));
               R.redeem(cfg, rw.id).then(function (res) {
-                if (res && res.result && res.result.discountCode) {
+                // Server returns { ok: true, result: { ok, error?, discountCode? } }.
+                // Surface inner.error so a failed redemption isn't silently
+                // dressed up as success.
+                var inner = (res && res.result) || res || {};
+                if (inner.ok === false) {
+                  rb.disabled = false;
+                  R.setStatus(
+                    status,
+                    'error',
+                    inner.error ||
+                      R.t('error.couldNotRedeem', "We couldn't redeem that reward. Please try again."),
+                  );
+                  return;
+                }
+                if (inner.discountCode) {
                   R.setStatus(
                     status,
                     'success',
                     R.tSubstitute(
                       R.t('status.rewardRedeemedWithCode', 'Reward redeemed — your code is {code}.'),
-                      { code: res.result.discountCode },
+                      { code: inner.discountCode },
                     ),
                   );
                 } else {

@@ -876,12 +876,34 @@
             setStatus(statusEl, "loading", t("status.redeeming", "Redeeming…"));
             redeem(cfg, rb.getAttribute("data-reward-id"))
               .then(function (res) {
-                if (res.discountCode) {
+                // Server response shape: { ok: true, result: { ok, error?, discountCode? } }
+                // The outer ok=true is HTTP-level; the actual outcome lives
+                // on result. Surfacing the inner error here is what made the
+                // cart redeem-button look silent when it really failed
+                // upstream (e.g. shop lookup, Shopify discount-code mutation).
+                var inner = (res && res.result) || res || {};
+                if (inner.ok === false) {
+                  setStatus(
+                    statusEl,
+                    "error",
+                    inner.error ||
+                      t(
+                        "error.couldNotApplyReward",
+                        "We couldn't apply that reward. Please try again.",
+                      ),
+                  );
+                  rb.disabled = false;
+                  return;
+                }
+                var code = inner.discountCode || res.discountCode;
+                if (code) {
                   window.location.href =
                     "/discount/" +
-                    encodeURIComponent(res.discountCode) +
+                    encodeURIComponent(code) +
                     "?redirect=/cart";
                 } else {
+                  // Store-credit reward: no code to apply, points already
+                  // debited, Shopify store-credit account already credited.
                   setStatus(
                     statusEl,
                     "success",

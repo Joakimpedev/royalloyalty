@@ -21,6 +21,7 @@ import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getBalance } from "../lib/points.server";
+import { withFreshToken } from "../lib/token.server";
 import {
   buildStorefrontLoyaltyPayload,
   type StorefrontPayload,
@@ -138,13 +139,35 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   // server-side validation (member, points, plan/quota) happens inside them.
   try {
     if (sub === "redeem" || sub === "pos/redeem") {
+      // Redemption needs an Admin GraphQL client to mint the Shopify
+      // discount code (amount_off / percent_off / free_shipping) or credit
+      // a store credit account (store_credit). The proxy auth only validates
+      // the storefront HMAC, so we grab the offline admin session via
+      // withFreshToken — same pattern as the store-credit balance read on
+      // /loyalty/balance.
+      if (!ctx.member) {
+        return jsonCors(
+          { ok: true, result: { ok: false, error: "Not enrolled yet." } },
+        );
+      }
       const { redeemReward } = await import("../lib/loyalty.server");
-      const result = await redeemReward({
-        shopId: ctx.shop.id,
-        memberId: ctx.member?.id,
-        shopifyCustomerId: customerId,
-        rewardId: String(body.rewardId ?? ""),
-      } as any);
+      const result = await withFreshToken(shopDomain, async (admin) =>
+        redeemReward({
+          shopDomain,
+          memberId: ctx.member!.id,
+          rewardId: String(body.rewardId ?? ""),
+          admin: { graphql: admin.graphql },
+        }),
+      );
+      if (!result) {
+        return jsonCors({
+          ok: true,
+          result: {
+            ok: false,
+            error: "Could not reach Shopify right now — please try again.",
+          },
+        });
+      }
       return jsonCors({ ok: true, result });
     }
     if (sub === "loyalty/claim-social") {
