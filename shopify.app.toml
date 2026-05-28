@@ -61,7 +61,7 @@ api_version = "2026-01"
 [access_scopes]
 # Minimal justified set (see SCOPE-JUSTIFICATIONS.md). config link wiped this
 # because the new Partner app had no scopes yet — restored to match the code.
-scopes = "read_customers,write_customers,read_orders,write_discounts,read_products,read_store_credit_account_transactions,write_store_credit_account_transactions,read_themes"
+scopes = "read_customers,write_customers,read_orders,write_discounts,read_products,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_themes"
 
 [auth]
 redirect_urls = [ "https://royalloyalty-production.up.railway.app/api/auth" ]

@@ -86,13 +86,18 @@ export async function getStoreCreditBalance(
 // Writes — credit / debit + mirror
 // ---------------------------------------------------------------------------
 
+// NOTE: we deliberately do NOT select `account { id }` here. Reading that
+// sub-field requires the `read_store_credit_accounts` scope, which is separate
+// from `write_store_credit_account_transactions`. We never use the account id
+// in the returned payload — leaving it in caused every cashback write to fail
+// with "Access denied for account field". Account-level reads go through the
+// dedicated STORE_CREDIT_ACCOUNTS_QUERY (which requires that scope).
 const CREDIT_MUTATION = `#graphql
   mutation storeCreditAccountCredit($id: ID!, $creditInput: StoreCreditAccountCreditInput!) {
     storeCreditAccountCredit(id: $id, creditInput: $creditInput) {
       storeCreditAccountTransaction {
         id
         amount { amount currencyCode }
-        account { id }
       }
       userErrors { field message }
     }
@@ -104,7 +109,6 @@ const DEBIT_MUTATION = `#graphql
       storeCreditAccountTransaction {
         id
         amount { amount currencyCode }
-        account { id }
       }
       userErrors { field message }
     }
