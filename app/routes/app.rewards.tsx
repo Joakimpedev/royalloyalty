@@ -20,12 +20,12 @@ import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
 import { PageTitle, useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
 
-const REWARD_TYPES = [
-  "amount_off",
-  "percent_off",
-  "free_shipping",
-  "store_credit",
-] as const;
+// Royal now mints exactly one kind of reward: a fixed store-credit drop.
+// Customers redeem points, the value lands in their Shopify store credit
+// account, and it applies at checkout as a payment method — independent
+// of any other discount/promo the merchant runs. We keep store_credit as
+// the internal type name so the existing redemption code path is unchanged.
+const REWARD_TYPES = ["store_credit"] as const;
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -78,29 +78,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { ok: true, message: "Reward updated." };
   }
 
-  const type = String(form.get("type") ?? "");
+  // Always store_credit now — the form doesn't expose any other types.
+  const type = "store_credit";
   const pointsCost = Number.parseInt(String(form.get("pointsCost")), 10);
   const value = Number.parseFloat(String(form.get("value")));
-  const productId = String(form.get("productId") ?? "").trim();
 
-  if (!REWARD_TYPES.includes(type as (typeof REWARD_TYPES)[number])) {
-    return { ok: false, message: "Select a valid reward type." };
-  }
   if (!Number.isFinite(pointsCost) || pointsCost <= 0) {
     return { ok: false, message: "Points cost must be greater than 0." };
   }
-  const needsValue = type === "amount_off" || type === "percent_off" || type === "store_credit";
-  if (needsValue && (!Number.isFinite(value) || value <= 0)) {
+  if (!Number.isFinite(value) || value <= 0) {
     return {
       ok: false,
-      message: "This reward type needs a value greater than 0.",
+      message: "Reward value must be greater than 0.",
     };
   }
   const id = form.get("id") ? String(form.get("id")) : null;
   const data = {
     type,
     pointsCost,
-    value: needsValue ? value : null,
+    value,
     productId: null,
   };
   if (id) {
@@ -202,10 +198,13 @@ export default function RewardsPage() {
       )}
       <s-section heading={form.id ? "Edit reward" : "New reward"}>
         <s-stack direction="block" gap="base">
-          <RewardTypePicker
-            value={form.type}
-            onChange={(next) => setForm((f) => ({ ...f, type: next }))}
-          />
+          <s-paragraph>
+            <s-text tone="subdued">
+              Every reward is a fixed discount delivered as Shopify store
+              credit — it applies at checkout as a payment method and stacks
+              with every other promotion you run.
+            </s-text>
+          </s-paragraph>
           <s-text-field
             label="Points cost"
             type="number"
@@ -220,25 +219,17 @@ export default function RewardsPage() {
               }))
             }
           />
-          {(form.type === "amount_off" ||
-            form.type === "percent_off" ||
-            form.type === "store_credit") && (
-            <s-text-field
-              label={
-                form.type === "percent_off"
-                  ? "Percent (e.g. 10 for 10%)"
-                  : `Value (in your store currency, ${useShopMoney().currencyCode})`
-              }
-              type="number"
-              value={String(form.value)}
-              onChange={(e: { target: { value: string } }) =>
-                setForm((f) => ({
-                  ...f,
-                  value: Number.parseFloat(e.target.value) || 0,
-                }))
-              }
-            />
-          )}
+          <s-text-field
+            label={`Reward value (in your store currency, ${useShopMoney().currencyCode})`}
+            type="number"
+            value={String(form.value)}
+            onChange={(e: { target: { value: string } }) =>
+              setForm((f) => ({
+                ...f,
+                value: Number.parseFloat(e.target.value) || 0,
+              }))
+            }
+          />
           <s-stack direction="inline" gap="base">
             <s-button
               variant="primary"
@@ -272,7 +263,6 @@ export default function RewardsPage() {
         ) : (
           <s-table>
             <s-table-header-row>
-              <s-table-header>Type</s-table-header>
               <s-table-header>Points</s-table-header>
               <s-table-header>Value</s-table-header>
               <s-table-header>Status</s-table-header>
@@ -281,18 +271,11 @@ export default function RewardsPage() {
             <s-table-body>
               {rewards.map((r) => (
                 <s-table-row key={r.id}>
-                  <s-table-cell>{r.type}</s-table-cell>
                   <s-table-cell>{r.pointsCost}</s-table-cell>
                   <s-table-cell>
-                    {r.type === "percent_off"
-                      ? r.value
-                        ? `${r.value}%`
-                        : "—"
-                      : r.type === "free_shipping"
-                        ? "Free shipping"
-                        : r.value !== null && r.value !== undefined
-                          ? money(r.value)
-                          : "—"}
+                    {r.value !== null && r.value !== undefined
+                      ? money(r.value)
+                      : "—"}
                   </s-table-cell>
                   <s-table-cell>
                     <s-badge tone={r.enabled ? "success" : "neutral"}>
@@ -333,167 +316,6 @@ export default function RewardsPage() {
       </s-section>
 
     </s-page>
-  );
-}
-
-// Reward type as a row of square tiles — every option visible at a glance
-// instead of hidden behind a dropdown. Square tiles, icon on top, label below.
-const REWARD_TYPE_OPTIONS: Array<{
-  value: typeof REWARD_TYPES[number];
-  label: string;
-  desc: string;
-  icon: React.ReactNode;
-}> = [
-  {
-    value: "amount_off",
-    label: "Fixed discount",
-    desc: "Set amount off the order",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M12 3v18M16 7H10a2.5 2.5 0 000 5h4a2.5 2.5 0 010 5H8"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    value: "percent_off",
-    label: "Percent off",
-    desc: "Percentage discount",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M19 5L5 19"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-        />
-        <circle cx="7.5" cy="7.5" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-        <circle cx="16.5" cy="16.5" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-      </svg>
-    ),
-  },
-  {
-    value: "free_shipping",
-    label: "Free shipping",
-    desc: "Waive shipping cost",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M3 7h11v9H3zM14 11h4l3 3v2h-7M6 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    value: "store_credit",
-    label: "Store credit",
-    desc: "Native Shopify credit",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <rect
-          x="3"
-          y="6"
-          width="18"
-          height="12"
-          rx="2"
-          stroke="currentColor"
-          strokeWidth="1.8"
-        />
-        <path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" />
-        <path
-          d="M7 15h3"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-];
-
-function RewardTypePicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <div>
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 500,
-          color: "#202223",
-          marginBottom: 8,
-        }}
-      >
-        Reward type
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-          gap: 10,
-        }}
-      >
-        {REWARD_TYPE_OPTIONS.map((opt) => {
-          const selected = opt.value === value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => onChange(opt.value)}
-              aria-pressed={selected}
-              style={{
-                cursor: "pointer",
-                appearance: "none",
-                textAlign: "left",
-                padding: "12px 12px 10px",
-                background: selected ? "#F1F8F5" : "#fff",
-                border: selected ? "2px solid #008060" : "1px solid #d1d5db",
-                borderRadius: 10,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
-                gap: 6,
-                color: "#202223",
-                transition: "border-color 0.12s ease, background 0.12s ease",
-                fontFamily: "inherit",
-                fontSize: "inherit",
-                // Compensate so selected (2px border) doesn't visually jump.
-                margin: selected ? 0 : 1,
-              }}
-            >
-              <span
-                style={{
-                  color: selected ? "#008060" : "#5c5f62",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {opt.icon}
-              </span>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>
-                {opt.label}
-              </span>
-              <span style={{ fontSize: 12, color: "#6d7175", lineHeight: 1.3 }}>
-                {opt.desc}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

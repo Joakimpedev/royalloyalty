@@ -539,18 +539,12 @@
                   );
                   return;
                 }
-                if (inner.discountCode) {
-                  R.setStatus(
-                    status,
-                    'success',
-                    R.tSubstitute(
-                      R.t('status.rewardRedeemedWithCode', 'Reward redeemed — your code is {code}.'),
-                      { code: inner.discountCode },
-                    ),
-                  );
-                } else {
-                  R.setStatus(status, 'success', R.t('status.rewardRedeemed', 'Reward redeemed.'));
-                }
+                // Every reward delivers as store credit now — no code path.
+                R.setStatus(
+                  status,
+                  'success',
+                  R.t('status.rewardRedeemed', 'Reward applied — store credit added to your account.'),
+                );
               }).catch(function () {
                 rb.disabled = false;
                 R.setStatus(status, 'error',

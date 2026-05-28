@@ -883,62 +883,23 @@
                   rb.disabled = false;
                   return;
                 }
-                var code = inner.discountCode || res.discountCode;
-                if (code) {
-                  // Apply the discount silently via Shopify's /discount/CODE
-                  // endpoint — it sets the discount cookie on the session
-                  // so the code is automatically applied at checkout. We
-                  // redirect to /cart.js (tiny JSON) instead of /cart so
-                  // fetch follows the redirect without dragging the user
-                  // off the current page. No copy/paste, no jank.
-                  fetch(
-                    "/discount/" + encodeURIComponent(code) + "?redirect=/cart.js",
-                    { credentials: "same-origin" }
+                // Every reward now delivers as Shopify store credit — no
+                // discount code to apply, no redirect. Points are already
+                // debited and the store-credit account is already credited
+                // server-side by the time we get here. Show the success
+                // status and let theme drawers refresh if they listen.
+                setStatus(
+                  statusEl,
+                  "success",
+                  t(
+                    "cart.rewardApplied",
+                    "Reward applied — store credit added to your account."
                   )
-                    .then(function () {
-                      setStatus(
-                        statusEl,
-                        "success",
-                        t(
-                          "cart.rewardApplied",
-                          "Reward applied — you'll see the discount at checkout."
-                        )
-                      );
-                      // Let any theme cart drawer that listens for these
-                      // events know to refresh its totals.
-                      try {
-                        document.dispatchEvent(
-                          new CustomEvent("royal:cart:discountApplied", {
-                            detail: { code: code },
-                          })
-                        );
-                        document.dispatchEvent(
-                          new CustomEvent("cart:refresh")
-                        );
-                      } catch (e) { /* old browser, no CustomEvent */ }
-                      rb.disabled = false;
-                    })
-                    .catch(function () {
-                      setStatus(
-                        statusEl,
-                        "error",
-                        t(
-                          "error.couldNotApplyReward",
-                          "We couldn't apply that reward. Please try again."
-                        )
-                      );
-                      rb.disabled = false;
-                    });
-                } else {
-                  // Store-credit reward: no code to apply, points already
-                  // debited, Shopify store-credit account already credited.
-                  setStatus(
-                    statusEl,
-                    "success",
-                    t("status.rewardRedeemed", "Reward redeemed."),
-                  );
-                  rb.disabled = false;
-                }
+                );
+                try {
+                  document.dispatchEvent(new CustomEvent("cart:refresh"));
+                } catch (e) { /* old browser, no CustomEvent */ }
+                rb.disabled = false;
               })
               .catch(function () {
                 rb.disabled = false;

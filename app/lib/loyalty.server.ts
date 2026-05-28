@@ -443,34 +443,39 @@ export async function redeemReward(params: {
   try {
     await transitionStatus("redemption", redemption.id, "ACTIVE");
 
-    let discountCode: string | undefined;
-    if (reward.type === "store_credit") {
-      // Convert the redeemed points into native Shopify store credit via
-      // the storeCreditAccountCredit mutation. The customer's points are
-      // already debited above; this credits their account for reward.value
-      // and writes a mirror row to StoreCreditLedger.
+    // Every reward now delivers as Shopify store credit. We force this even
+    // for legacy rows where reward.type is amount_off / percent_off / free_
+    // shipping — those types are no longer creatable in the admin, but
+    // historical rows still exist in shops that activated before the cutover.
+    // Treating them all as store-credit avoids minting any new Shopify
+    // discount codes (no admin clutter) and is collision-proof against
+    // other discount apps' combinesWith settings (store credit applies as
+    // a payment method, not a discount).
+    //
+    // For non-amount reward.value (e.g. an old free_shipping row whose
+    // value is null), we skip the Shopify credit call and just complete the
+    // redemption — the points are already debited, the customer learns
+    // they're holding a legacy reward that no longer has a fulfillment
+    // path. In practice every active reward catalog after the cutover
+    // stores a numeric value.
+    const amount = reward.value ?? 0;
+    if (amount > 0) {
       const { redeemStoreCreditReward } = await import("./storecredit.server");
       const res = await redeemStoreCreditReward({
         graphql: params.admin.graphql,
         shopId: shop.id,
         shopifyCustomerId: member.shopifyCustomerId,
-        amount: reward.value ?? 0,
+        amount,
         currencyCode: shop.currencyCode ?? "USD",
         redemptionId: redemption.id,
       });
       if (!res.ok) {
         throw new Error(res.error ?? "Store credit issue failed.");
       }
-    } else {
-      discountCode = await createDiscountCode(params.admin.graphql, reward);
-      await prisma.redemption.update({
-        where: { id: redemption.id },
-        data: { discountCode },
-      });
     }
 
     await transitionStatus("redemption", redemption.id, "COMPLETED");
-    return { ok: true, redemptionId: redemption.id, discountCode };
+    return { ok: true, redemptionId: redemption.id };
   } catch (err) {
     // Compensate: cancel the redemption and restore points via an append-only
     // ADJUST row (never delete the REDEEM row — the ledger is immutable).

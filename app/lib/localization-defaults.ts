@@ -72,7 +72,7 @@ const en: Bundle = {
     "Keep shopping to unlock your first reward ({points} points).",
   "cart.activeCodesHeading": "Your active codes",
   "cart.cashbackSuffix": "store credit",
-  "cart.rewardApplied": "Reward applied — you'll see the discount at checkout.",
+  "cart.rewardApplied": "Reward applied — store credit added to your account.",
   "product.subtext":
     "You have {balance} points. Earn {more} more with this order!",
   "social.platform.instagram": "Instagram",
@@ -95,7 +95,7 @@ const en: Bundle = {
   "empty.rewards": "No rewards available yet — check back soon.",
   "status.redeeming": "Redeeming…",
   "status.rewardRedeemedWithCode": "Reward redeemed — your code is {code}.",
-  "status.rewardRedeemed": "Reward redeemed.",
+  "status.rewardRedeemed": "Reward applied — store credit added to your account.",
   "error.couldNotRedeem":
     "We couldn't redeem that reward. Please try again.",
   "error.couldNotApplyReward":
