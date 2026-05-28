@@ -159,6 +159,9 @@ const es: Bundle = {
   "hub.visitor.desc": "Inicia sesión para seguir tus puntos y desbloquear recompensas.",
   "hub.member.nextReward": "Próxima recompensa",
   "hub.member.readyToRedeem": "Listo para canjear",
+  "hub.member.cashbackLine": "Gana un {percent}% de devolución en saldo de tienda en cada pedido.",
+  "hub.member.storeCreditBalance": "Saldo de tienda",
+  "cart.rewardApplied": "Recompensa aplicada — verás el descuento al pagar.",
   "page.heroTitle": "Gana puntos. Obtén recompensas.",
   "page.heroSubtitle": "Únete al programa y gana en cada compra.",
   "page.balanceLabel": "Tu saldo:",
@@ -297,6 +300,9 @@ const fr: Bundle = {
   "hub.visitor.desc": "Connectez-vous pour suivre vos points et débloquer des récompenses.",
   "hub.member.nextReward": "Prochaine récompense",
   "hub.member.readyToRedeem": "Prêt à utiliser",
+  "hub.member.cashbackLine": "Gagnez {percent}% en crédit en magasin sur chaque commande.",
+  "hub.member.storeCreditBalance": "Solde de crédit en magasin",
+  "cart.rewardApplied": "Récompense appliquée — vous verrez la réduction au paiement.",
   "page.heroTitle": "Gagnez des points. Obtenez des récompenses.",
   "page.heroSubtitle":
     "Rejoignez le programme et gagnez à chaque commande.",
@@ -441,6 +447,9 @@ const de: Bundle = {
   "hub.visitor.desc": "Melde dich an, um deine Punkte zu verfolgen und Prämien freizuschalten.",
   "hub.member.nextReward": "Nächste Prämie",
   "hub.member.readyToRedeem": "Bereit einzulösen",
+  "hub.member.cashbackLine": "Erhalte {percent}% als Guthaben zurück bei jeder Bestellung.",
+  "hub.member.storeCreditBalance": "Guthaben",
+  "cart.rewardApplied": "Prämie angewendet — du siehst den Rabatt beim Checkout.",
   "page.heroTitle": "Punkte sammeln. Prämien erhalten.",
   "page.heroSubtitle":
     "Mach beim Programm mit und verdiene bei jeder Bestellung.",
@@ -591,6 +600,9 @@ const it: Bundle = {
   "hub.visitor.desc": "Accedi per tracciare i tuoi punti e sbloccare premi.",
   "hub.member.nextReward": "Prossimo premio",
   "hub.member.readyToRedeem": "Pronto da riscattare",
+  "hub.member.cashbackLine": "Ottieni il {percent}% in credito negozio su ogni ordine.",
+  "hub.member.storeCreditBalance": "Credito negozio",
+  "cart.rewardApplied": "Premio applicato — vedrai lo sconto al checkout.",
   "page.heroTitle": "Guadagna punti. Ottieni premi.",
   "page.heroSubtitle":
     "Iscriviti al programma e guadagna ad ogni ordine.",
@@ -738,6 +750,9 @@ const ptBR: Bundle = {
   "hub.visitor.desc": "Faça login para acompanhar seus pontos e desbloquear recompensas.",
   "hub.member.nextReward": "Próxima recompensa",
   "hub.member.readyToRedeem": "Pronto para resgatar",
+  "hub.member.cashbackLine": "Ganhe {percent}% de volta como crédito da loja em cada pedido.",
+  "hub.member.storeCreditBalance": "Crédito da loja",
+  "cart.rewardApplied": "Recompensa aplicada — você verá o desconto no checkout.",
   "page.heroTitle": "Ganhe pontos. Receba recompensas.",
   "page.heroSubtitle":
     "Participe do programa e ganhe a cada pedido.",
@@ -886,6 +901,9 @@ const nl: Bundle = {
   "hub.visitor.desc": "Log in om je punten te volgen en beloningen vrij te spelen.",
   "hub.member.nextReward": "Volgende beloning",
   "hub.member.readyToRedeem": "Klaar om in te wisselen",
+  "hub.member.cashbackLine": "Krijg {percent}% terug als winkeltegoed op elke bestelling.",
+  "hub.member.storeCreditBalance": "Winkeltegoed",
+  "cart.rewardApplied": "Beloning toegepast — je ziet de korting bij het afrekenen.",
   "page.heroTitle": "Verdien punten. Krijg beloningen.",
   "page.heroSubtitle":
     "Doe mee aan het programma en verdien bij elke bestelling.",
@@ -1043,6 +1061,9 @@ const pl: Bundle = {
   "hub.visitor.desc": "Zaloguj się, aby śledzić swoje punkty i odblokować nagrody.",
   "hub.member.nextReward": "Następna nagroda",
   "hub.member.readyToRedeem": "Gotowe do wykorzystania",
+  "hub.member.cashbackLine": "Otrzymaj {percent}% z powrotem jako kredyt sklepowy przy każdym zamówieniu.",
+  "hub.member.storeCreditBalance": "Kredyt sklepowy",
+  "cart.rewardApplied": "Nagroda zastosowana — zniżkę zobaczysz przy płatności.",
   "page.heroTitle": "Zdobywaj punkty. Odbieraj nagrody.",
   "page.heroSubtitle":
     "Dołącz do programu i zdobywaj punkty przy każdym zamówieniu.",
@@ -1193,6 +1214,9 @@ const nb: Bundle = {
   "hub.visitor.desc": "Logg inn for å spore poengene dine og låse opp belønninger.",
   "hub.member.nextReward": "Neste belønning",
   "hub.member.readyToRedeem": "Klar til å innløse",
+  "hub.member.cashbackLine": "Få {percent}% tilbake som butikkreditt på hver ordre.",
+  "hub.member.storeCreditBalance": "Butikkreditt",
+  "cart.rewardApplied": "Belønning brukt — du ser rabatten i kassen.",
   "page.heroTitle": "Tjen poeng. Få belønninger.",
   "page.heroSubtitle":
     "Bli med i programmet og tjen på hver bestilling.",
@@ -1856,6 +1880,20 @@ const ja: Bundle = {
   "pos.errorInsufficient": "この特典にはポイントが不足しています。",
   "pos.noRewards": "利用可能な特典はありません。",
   "pos.lookupHint": "顧客を検索してポイントと特典を確認。",
+  "hub.member.cashbackLine": "ご注文ごとに {percent}% をストアクレジットとして還元。",
+  "hub.member.storeCreditBalance": "ストアクレジット残高",
+  "page.activeCodesHeading": "利用可能なコード",
+  "page.referLoadingLink": "リンクを読み込み中…",
+  "account.signInRequired": "ロイヤルティ状況を表示するにはログインしてください。",
+  "cart.activeCodesHeading": "利用可能なコード",
+  "cart.rewardApplied": "特典を適用しました — ストアクレジットがアカウントに追加されました。",
+  "refer.unavailable": "現在、紹介プログラムはご利用いただけません。",
+  "social.platform.instagram": "Instagram",
+  "social.platform.tiktok": "TikTok",
+  "social.platform.x": "X",
+  "social.platform.facebook": "Facebook",
+  "social.platform.youtube": "YouTube",
+  "pos.tileTitle": "Royal Loyalty",
 };
 
 const zhCN: Bundle = {
@@ -1966,6 +2004,20 @@ const zhCN: Bundle = {
   "pos.errorInsufficient": "积分不足以兑换该奖励。",
   "pos.noRewards": "没有可用奖励。",
   "pos.lookupHint": "查询客户以查看其积分和奖励。",
+  "hub.member.cashbackLine": "每笔订单可获得 {percent}% 作为店铺积分返还。",
+  "hub.member.storeCreditBalance": "店铺积分余额",
+  "page.activeCodesHeading": "您的有效代码",
+  "page.referLoadingLink": "正在加载您的链接…",
+  "account.signInRequired": "请登录以查看您的会员状态。",
+  "cart.activeCodesHeading": "您的有效代码",
+  "cart.rewardApplied": "奖励已应用 — 店铺积分已添加到您的账户。",
+  "refer.unavailable": "推荐功能目前不可用。",
+  "social.platform.instagram": "Instagram",
+  "social.platform.tiktok": "TikTok",
+  "social.platform.x": "X",
+  "social.platform.facebook": "Facebook",
+  "social.platform.youtube": "YouTube",
+  "pos.tileTitle": "Royal Loyalty",
 };
 
 // Locales below: every key falls back to English by spreading `...en`,
@@ -1974,21 +2026,152 @@ const zhCN: Bundle = {
 // on the admin Localization page.
 
 const cs: Bundle = {
-  ...en,
   "launcher.title": "Vaše odměny",
+  "launcher.subtitle":
+    "Sbírejte body za každou objednávku — uplatněte je za odměny.",
   "launcher.text": "Odměny",
   "launcher.hub.earn": "Získat body",
   "launcher.hub.redeem": "Uplatnit odměny",
   "launcher.hub.refer": "Doporučit přítele",
+  "launcher.activeCodesHeading": "Vaše aktivní kódy",
+  "launcher.loadingRewards": "Načítání odměn…",
   "hub.visitor.title": "Přihlaste se a začněte sbírat",
-  "hub.visitor.desc": "Přihlaste se ke sledování svých bodů a odemčení odměn.",
+  "hub.visitor.desc":
+    "Přihlaste se ke sledování svých bodů a odemčení odměn.",
   "hub.member.nextReward": "Další odměna",
   "hub.member.readyToRedeem": "Připraveno k uplatnění",
+  "hub.member.cashbackLine":
+    "Získejte {percent}% zpět jako kredit do obchodu z každé objednávky.",
+  "hub.member.storeCreditBalance": "Zůstatek kreditu",
   "page.heroTitle": "Získávejte body. Sbírejte odměny.",
+  "page.heroSubtitle":
+    "Připojte se k programu a sbírejte body za každou objednávku.",
+  "page.balanceLabel": "Váš zůstatek:",
+  "page.activeCodesHeading": "Vaše aktivní kódy",
+  "page.signInCta": "Přihlaste se a zobrazte své body",
+  "page.waysToEarnHeading": "Jak sbírat body",
+  "page.rewardsHeading": "Odměny",
+  "page.followUsHeading": "Sledujte nás",
+  "page.referHeading": "Doporučit přítele",
+  "page.referDescription":
+    "Sdílejte svůj odkaz — odměnu získáte oba.",
+  "page.referLoadingLink": "Načítání vašeho odkazu…",
+  "page.referCopyButton": "Kopírovat odkaz",
+  "page.loading": "Načítání…",
+  "account.heading": "Vaše věrnost",
+  "account.pointsSuffix": " bodů",
+  "account.recentActivityHeading": "Nedávná aktivita",
+  "account.rewardsHeading": "Odměny",
+  "account.referHeading": "Doporučit přítele",
+  "account.referCopyButton": "Kopírovat odkaz",
+  "account.signInRequired":
+    "Přihlaste se, abyste viděli svůj věrnostní stav.",
+  "account.emptyActivity":
+    "Zatím žádná aktivita. Zadejte objednávku a začněte sbírat body.",
+  "reward.type.freeShipping": "Doprava zdarma",
+  "reward.type.freeProduct": "Produkt zdarma",
   "reward.redeemButton": "Uplatnit",
+  "reward.signInToRedeemButton": "Přihlaste se k uplatnění",
+  "reward.applyToCart": "Použít v košíku",
+  "reward.copyCode": "Kopírovat",
+  "reward.copiedCode": "Zkopírováno!",
+  "refer.descSignedOut":
+    "Sdílejte svůj osobní odkaz s přáteli. Když zadají svou první objednávku, odměnu získáte oba.",
+  "refer.signInCta": "Přihlaste se a získejte svůj odkaz",
+  "refer.unavailable": "Doporučení nyní nejsou dostupná.",
+  "refer.descSignedIn":
+    "Sdílejte svůj odkaz. Když přátelé zadají první objednávku, získáte odměnu oba.",
+  "refer.copyButton": "Kopírovat",
+  "refer.copiedButton": "Zkopírováno!",
+  "cart.heading": "Použít vaše body",
+  "cart.signedOutCta":
+    "Přihlaste se a použijte své body na tuto objednávku.",
+  "cart.earnLineLoading": "Počítání získaných bodů…",
+  "cart.keepShoppingForFirstReward":
+    "Pokračujte v nákupu a odemkněte svou první odměnu ({points} bodů).",
+  "cart.activeCodesHeading": "Vaše aktivní kódy",
+  "cart.cashbackSuffix": "kredit do obchodu",
+  "cart.rewardApplied":
+    "Odměna použita — kredit byl přidán na váš účet.",
+  "product.subtext":
+    "Máte {balance} bodů. Získejte s touto objednávkou dalších {more}!",
+  "social.platform.instagram": "Instagram",
+  "social.platform.tiktok": "TikTok",
+  "social.platform.x": "X",
+  "social.platform.facebook": "Facebook",
+  "social.platform.youtube": "YouTube",
+  "social.awardedButton": "Získáno +{points}",
+  "social.awardedStatus": "Získáno {points} bodů.",
+  "social.alreadyClaimed": "Již uplatněno",
+  "empty.programBeingSetUp":
+    "Váš věrnostní program se připravuje. Brzy se vraťte.",
+  "empty.earnSignedOut":
+    "Přihlaste se nebo si vytvořte účet a začněte sbírat body za každou objednávku.",
+  "empty.earnSignInButton": "Přihlásit se a sbírat",
+  "empty.earnRules":
+    "Zatím žádné způsoby sběru — brzy se vraťte.",
+  "empty.rewardsSignedOut":
+    "Tyto odměny můžete uplatnit za své body. {signInLink} nebo si vytvořte účet a začněte sbírat.",
+  "empty.rewardsSignInLink": "Přihlásit se",
+  "empty.rewards":
+    "Zatím nejsou k dispozici žádné odměny — brzy se vraťte.",
+  "status.redeeming": "Uplatňování…",
+  "status.rewardRedeemedWithCode":
+    "Odměna uplatněna — váš kód je {code}.",
+  "status.rewardRedeemed":
+    "Odměna použita — kredit byl přidán na váš účet.",
+  "error.couldNotRedeem":
+    "Tuto odměnu se nepodařilo uplatnit. Zkuste to prosím znovu.",
+  "error.couldNotApplyReward":
+    "Tuto odměnu se nepodařilo použít. Zkuste to prosím znovu.",
+  "error.couldNotLoad":
+    "Vaše odměny se nyní nepodařilo načíst. Zkuste to prosím později.",
   "tooltip.back": "Zpět",
   "tooltip.close": "Zavřít",
+  "tooltip.notEnoughPoints": "Zatím nemáte dost bodů",
+  "tooltip.signUpToRedeem": "Registrujte se k uplatnění",
   "rule.purchase.title": "Vytvořit objednávku",
+  "rule.purchase.description": "Získejte {{points}} bodů za objednávku",
+  "rule.purchase.descriptionPerDollar":
+    "Získejte {{points}} bodů za každých utracených {{per_amount}}",
+  "rule.purchase.productLine":
+    "Získejte {{points}} bodů s tímto nákupem",
+  "rule.purchase.cartLine": "+{{points}} bodů za tuto objednávku",
+  "rule.signup.title": "Vytvořit účet",
+  "rule.signup.description": "Získejte {{points}} bodů za registraci",
+  "rule.birthday.title": "Oslavte své narozeniny",
+  "rule.birthday.description":
+    "Získejte {{points}} bodů ke svým narozeninám",
+  "rule.newsletter.title": "Přihlaste se k odběru novinek",
+  "rule.newsletter.description":
+    "Získejte {{points}} bodů za přihlášení k odběru",
+  "rule.social.title": "Sledujte nás na sociálních sítích",
+  "rule.social.description":
+    "Získejte body, když nás sledujete na sociálních sítích",
+  "rule.review.title": "Napište recenzi produktu",
+  "rule.review.description": "Získejte {{points}} bodů za recenzi",
+  "rule.anniversary.title": "Výročí účtu",
+  "rule.anniversary.description":
+    "Získejte {{points}} bodů k výročí ve věrnostním programu",
+  "pos.tileTitle": "Royal Loyalty",
+  "pos.tileSubtitle": "Zůstatek · sbírání · uplatnění",
+  "pos.errorNoCustomer": "Nejprve přiřaďte zákazníka ke košíku.",
+  "pos.errorLoadBalance":
+    "Nepodařilo se načíst zůstatek tohoto zákazníka. Zkontrolujte připojení a zkuste to znovu.",
+  "pos.errorAward": "Body se nepodařilo přidělit. Zkuste to znovu.",
+  "pos.appliedCode": "Použit kód odměny {code}.",
+  "pos.redeemed": "Odměna uplatněna.",
+  "pos.errorRedeem": "Uplatnění se nezdařilo. Zkuste to znovu.",
+  "pos.noCustomerOnCart": "Žádný zákazník v košíku",
+  "pos.lookupBalanceButton": "Zjistit zůstatek",
+  "pos.sectionBalance": "Zůstatek",
+  "pos.sectionEarn": "Sbírat",
+  "pos.awardButton": "Připsat body za tento košík",
+  "pos.sectionRedeem": "Uplatnit",
+  "pos.errorInsufficient": "Nemáte dost bodů na tuto odměnu.",
+  "pos.noRewards": "Žádné odměny nejsou k dispozici.",
+  "pos.lookupHint":
+    "Vyhledejte zákazníka a zobrazte jeho body a odměny.",
 };
 
 const el: Bundle = {
@@ -2108,6 +2291,20 @@ const zhTW: Bundle = {
   "tooltip.back": "返回",
   "tooltip.close": "關閉",
   "rule.purchase.title": "下單",
+  "hub.member.cashbackLine": "每筆訂單可獲得 {percent}% 作為商店積分回饋。",
+  "hub.member.storeCreditBalance": "商店積分餘額",
+  "page.activeCodesHeading": "您的有效代碼",
+  "page.referLoadingLink": "正在載入您的連結…",
+  "account.signInRequired": "請登入以查看您的會員狀態。",
+  "cart.activeCodesHeading": "您的有效代碼",
+  "cart.rewardApplied": "獎勵已套用 — 商店積分已新增至您的帳戶。",
+  "refer.unavailable": "推薦功能目前無法使用。",
+  "social.platform.instagram": "Instagram",
+  "social.platform.tiktok": "TikTok",
+  "social.platform.x": "X",
+  "social.platform.facebook": "Facebook",
+  "social.platform.youtube": "YouTube",
+  "pos.tileTitle": "Royal Loyalty",
 };
 
 const ko: Bundle = {
