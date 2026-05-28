@@ -19,6 +19,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { seedDefaultEarnRules } from "../lib/loyalty.server";
 import { useAppNavigate } from "../lib/app-navigate";
+import { useSuccessToast } from "../lib/polaris-bindings";
 import { useMoney } from "../lib/use-money";
 
 const ACTIONS = [
@@ -111,6 +112,7 @@ export default function ProgramPage() {
 
   const rules = earnRules;
   const saving = nav.state === "submitting";
+  useSuccessToast(actionData);
   const appNav = useAppNavigate();
   const money = useMoney();
 
@@ -154,14 +156,6 @@ export default function ProgramPage() {
           </s-banner>
         </s-section>
       )}
-      {actionData && actionData.ok && (
-        <s-section>
-          <s-banner tone="success">
-            <s-paragraph>{actionData.message}</s-paragraph>
-          </s-banner>
-        </s-section>
-      )}
-
       {/* Earn-rules list (BON-simple). Each row clicks through to the per-rule
           editor at /app/program/earn/:action. No bulk-form editing — one rule
           at a time so the merchant sees its summary in context before saving. */}
@@ -266,9 +260,9 @@ function ProgramCatalog() {
     // user-facing. Re-enable when tier UX is complete.
     {
       href: "/app/storecredit",
-      title: "Store credit",
+      title: "Cashback",
       description:
-        "Native Shopify store credit issued from the loyalty ledger.",
+        "Return a percentage of every order as native Shopify store credit.",
     },
     {
       href: "/app/suggestions",

@@ -18,7 +18,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
-import { PageTitle, useSaveBar } from "../lib/polaris-bindings";
+import { PageTitle, useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
 
 const REWARD_TYPES = [
   "amount_off",
@@ -147,6 +147,7 @@ export default function RewardsPage() {
   const saving = nav.state === "submitting";
 
   useSaveBar(saveBarRef, dirty);
+  useSuccessToast(actionData as { ok?: boolean; message?: string } | undefined);
 
   useEffect(() => {
     if (actionData?.ok) {
@@ -207,14 +208,6 @@ export default function RewardsPage() {
           </s-banner>
         </s-section>
       )}
-      {actionData && actionData.ok && (
-        <s-section>
-          <s-banner tone="success">
-            <s-paragraph>{actionData.message}</s-paragraph>
-          </s-banner>
-        </s-section>
-      )}
-
       <s-section heading={form.id ? "Edit reward" : "New reward"}>
         <s-stack direction="block" gap="base">
           <s-select

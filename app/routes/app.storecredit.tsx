@@ -18,7 +18,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
-import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle, useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
 import {
   getCashbackSettings,
   saveCashbackSettings,
@@ -107,6 +107,7 @@ export default function StoreCreditPage() {
   const saving = nav.state === "submitting";
 
   useSaveBar(saveBarRef, dirty);
+  useSuccessToast(actionData as { ok?: boolean; message?: string } | undefined);
 
   useEffect(() => {
     if (actionData?.ok) setBaseline(form);
@@ -124,8 +125,8 @@ export default function StoreCreditPage() {
   return (
     <s-page>
       <PageTitle
-        title="Store Credit"
-        subtitle="Native Shopify store credit issued from the loyalty ledger"
+        title="Cashback"
+        subtitle="Return a percentage of every order as native Shopify store credit"
         backHref="/app/program"
         dirty={dirty}
       />
@@ -150,14 +151,6 @@ export default function StoreCreditPage() {
           </s-banner>
         </s-section>
       )}
-      {actionData && actionData.ok && (
-        <s-section>
-          <s-banner tone="success">
-            <s-paragraph>{actionData.message}</s-paragraph>
-          </s-banner>
-        </s-section>
-      )}
-
       <s-section heading="Cashback">
         <s-stack direction="block" gap="base">
           <s-paragraph>
@@ -193,7 +186,7 @@ export default function StoreCreditPage() {
       <s-section heading="Reconciliation">
         <s-stack direction="block" gap="base">
           {drift > 0 ? (
-            <s-banner tone="warning" heading="Store credit needs attention">
+            <s-banner tone="warning" heading="Cashback needs attention">
               <s-paragraph>
                 {drift} mirrored transaction(s) are out of sync with Shopify.
                 Run reconciliation to repair what can be auto-resolved; the rest
@@ -202,7 +195,7 @@ export default function StoreCreditPage() {
             </s-banner>
           ) : (
             <s-paragraph>
-              All mirrored store-credit transactions are in sync with Shopify.
+              All mirrored cashback transactions are in sync with Shopify.
             </s-paragraph>
           )}
           <s-button
@@ -214,23 +207,15 @@ export default function StoreCreditPage() {
         </s-stack>
       </s-section>
 
-      <s-section heading="Store credit ledger">
+      <s-section heading="Cashback ledger">
         {ledger.length === 0 ? (
           <s-stack direction="block" gap="base">
-            <s-heading>No store credit activity yet</s-heading>
+            <s-heading>No cashback activity yet</s-heading>
             <s-paragraph>
               Once cashback is earned or a store-credit reward is redeemed,
               every credit and debit is mirrored here next to its Shopify
               reconciliation status.
             </s-paragraph>
-            <s-button
-              variant="primary"
-              onClick={() =>
-                setForm((f) => ({ ...f, enabled: true, percent: f.percent || 5 }))
-              }
-            >
-              Turn on cashback
-            </s-button>
           </s-stack>
         ) : (
           <s-table>

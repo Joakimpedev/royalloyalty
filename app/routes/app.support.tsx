@@ -19,7 +19,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
-import { PageTitle } from "../lib/polaris-bindings";
+import { PageTitle, useSuccessToast } from "../lib/polaris-bindings";
 
 const DOCS_URL = "https://royalloyalty.help";
 
@@ -102,6 +102,10 @@ export default function SupportPage() {
   const nav = useNavigation();
   const appNav = useAppNavigate();
   const submitting = nav.state === "submitting";
+  useSuccessToast(
+    actionData as { ok?: boolean; message?: string } | undefined,
+    "Message sent.",
+  );
 
   return (
     <s-page>
@@ -128,11 +132,6 @@ export default function SupportPage() {
       <s-section heading="Contact us">
         {actionData && !actionData.ok && (
           <s-banner tone="critical" heading="Message not sent">
-            <s-paragraph>{actionData.message}</s-paragraph>
-          </s-banner>
-        )}
-        {actionData && actionData.ok && (
-          <s-banner tone="success">
             <s-paragraph>{actionData.message}</s-paragraph>
           </s-banner>
         )}

@@ -23,7 +23,7 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { useSaveBar } from "../lib/polaris-bindings";
+import { useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
 import {
   PLANS,
   PLAN_ORDER,
@@ -178,6 +178,7 @@ export default function SettingsPage() {
   const dirty = contactEmail !== String(data.contactEmail ?? "");
   const busy = nav.state === "submitting";
   useSaveBar(saveBarRef, dirty);
+  useSuccessToast(actionData as { ok?: boolean; message?: string } | undefined);
 
   // Client-side redirect to Shopify-hosted confirmation / managed pricing.
   //
@@ -262,14 +263,6 @@ export default function SettingsPage() {
           </s-banner>
         </s-section>
       )}
-      {actionData && actionData.ok && "message" in actionData && (
-        <s-section>
-          <s-banner tone="success">
-            <s-paragraph>{actionData.message}</s-paragraph>
-          </s-banner>
-        </s-section>
-      )}
-
       {data.testMode && (
         <s-section>
           <s-banner tone="info" heading="Billing test mode is on">

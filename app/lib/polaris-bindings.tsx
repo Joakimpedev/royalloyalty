@@ -114,6 +114,26 @@ export function useSaveBar(
   }, [ref, dirty]);
 }
 
+// Fire a Polaris/App Bridge toast on successful action. Replaces the
+// green <s-banner tone="success"> blocks merchants kept asking us to
+// kill — toasts auto-dismiss and don't shove the page content down.
+export function useSuccessToast(
+  actionData: { ok?: boolean; message?: string } | null | undefined,
+  fallback = "Saved.",
+): void {
+  useEffect(() => {
+    if (!actionData?.ok) return;
+    try {
+      const sh = (window as unknown as {
+        shopify?: { toast?: { show?: (msg: string, opts?: object) => void } };
+      }).shopify;
+      sh?.toast?.show?.(actionData.message ?? fallback, { duration: 3000 });
+    } catch {
+      /* App Bridge not available — no-op */
+    }
+  }, [actionData, fallback]);
+}
+
 // Nudge the user when they try to leave with unsaved changes. The
 // <ui-save-bar> visible UI lives in App Bridge's parent admin shell
 // (outside our iframe), so we can't directly animate it. Instead:

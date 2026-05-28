@@ -8,7 +8,7 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { useAppNavigate } from "../lib/app-navigate";
-import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
+import { ChoiceList, PageTitle, useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
 import {
   useLoaderData,
   useActionData,
@@ -144,6 +144,7 @@ export default function ReferralsPage() {
   const saving = nav.state === "submitting";
 
   useSaveBar(saveBarRef, dirty);
+  useSuccessToast(actionData as { ok?: boolean; message?: string } | undefined);
 
   useEffect(() => {
     if (actionData?.ok) setBaseline(form);
@@ -191,14 +192,6 @@ export default function ReferralsPage() {
           </s-banner>
         </s-section>
       )}
-      {actionData && actionData.ok && (
-        <s-section>
-          <s-banner tone="success">
-            <s-paragraph>{actionData.message}</s-paragraph>
-          </s-banner>
-        </s-section>
-      )}
-
       <s-section heading="Referral program">
         <s-stack direction="block" gap="base">
           <ChoiceList
