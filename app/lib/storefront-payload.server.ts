@@ -559,19 +559,31 @@ async function readCustomerStoreCredit(
   shopifyCustomerId: string,
   fallbackCurrency: string,
 ): Promise<{ balance: number; currency: string }> {
+  // Tight timeout so a slow/stuck admin GraphQL roundtrip can never block
+  // /loyalty/balance — the rest of the payload (points, rewards, branding)
+  // is critical, store credit is just a nice-to-have line on the panel.
+  // Cold offline-token exchange + Shopify call can easily take >1s; cap at
+  // 2.5s and degrade silently to 0 if we hit it.
+  const TIMEOUT_MS = 2500;
+  const fallback = { balance: 0, currency: fallbackCurrency };
   try {
-    const result = await withFreshToken(shopDomain, async (admin) => {
+    const read = withFreshToken(shopDomain, async (admin) => {
       const accounts = await getStoreCreditAccounts(
         admin.graphql,
         shopifyCustomerId,
       );
-      const balance = accounts.reduce((s, a) => s + a.amount, 0);
-      const currency = accounts[0]?.currencyCode ?? fallbackCurrency;
-      return { balance, currency };
+      return {
+        balance: accounts.reduce((s, a) => s + a.amount, 0),
+        currency: accounts[0]?.currencyCode ?? fallbackCurrency,
+      };
     });
-    return result ?? { balance: 0, currency: fallbackCurrency };
+    const timeout = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), TIMEOUT_MS),
+    );
+    const result = await Promise.race([read, timeout]);
+    return result ?? fallback;
   } catch {
-    return { balance: 0, currency: fallbackCurrency };
+    return fallback;
   }
 }
 
