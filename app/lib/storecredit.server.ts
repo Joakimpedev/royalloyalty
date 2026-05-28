@@ -167,15 +167,15 @@ export async function creditStoreCredit(params: {
       | Array<{ message: string }>
       | undefined;
     if (errs && errs.length > 0) {
+      const msg = errs.map((e) => e.message).join("; ");
+      console.warn(
+        `[storecredit] credit FAILED userErrors customer=${params.shopifyCustomerId} amount=${params.amount} ${params.currencyCode} reason="${params.reason}" :: ${msg}`,
+      );
       await prisma.storeCreditLedger.update({
         where: { id: ledger.id },
         data: { reconcileState: "DRIFT" },
       });
-      return {
-        ok: false,
-        ledgerId: ledger.id,
-        error: errs.map((e) => e.message).join("; "),
-      };
+      return { ok: false, ledgerId: ledger.id, error: msg };
     }
     const txnId = result?.storeCreditAccountTransaction?.id as
       | string
@@ -186,15 +186,15 @@ export async function creditStoreCredit(params: {
     });
     return { ok: true, ledgerId: ledger.id, shopifyTxnId: txnId };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "Store credit write failed.";
+    console.warn(
+      `[storecredit] credit THREW customer=${params.shopifyCustomerId} amount=${params.amount} ${params.currencyCode} reason="${params.reason}" :: ${msg}`,
+    );
     await prisma.storeCreditLedger.update({
       where: { id: ledger.id },
       data: { reconcileState: "DRIFT" },
     });
-    return {
-      ok: false,
-      ledgerId: ledger.id,
-      error: err instanceof Error ? err.message : "Store credit write failed.",
-    };
+    return { ok: false, ledgerId: ledger.id, error: msg };
   }
 }
 
