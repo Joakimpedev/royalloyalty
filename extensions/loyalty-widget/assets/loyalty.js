@@ -797,7 +797,7 @@
         var scCcy = payload.storeCreditCurrency || payload.currencyCode;
         creditBalanceLine =
           '<div class="royal-injected__sub royal-injected__credit-balance">' +
-          t("cart.storeCreditBalance", "Store credit balance") +
+          t("hub.member.storeCreditBalance", "Store credit balance") +
           ": " +
           formatMoney(scBal, scCcy) +
           "</div>";

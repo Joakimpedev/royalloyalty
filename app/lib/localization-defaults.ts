@@ -29,7 +29,6 @@ const en: Bundle = {
   "hub.member.readyToRedeem": "Ready to redeem",
   "hub.member.cashbackLine": "Earn {percent}% back as store credit on every order.",
   "hub.member.storeCreditBalance": "Store credit balance",
-  "cart.storeCreditBalance": "Store credit balance",
   "page.heroTitle": "Earn points. Get rewards.",
   "page.heroSubtitle": "Join the program and earn on every order.",
   "page.balanceLabel": "Your balance:",
