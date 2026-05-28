@@ -8,7 +8,13 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import { useAppNavigate } from "../lib/app-navigate";
-import { ChoiceList, PageTitle, useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
+import {
+  ChoiceList,
+  PageTitle,
+  PointsField,
+  useSaveBar,
+  useSuccessToast,
+} from "../lib/polaris-bindings";
 import {
   useLoaderData,
   useActionData,
@@ -202,31 +208,23 @@ export default function ReferralsPage() {
             <s-choice value="on">Enabled</s-choice>
             <s-choice value="off">Disabled</s-choice>
           </ChoiceList>
-          <s-text-field
-            label="Referrer reward (points)"
-            type="number"
-            value={String(form.referrerPoints)}
-            onChange={(e: { target: { value: string } }) =>
+          <PointsField
+            label="Referrer reward"
+            value={form.referrerPoints}
+            onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                referrerPoints: Math.max(
-                  0,
-                  Number.parseInt(e.target.value, 10) || 0,
-                ),
+                referrerPoints: Math.max(0, Number.parseInt(next, 10) || 0),
               }))
             }
           />
-          <s-text-field
-            label="Referee reward (points)"
-            type="number"
-            value={String(form.refereePoints)}
-            onChange={(e: { target: { value: string } }) =>
+          <PointsField
+            label="Referee reward"
+            value={form.refereePoints}
+            onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                refereePoints: Math.max(
-                  0,
-                  Number.parseInt(e.target.value, 10) || 0,
-                ),
+                refereePoints: Math.max(0, Number.parseInt(next, 10) || 0),
               }))
             }
           />
@@ -264,17 +262,14 @@ export default function ReferralsPage() {
               Require manual approval for every payout
             </s-choice>
           </ChoiceList>
-          <s-text-field
-            label="Post-order holdback (hours before payout)"
-            type="number"
-            value={String(form.holdbackHours)}
-            onChange={(e: { target: { value: string } }) =>
+          <PointsField
+            label="Post-order holdback"
+            suffix="hours"
+            value={form.holdbackHours}
+            onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                holdbackHours: Math.max(
-                  0,
-                  Number.parseInt(e.target.value, 10) || 0,
-                ),
+                holdbackHours: Math.max(0, Number.parseInt(next, 10) || 0),
               }))
             }
           />

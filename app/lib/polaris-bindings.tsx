@@ -134,6 +134,172 @@ export function useSuccessToast(
   }, [actionData, fallback]);
 }
 
+// ---------------------------------------------------------------------------
+// Narrow number inputs with inline affixes
+// ---------------------------------------------------------------------------
+//
+// Default `<s-text-field type="number">` stretches the full width of its
+// container. That's fine for free-form text but absurd for a percent (max
+// 100, 3 digits) or a money amount (almost always under 9999). And it never
+// shows the currency / % symbol inline, so the merchant has to read the
+// label to know what units they're typing.
+//
+// PercentField + MoneyField wrap `<s-number-field>` (which natively supports
+// `prefix` / `suffix`) with a width-constrained container and the right
+// affix derived from the shop's locale + currency. PointsField stays plain
+// (points have no symbol) but is also width-capped because point values
+// are typically 2–4 digits.
+
+
+// Decide whether the currency symbol leads (USD "$1") or trails ("1 kr")
+// based on the shop's locale + currency. Uses Intl.NumberFormat parts so
+// it picks up the locale's actual convention rather than hardcoding rules.
+export function moneyAffix(
+  currencyCode: string,
+  locale: string,
+): { prefix?: string; suffix?: string } {
+  try {
+    const parts = new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: currencyCode,
+      currencyDisplay: "narrowSymbol",
+    }).formatToParts(1);
+    const idxCurrency = parts.findIndex((p) => p.type === "currency");
+    const idxNumber = parts.findIndex(
+      (p) => p.type === "integer" || p.type === "decimal",
+    );
+    const symbol = parts[idxCurrency]?.value ?? currencyCode;
+    if (idxCurrency >= 0 && idxNumber >= 0 && idxCurrency < idxNumber) {
+      return { prefix: symbol };
+    }
+    return { suffix: symbol };
+  } catch {
+    return { suffix: currencyCode };
+  }
+}
+
+function NarrowFieldShell({
+  width,
+  children,
+}: {
+  width: number;
+  children: ReactNode;
+}) {
+  // Inline-block so the field can sit next to other inputs in a stack and
+  // never stretch past its needed width.
+  return (
+    <div style={{ display: "inline-block", maxWidth: "100%", width }}>
+      {children}
+    </div>
+  );
+}
+
+// `s-number-field` JSX types from @shopify/ui-extensions are strict about
+// the onChange event shape and reject our looser `{ target: { value } }`
+// signature. Wrap the element with `any` so the wrapper API stays clean
+// for callers — same pragma used everywhere else in this file.
+const SNumberField = "s-number-field" as unknown as React.FC<any>;
+
+export function PercentField({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  width = 140,
+}: {
+  label: string;
+  value: number | string;
+  onChange: (next: string) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  width?: number;
+}) {
+  return (
+    <NarrowFieldShell width={width}>
+      <SNumberField
+        label={label}
+        value={String(value)}
+        suffix="%"
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e: NumberFieldChangeEvent) => onChange(e.target.value)}
+      />
+    </NarrowFieldShell>
+  );
+}
+
+export function MoneyField({
+  label,
+  value,
+  onChange,
+  currencyCode,
+  locale,
+  min = 0,
+  step = 0.01,
+  width = 200,
+}: {
+  label: string;
+  value: number | string;
+  onChange: (next: string) => void;
+  currencyCode: string;
+  locale: string;
+  min?: number;
+  step?: number;
+  width?: number;
+}) {
+  const { prefix, suffix } = moneyAffix(currencyCode, locale);
+  return (
+    <NarrowFieldShell width={width}>
+      <SNumberField
+        label={label}
+        value={String(value)}
+        {...(prefix ? { prefix } : {})}
+        {...(suffix ? { suffix } : {})}
+        min={min}
+        step={step}
+        onChange={(e: NumberFieldChangeEvent) => onChange(e.target.value)}
+      />
+    </NarrowFieldShell>
+  );
+}
+
+export function PointsField({
+  label,
+  value,
+  onChange,
+  min = 0,
+  step = 1,
+  width = 160,
+  suffix = "points",
+}: {
+  label: string;
+  value: number | string;
+  onChange: (next: string) => void;
+  min?: number;
+  step?: number;
+  width?: number;
+  suffix?: string;
+}) {
+  return (
+    <NarrowFieldShell width={width}>
+      <SNumberField
+        label={label}
+        value={String(value)}
+        suffix={suffix}
+        min={min}
+        step={step}
+        onChange={(e: NumberFieldChangeEvent) => onChange(e.target.value)}
+      />
+    </NarrowFieldShell>
+  );
+}
+
+type NumberFieldChangeEvent = { target: { value: string } };
+
 // Nudge the user when they try to leave with unsaved changes. The
 // <ui-save-bar> visible UI lives in App Bridge's parent admin shell
 // (outside our iframe), so we can't directly animate it. Instead:

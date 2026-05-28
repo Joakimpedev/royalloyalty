@@ -18,7 +18,13 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
-import { PageTitle, useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
+import {
+  MoneyField,
+  PageTitle,
+  PointsField,
+  useSaveBar,
+  useSuccessToast,
+} from "../lib/polaris-bindings";
 
 // Royal now mints exactly one kind of reward: a fixed store-credit drop.
 // Customers redeem points, the value lands in their Shopify store credit
@@ -198,28 +204,26 @@ export default function RewardsPage() {
       )}
       <s-section heading={form.id ? "Edit reward" : "New reward"}>
         <s-stack direction="block" gap="base">
-          <s-text-field
+          <PointsField
             label="Points cost"
-            type="number"
-            value={String(form.pointsCost)}
-            onChange={(e: { target: { value: string } }) =>
+            value={form.pointsCost}
+            min={1}
+            onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                pointsCost: Math.max(
-                  1,
-                  Number.parseInt(e.target.value, 10) || 1,
-                ),
+                pointsCost: Math.max(1, Number.parseInt(next, 10) || 1),
               }))
             }
           />
-          <s-text-field
-            label={`Reward value (in your store currency, ${useShopMoney().currencyCode})`}
-            type="number"
-            value={String(form.value)}
-            onChange={(e: { target: { value: string } }) =>
+          <MoneyField
+            label="Reward value"
+            value={form.value}
+            currencyCode={useShopMoney().currencyCode}
+            locale={useShopMoney().locale}
+            onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                value: Number.parseFloat(e.target.value) || 0,
+                value: Number.parseFloat(next) || 0,
               }))
             }
           />

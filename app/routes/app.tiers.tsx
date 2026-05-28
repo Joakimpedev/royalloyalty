@@ -18,7 +18,13 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney, useShopMoney } from "../lib/use-money";
-import { PageTitle, useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
+import {
+  MoneyField,
+  PageTitle,
+  PointsField,
+  useSaveBar,
+  useSuccessToast,
+} from "../lib/polaris-bindings";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -208,29 +214,42 @@ export default function TiersPage() {
             <s-option value="points">Points balance</s-option>
             <s-option value="spend">Lifetime earned (spend proxy)</s-option>
           </s-select>
-          <s-text-field
-            label={
-              form.thresholdType === "spend"
-                ? `Threshold (lifetime earned, ${useShopMoney().currencyCode})`
-                : "Threshold (points)"
-            }
-            type="number"
-            value={String(form.threshold)}
-            onChange={(e: { target: { value: string } }) =>
-              setForm((f) => ({
-                ...f,
-                threshold: Math.max(0, Number.parseInt(e.target.value, 10) || 0),
-              }))
-            }
-          />
-          <s-text-field
+          {form.thresholdType === "spend" ? (
+            <MoneyField
+              label="Threshold (lifetime earned)"
+              value={form.threshold}
+              currencyCode={useShopMoney().currencyCode}
+              locale={useShopMoney().locale}
+              step={1}
+              onChange={(next) =>
+                setForm((f) => ({
+                  ...f,
+                  threshold: Math.max(0, Number.parseInt(next, 10) || 0),
+                }))
+              }
+            />
+          ) : (
+            <PointsField
+              label="Threshold"
+              value={form.threshold}
+              onChange={(next) =>
+                setForm((f) => ({
+                  ...f,
+                  threshold: Math.max(0, Number.parseInt(next, 10) || 0),
+                }))
+              }
+            />
+          )}
+          <PointsField
             label="Earn multiplier"
-            type="number"
-            value={String(form.earnMultiplier)}
-            onChange={(e: { target: { value: string } }) =>
+            suffix="×"
+            value={form.earnMultiplier}
+            min={1}
+            step={0.1}
+            onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                earnMultiplier: Number.parseFloat(e.target.value) || 1,
+                earnMultiplier: Number.parseFloat(next) || 1,
               }))
             }
           />

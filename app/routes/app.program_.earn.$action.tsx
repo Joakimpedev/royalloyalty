@@ -48,7 +48,12 @@ import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { formatMoney } from "../lib/use-money";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
-import { ChoiceList, PageTitle, useSaveBar } from "../lib/polaris-bindings";
+import {
+  ChoiceList,
+  MoneyField,
+  PageTitle,
+  useSaveBar,
+} from "../lib/polaris-bindings";
 import VariablePicker from "../components/VariablePicker";
 import LockedHint from "../components/LockedHint";
 import {
@@ -829,22 +834,19 @@ export default function EarnRuleEditor() {
             />
           </div>
           {isPurchase && perDollar && (
-            <div style={{ maxWidth: 280, width: "100%" }}>
-              <s-number-field
-                label="For every amount spent"
-                suffix={currencyCode}
-                min={1}
-                value={String(perAmount)}
-                onChange={(e: any) =>
-                  setPerAmount(
-                    Math.max(
-                      1,
-                      Number.parseInt(String(e.target.value), 10) || 1,
-                    ),
-                  )
-                }
-              />
-            </div>
+            <MoneyField
+              label="For every amount spent"
+              currencyCode={currencyCode}
+              locale={moneyCtx.locale}
+              min={1}
+              step={1}
+              value={perAmount}
+              onChange={(next) =>
+                setPerAmount(
+                  Math.max(1, Number.parseInt(next, 10) || 1),
+                )
+              }
+            />
           )}
 
           {/* Completion limit: radio for Unlimited vs Fixed amount. When

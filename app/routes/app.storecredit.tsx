@@ -18,7 +18,13 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { useAppNavigate } from "../lib/app-navigate";
 import { useMoney } from "../lib/use-money";
-import { ChoiceList, PageTitle, useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
+import {
+  ChoiceList,
+  PageTitle,
+  PercentField,
+  useSaveBar,
+  useSuccessToast,
+} from "../lib/polaris-bindings";
 import {
   getCashbackSettings,
   saveCashbackSettings,
@@ -253,16 +259,15 @@ export default function StoreCreditPage() {
             <s-choice value="on">Enabled</s-choice>
             <s-choice value="off">Disabled</s-choice>
           </ChoiceList>
-          <s-text-field
-            label="Cashback percent (e.g. 5 for 5%)"
-            type="number"
-            value={String(form.percent)}
-            onChange={(e: { target: { value: string } }) =>
+          <PercentField
+            label="Cashback percent"
+            value={form.percent}
+            onChange={(next) =>
               setForm((f) => ({
                 ...f,
                 percent: Math.max(
                   0,
-                  Math.min(100, Number.parseFloat(e.target.value) || 0),
+                  Math.min(100, Number.parseFloat(next) || 0),
                 ),
               }))
             }
