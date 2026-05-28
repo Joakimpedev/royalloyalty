@@ -24,7 +24,6 @@ const REWARD_TYPES = [
   "amount_off",
   "percent_off",
   "free_shipping",
-  "free_product",
   "store_credit",
 ] as const;
 
@@ -97,19 +96,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       message: "This reward type needs a value greater than 0.",
     };
   }
-  if (type === "free_product" && !productId) {
-    return {
-      ok: false,
-      message: "Free product rewards require a product ID (gid://shopify/Product/...).",
-    };
-  }
-
   const id = form.get("id") ? String(form.get("id")) : null;
   const data = {
     type,
     pointsCost,
     value: needsValue ? value : null,
-    productId: type === "free_product" ? productId : null,
+    productId: null,
   };
   if (id) {
     await prisma.reward.updateMany({
@@ -247,15 +239,6 @@ export default function RewardsPage() {
               }
             />
           )}
-          {form.type === "free_product" && (
-            <s-text-field
-              label="Product ID (gid://shopify/Product/...)"
-              value={form.productId}
-              onChange={(e: { target: { value: string } }) =>
-                setForm((f) => ({ ...f, productId: e.target.value }))
-              }
-            />
-          )}
           <s-stack direction="inline" gap="base">
             <s-button
               variant="primary"
@@ -301,17 +284,15 @@ export default function RewardsPage() {
                   <s-table-cell>{r.type}</s-table-cell>
                   <s-table-cell>{r.pointsCost}</s-table-cell>
                   <s-table-cell>
-                    {r.type === "free_product"
-                      ? r.productId || "—"
-                      : r.type === "percent_off"
-                        ? r.value
-                          ? `${r.value}%`
-                          : "—"
-                        : r.type === "free_shipping"
-                          ? "Free shipping"
-                          : r.value !== null && r.value !== undefined
-                            ? money(r.value)
-                            : "—"}
+                    {r.type === "percent_off"
+                      ? r.value
+                        ? `${r.value}%`
+                        : "—"
+                      : r.type === "free_shipping"
+                        ? "Free shipping"
+                        : r.value !== null && r.value !== undefined
+                          ? money(r.value)
+                          : "—"}
                   </s-table-cell>
                   <s-table-cell>
                     <s-badge tone={r.enabled ? "success" : "neutral"}>
@@ -404,21 +385,6 @@ const REWARD_TYPE_OPTIONS: Array<{
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
         <path
           d="M3 7h11v9H3zM14 11h4l3 3v2h-7M6 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    value: "free_product",
-    label: "Free product",
-    desc: "100% off a specific item",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M3 8h18v4H3zM4 12v9h16v-9M12 8v13M8 8s-2-4 1-4 3 4 3 4 0-4 3-4 1 4 1 4"
           stroke="currentColor"
           strokeWidth="1.8"
           strokeLinejoin="round"
