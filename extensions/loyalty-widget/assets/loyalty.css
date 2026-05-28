@@ -214,6 +214,26 @@
 .royal-status-card__balanceWrap {
   margin-bottom: 4px;
 }
+.royal-status-card__credit {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--royal-primary, #2C2A29);
+  color: #fff;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.royal-status-card__creditLabel {
+  font-size: 12px;
+  opacity: 0.85;
+  letter-spacing: 0.02em;
+}
+.royal-status-card__creditAmount {
+  font-size: 15px;
+  font-weight: 700;
+}
 .royal-status-card__cashback {
   margin-top: 10px;
   padding: 8px 12px;

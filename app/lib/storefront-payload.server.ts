@@ -16,7 +16,11 @@ import prisma from "../db.server";
 import type { Shop } from "@prisma/client";
 import { getBalance } from "./points.server";
 import { issueReferralCode, referralLink } from "./referrals.server";
-import { readCashbackSettings } from "./storecredit.server";
+import {
+  readCashbackSettings,
+  getStoreCreditAccounts,
+} from "./storecredit.server";
+import { withFreshToken } from "./token.server";
 import { seedDefaultEarnRules } from "./loyalty.server";
 import {
   substituteTokens,
@@ -152,6 +156,16 @@ export interface StorefrontPayload {
   /** Cashback settings — drives the "Earn X% back as store credit"
    *  callouts on the loyalty page, launcher panel, and cart widget. */
   cashback: StorefrontCashback;
+  /** Customer's current Shopify store-credit balance (sum across accounts in
+   *  any currency). 0 for visitors / customers with no credit. The
+   *  storefront uses this to surface "You have X in store credit" alongside
+   *  the points balance — clearly distinct from the cashback projection on
+   *  the cart line, which is what the *next* order would earn. */
+  storeCreditBalance: number;
+  /** Currency of the primary store-credit account (first account returned by
+   *  Shopify). Used to format storeCreditBalance. Falls back to the shop's
+   *  default currency when the customer has no account yet. */
+  storeCreditCurrency: string;
   branding: StorefrontBranding;
 }
 
@@ -429,6 +443,8 @@ export async function buildStorefrontLoyaltyPayload(params: {
       activeCodes: [],
       socialPlatforms,
       cashback,
+      storeCreditBalance: 0,
+      storeCreditCurrency: shop.currencyCode ?? "USD",
       branding,
       localization: localizationBundle,
       locale: localeInfo,
@@ -445,6 +461,12 @@ export async function buildStorefrontLoyaltyPayload(params: {
     include: { currentTier: true },
   });
 
+  // Live Shopify store-credit balance for this customer — read via offline
+  // admin token. Returns 0 silently on any failure (missing scope, dead
+  // token, Shopify outage) so the widget never breaks over a side-channel.
+  // Used both here and in the non-member return below.
+  const sc = await readCustomerStoreCredit(shopDomain, shopifyCustomerId, shop.currencyCode ?? "USD");
+
   if (!member) {
     // Customer is signed in but hasn't been enrolled yet — they'll be
     // enrolled on their first qualifying action (purchase / signup / etc).
@@ -460,6 +482,8 @@ export async function buildStorefrontLoyaltyPayload(params: {
       activeCodes: [],
       socialPlatforms,
       cashback,
+      storeCreditBalance: sc.balance,
+      storeCreditCurrency: sc.currency,
       branding,
       localization: localizationBundle,
       locale: localeInfo,
@@ -511,6 +535,8 @@ export async function buildStorefrontLoyaltyPayload(params: {
     activeCodes: await buildActiveCodes(activeRedemptions),
     socialPlatforms,
     cashback,
+    storeCreditBalance: sc.balance,
+    storeCreditCurrency: sc.currency,
     activity: activityRows.map((a) => ({
       type: a.type,
       reason: a.reason,
@@ -521,6 +547,32 @@ export async function buildStorefrontLoyaltyPayload(params: {
     localization: localizationBundle,
     locale: localeInfo,
   };
+}
+
+// Live Shopify store-credit balance for a customer. Uses the offline admin
+// session via withFreshToken so storefront proxy calls (which only have
+// app-proxy auth) can reach the Admin GraphQL. Failures are swallowed so a
+// missing-scope / dead-token edge never breaks the panel — the widget just
+// hides the balance line.
+async function readCustomerStoreCredit(
+  shopDomain: string,
+  shopifyCustomerId: string,
+  fallbackCurrency: string,
+): Promise<{ balance: number; currency: string }> {
+  try {
+    const result = await withFreshToken(shopDomain, async (admin) => {
+      const accounts = await getStoreCreditAccounts(
+        admin.graphql,
+        shopifyCustomerId,
+      );
+      const balance = accounts.reduce((s, a) => s + a.amount, 0);
+      const currency = accounts[0]?.currencyCode ?? fallbackCurrency;
+      return { balance, currency };
+    });
+    return result ?? { balance: 0, currency: fallbackCurrency };
+  } catch {
+    return { balance: 0, currency: fallbackCurrency };
+  }
 }
 
 // ───────────────────────────────────────────────────────────────────────────

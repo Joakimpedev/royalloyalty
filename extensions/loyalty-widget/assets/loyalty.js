@@ -736,6 +736,21 @@
         "</div>" +
         "</div>";
 
+      // Current store-credit balance — shown only when the customer has
+      // any. Separate from the cashback projection appended to the earn
+      // line below (that one is what THIS order will earn).
+      var scBal = payload.storeCreditBalance || 0;
+      var creditBalanceLine = "";
+      if (scBal > 0) {
+        var scCcy = payload.storeCreditCurrency || payload.currencyCode;
+        creditBalanceLine =
+          '<div class="royal-injected__sub royal-injected__credit-balance">' +
+          t("cart.storeCreditBalance", "Store credit balance") +
+          ": " +
+          formatMoney(scBal, scCcy) +
+          "</div>";
+      }
+
       var earnLine = b.cartShowEarnLine
         ? '<div class="royal-injected__sub" id="royal-injected-cart-earn">' +
           t("cart.earnLineLoading", "Calculating points earned…") +
@@ -786,7 +801,8 @@
       var status =
         '<div class="royal-status" id="royal-injected-cart-status" aria-live="polite"></div>';
 
-      card.innerHTML = head + earnLine + activeCodesBlock + list + status;
+      card.innerHTML =
+        head + creditBalanceLine + earnLine + activeCodesBlock + list + status;
       insertIntoForm(form, card);
 
       // Render active-code cards into the placeholder container.

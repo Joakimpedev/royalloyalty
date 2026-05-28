@@ -327,6 +327,22 @@
             (tier ? '<div class="royal-status-card__tier">' + escapeHtml(tier) + '</div>' : '') +
           '</div>';
 
+        // Live store-credit balance — only shown when the customer actually
+        // has any. Distinct from the cashback callout below, which is about
+        // FUTURE earnings.
+        var sc = d.storeCreditBalance || 0;
+        if (sc > 0) {
+          var scLabel = R.t('hub.member.storeCreditBalance', 'Store credit balance');
+          var scAmount = R.formatMoney
+            ? R.formatMoney(sc, d.storeCreditCurrency || d.currencyCode)
+            : (d.storeCreditCurrency || d.currencyCode || '') + ' ' + sc.toFixed(2);
+          html +=
+            '<div class="royal-status-card__credit">' +
+              '<span class="royal-status-card__creditLabel">' + escapeHtml(scLabel) + '</span>' +
+              '<span class="royal-status-card__creditAmount">' + escapeHtml(scAmount) + '</span>' +
+            '</div>';
+        }
+
         // Cashback callout — appears between balance and Next Reward whenever
         // the merchant has cashback turned on. Tells the member what they'll
         // get *back* on every order on top of points.

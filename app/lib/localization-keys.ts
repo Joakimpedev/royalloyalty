@@ -132,6 +132,18 @@ export const KEY_CATALOG: LocalizationKey[] = [
     defaultEn: "Earn {percent}% back as store credit on every order.",
   },
   {
+    key: "hub.member.storeCreditBalance",
+    section: "launcher",
+    label: "Hub status card — store credit balance label",
+    defaultEn: "Store credit balance",
+  },
+  {
+    key: "cart.storeCreditBalance",
+    section: "launcher",
+    label: "Cart card — store credit balance label",
+    defaultEn: "Store credit balance",
+  },
+  {
     key: "launcher.loadingRewards",
     section: "launcher",
     label: "Loading rewards placeholder",
