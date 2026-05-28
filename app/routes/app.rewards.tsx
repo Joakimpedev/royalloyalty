@@ -198,13 +198,6 @@ export default function RewardsPage() {
       )}
       <s-section heading={form.id ? "Edit reward" : "New reward"}>
         <s-stack direction="block" gap="base">
-          <s-paragraph>
-            <s-text tone="subdued">
-              Every reward is a fixed discount delivered as Shopify store
-              credit — it applies at checkout as a payment method and stacks
-              with every other promotion you run.
-            </s-text>
-          </s-paragraph>
           <s-text-field
             label="Points cost"
             type="number"
