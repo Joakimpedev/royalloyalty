@@ -1344,7 +1344,15 @@ function RecentActivityCard({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {r.reason}
+                      {/* REDEEM rows: the stored reason is internal
+                          ("Redeemed reward amount_off (100 pts)") and noisy
+                          on the dashboard — collapse it to the merchant-
+                          friendly "Redeemed N pts". Everything else (EARN,
+                          ADJUST, etc.) keeps the original reason since
+                          those already read well. */}
+                      {r.type === "REDEEM"
+                        ? `Redeemed ${Math.abs(r.points)} pts`
+                        : r.reason}
                     </div>
                   </div>
                   <div
