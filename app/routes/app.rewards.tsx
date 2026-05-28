@@ -210,19 +210,10 @@ export default function RewardsPage() {
       )}
       <s-section heading={form.id ? "Edit reward" : "New reward"}>
         <s-stack direction="block" gap="base">
-          <s-select
-            label="Reward type"
+          <RewardTypePicker
             value={form.type}
-            onChange={(e: { target: { value: string } }) =>
-              setForm((f) => ({ ...f, type: e.target.value }))
-            }
-          >
-            <s-option value="amount_off">Amount off</s-option>
-            <s-option value="percent_off">Percent off</s-option>
-            <s-option value="free_shipping">Free shipping</s-option>
-            <s-option value="free_product">Free product</s-option>
-            <s-option value="store_credit">Store credit</s-option>
-          </s-select>
+            onChange={(next) => setForm((f) => ({ ...f, type: next }))}
+          />
           <s-text-field
             label="Points cost"
             type="number"
@@ -361,6 +352,182 @@ export default function RewardsPage() {
       </s-section>
 
     </s-page>
+  );
+}
+
+// Reward type as a row of square tiles — every option visible at a glance
+// instead of hidden behind a dropdown. Square tiles, icon on top, label below.
+const REWARD_TYPE_OPTIONS: Array<{
+  value: typeof REWARD_TYPES[number];
+  label: string;
+  desc: string;
+  icon: React.ReactNode;
+}> = [
+  {
+    value: "amount_off",
+    label: "Amount off",
+    desc: "Fixed money discount",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M12 3v18M16 7H10a2.5 2.5 0 000 5h4a2.5 2.5 0 010 5H8"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: "percent_off",
+    label: "Percent off",
+    desc: "Percentage discount",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M19 5L5 19"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <circle cx="7.5" cy="7.5" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+        <circle cx="16.5" cy="16.5" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+      </svg>
+    ),
+  },
+  {
+    value: "free_shipping",
+    label: "Free shipping",
+    desc: "Waive shipping cost",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M3 7h11v9H3zM14 11h4l3 3v2h-7M6 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: "free_product",
+    label: "Free product",
+    desc: "100% off a specific item",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M3 8h18v4H3zM4 12v9h16v-9M12 8v13M8 8s-2-4 1-4 3 4 3 4 0-4 3-4 1 4 1 4"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: "store_credit",
+    label: "Store credit",
+    desc: "Native Shopify credit",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect
+          x="3"
+          y="6"
+          width="18"
+          height="12"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        />
+        <path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" />
+        <path
+          d="M7 15h3"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+];
+
+function RewardTypePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 500,
+          color: "#202223",
+          marginBottom: 8,
+        }}
+      >
+        Reward type
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+          gap: 10,
+        }}
+      >
+        {REWARD_TYPE_OPTIONS.map((opt) => {
+          const selected = opt.value === value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              aria-pressed={selected}
+              style={{
+                cursor: "pointer",
+                appearance: "none",
+                textAlign: "left",
+                padding: "12px 12px 10px",
+                background: selected ? "#F1F8F5" : "#fff",
+                border: selected ? "2px solid #008060" : "1px solid #d1d5db",
+                borderRadius: 10,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: 6,
+                color: "#202223",
+                transition: "border-color 0.12s ease, background 0.12s ease",
+                fontFamily: "inherit",
+                fontSize: "inherit",
+                // Compensate so selected (2px border) doesn't visually jump.
+                margin: selected ? 0 : 1,
+              }}
+            >
+              <span
+                style={{
+                  color: selected ? "#008060" : "#5c5f62",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {opt.icon}
+              </span>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>
+                {opt.label}
+              </span>
+              <span style={{ fontSize: 12, color: "#6d7175", lineHeight: 1.3 }}>
+                {opt.desc}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
