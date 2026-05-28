@@ -346,8 +346,8 @@ const REWARD_TYPE_OPTIONS: Array<{
 }> = [
   {
     value: "amount_off",
-    label: "Amount off",
-    desc: "Fixed money discount",
+    label: "Fixed discount",
+    desc: "Set amount off the order",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
         <path
