@@ -410,16 +410,10 @@ export default function MembersPage() {
     setParams(next);
   };
 
-  // ESC closes the slide-over.
-  useEffect(() => {
-    if (!detail) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeDetail();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail]);
+  // ESC handling lives inside DetailSlideOver so it can trigger the
+  // animated close (set mounted=false, wait for the transition, THEN call
+  // back here to strip the URL). Closing here directly would skip the
+  // animation and the panel would just disappear.
 
   return (
     <s-page heading="Members">
@@ -583,21 +577,42 @@ function DetailSlideOver({
 }) {
   const notFound = detail?.notFound === true;
 
-  // Slide-in animation — start off-screen on first render then flip on the
-  // next frame so the transition has something to interpolate to. Closing
-  // is handled by the parent unmounting; we don't try to animate out (would
-  // need an exit-tracking state machine for marginal payoff).
+  // Slide-in on mount, slide-out on user-initiated close. `mounted` drives
+  // both the open transition (false→true on first frame) and the close
+  // transition (true→false when the user clicks backdrop / X / hits Esc).
+  // Only AFTER the close transition finishes do we call the parent's
+  // onClose, which strips ?member= from the URL and unmounts us.
+  const CLOSE_MS = 240;
   const [mounted, setMounted] = useState(false);
+  const [closing, setClosing] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(id);
+  }, []);
+
+  const requestClose = () => {
+    if (closing) return;
+    setClosing(true);
+    setMounted(false);
+    window.setTimeout(onClose, CLOSE_MS);
+  };
+
+  // Esc closes the panel (with animation). Listener lives here, not on the
+  // parent, so the parent's URL change happens AFTER the transition.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") requestClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <>
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        onClick={requestClose}
         style={{
           position: "fixed",
           inset: 0,
@@ -662,7 +677,7 @@ function DetailSlideOver({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close"
             style={{
               background: "none",
