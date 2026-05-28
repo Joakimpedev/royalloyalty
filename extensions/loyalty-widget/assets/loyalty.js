@@ -56,17 +56,25 @@
     earlyBox.style.cssText =
       "position:fixed;top:8px;left:8px;z-index:2147483647;" +
       "background:#111;color:#fff;font:12px/1.4 ui-monospace,monospace;" +
-      "padding:10px 12px;border-radius:8px;max-width:380px;" +
+      "padding:6px 8px;border-radius:8px;max-width:380px;" +
       "box-shadow:0 6px 24px rgba(0,0,0,.35);";
-    var earlyText = document.createElement("pre");
-    earlyText.id = "royal-debug-overlay__text";
-    earlyText.style.cssText = "margin:0;white-space:pre-wrap;font:inherit;color:inherit;";
+    // Header row stays visible even when collapsed — toggle on the left,
+    // Copy on the right so the merchant can grab the diagnostic dump
+    // without expanding the overlay.
+    var header = document.createElement("div");
+    header.style.cssText =
+      "display:flex;align-items:center;justify-content:space-between;gap:8px;";
+    var earlyToggle = document.createElement("button");
+    earlyToggle.type = "button";
+    earlyToggle.style.cssText =
+      "background:transparent;color:#fff;border:none;font:inherit;" +
+      "cursor:pointer;padding:2px 4px;display:inline-flex;align-items:center;gap:6px;";
     var earlyCopy = document.createElement("button");
     earlyCopy.type = "button";
     earlyCopy.textContent = "Copy";
     earlyCopy.style.cssText =
-      "margin-top:8px;background:#fff;color:#111;border:none;" +
-      "border-radius:4px;padding:4px 10px;font:inherit;cursor:pointer;";
+      "background:#fff;color:#111;border:none;" +
+      "border-radius:4px;padding:3px 10px;font:inherit;cursor:pointer;";
     earlyCopy.addEventListener("click", function () {
       var txt = (document.getElementById("royal-debug-overlay__text") || {}).textContent || "";
       var done = function () {
@@ -87,8 +95,26 @@
         document.execCommand("copy"); document.body.removeChild(ta);
       } catch (e) { /* give up */ }
     }
+    var earlyText = document.createElement("pre");
+    earlyText.id = "royal-debug-overlay__text";
+    earlyText.style.cssText =
+      "margin:8px 0 0;white-space:pre-wrap;font:inherit;color:inherit;";
+    // Collapsed by default so the overlay doesn't dominate the storefront
+    // during normal QA. Click the chevron (or the title) to expand.
+    var collapsed = true;
+    function applyCollapsed() {
+      earlyText.style.display = collapsed ? "none" : "block";
+      earlyToggle.textContent = (collapsed ? "▸ " : "▾ ") + "Royal diag";
+    }
+    earlyToggle.addEventListener("click", function () {
+      collapsed = !collapsed;
+      applyCollapsed();
+    });
+    applyCollapsed();
+    header.appendChild(earlyToggle);
+    header.appendChild(earlyCopy);
+    earlyBox.appendChild(header);
     earlyBox.appendChild(earlyText);
-    earlyBox.appendChild(earlyCopy);
     var mount = function () {
       if (document.body) document.body.appendChild(earlyBox);
       else setTimeout(mount, 50);
