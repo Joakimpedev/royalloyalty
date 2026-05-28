@@ -248,7 +248,7 @@ function ProgramCatalog() {
       href: "/app/rewards",
       title: "Rewards",
       description:
-        "What customers can redeem points for — discounts, free shipping, products.",
+        "Set how many points customers spend to redeem store credit.",
     },
     {
       href: "/app/referrals",
