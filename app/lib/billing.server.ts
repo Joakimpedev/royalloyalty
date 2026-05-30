@@ -90,9 +90,36 @@ export function planDef(tier: PlanTier): PlanDef {
  * commented-out check. Production MUST set NODE_ENV=production explicitly on
  * Railway (Phase 0); if it is unset there, this returns true and NO ONE is
  * billed (the known 2/2 pattern this is written to surface, not hide).
+ *
+ * NOTE: this is the *environment* signal only. `subscribeToPlan` ORs this
+ * with `isDevelopmentStore()` so dev stores always get test charges (Shopify
+ * rejects real charges against a dev store) even on a NODE_ENV=production
+ * Railway deploy.
  */
 export function billingTestMode(): boolean {
   return process.env.NODE_ENV !== "production";
+}
+
+const SHOP_PLAN_QUERY = `#graphql
+  query shopPlan { shop { plan { partnerDevelopment } } }`;
+
+/**
+ * Whether the calling shop is a Shopify Partner development store. Shopify
+ * rejects real (non-test) AppSubscription charges against dev stores, so we
+ * must always set test=true for them regardless of NODE_ENV. Failures fall
+ * back to `false` (the safer default — a wrong `true` only means a real
+ * charge would have been attempted, which Shopify will reject cleanly).
+ */
+export async function isDevelopmentStore(
+  graphql: GraphqlClient,
+): Promise<boolean> {
+  try {
+    const resp = await graphql(SHOP_PLAN_QUERY);
+    const body = await resp.json();
+    return body?.data?.shop?.plan?.partnerDevelopment === true;
+  } catch {
+    return false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,11 +213,18 @@ export async function subscribeToPlan(params: {
     return { ok: true };
   }
 
+  // test=true if either the env is non-production OR the calling shop is a
+  // Partner development store (Shopify rejects real charges against dev
+  // stores). The dev-store check costs one extra GraphQL round-trip per
+  // subscribe — acceptable for a one-time flow.
+  const devStore = await isDevelopmentStore(params.graphql);
+  const test = billingTestMode() || devStore;
+
   const resp = await params.graphql(APP_SUBSCRIPTION_CREATE, {
     variables: {
       name: def.name,
       returnUrl: params.returnUrl,
-      test: billingTestMode(),
+      test,
       trialDays: def.trialDays,
       lineItems: [
         {
