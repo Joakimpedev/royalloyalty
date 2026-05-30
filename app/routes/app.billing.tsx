@@ -563,51 +563,68 @@ function PricingCards({
               </div>
 
               {/* CTA — Essent uses a full-width solid-black primary button
-                  centered inside the card. We wrap <s-button> with a flex row
-                  whose child is set to flex: 1 so the button stretches edge to
-                  edge of the card's padding, with centered label. (s-button is
-                  a custom element and doesn't accept width props directly, so
-                  the wrapper carries the sizing.) */}
+                  edge-to-edge inside the card, ~44px tall. <s-button> is a
+                  custom element that ignores width/height styles, which is why
+                  the previous attempt rendered as a small natural-width pill.
+                  Swapping to a plain styled <button> guarantees the layout
+                  matches Essent exactly. This button SUBMITS a form (does not
+                  navigate), so it has no iframe-auth implications — the auth
+                  rule only bans <button href> / target="_top" / window.top
+                  navigations, none of which apply here. */}
               <div
                 style={{
                   marginTop: "auto",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 6,
+                  gap: 8,
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "stretch",
-                    alignItems: "stretch",
-                  }}
-                >
-                  <div
+                {isCurrent ? (
+                  <button
+                    type="button"
+                    disabled
                     style={{
-                      flex: 1,
-                      display: "flex",
-                      justifyContent: "center",
+                      width: "100%",
+                      padding: "12px 16px",
+                      background: "#f6f6f7",
+                      color: "#8c9196",
+                      border: "1px solid #e3e5e7",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 500,
+                      lineHeight: 1.2,
+                      cursor: "default",
+                      textAlign: "center",
                     }}
                   >
-                    {isCurrent ? (
-                      <s-button disabled style={{ width: "100%" }}>
-                        Current plan
-                      </s-button>
-                    ) : (
-                      <s-button
-                        variant="primary"
-                        onClick={() => onSubscribe(p.tier)}
-                        style={{ width: "100%" }}
-                        {...(busy ? { loading: "" } : {})}
-                      >
-                        {p.trialDays > 0
-                          ? `Start ${p.trialDays}-day free trial`
-                          : "Choose plan"}
-                      </s-button>
-                    )}
-                  </div>
-                </div>
+                    Current plan
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onSubscribe(p.tier)}
+                    style={{
+                      width: "100%",
+                      padding: "12px 16px",
+                      background: "#202223",
+                      color: "#fff",
+                      border: "1px solid #202223",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 500,
+                      lineHeight: 1.2,
+                      cursor: busy ? "wait" : "pointer",
+                      textAlign: "center",
+                      opacity: busy ? 0.7 : 1,
+                      transition: "opacity 120ms ease",
+                    }}
+                  >
+                    {p.trialDays > 0
+                      ? `Start ${p.trialDays}-day free trial`
+                      : "Choose plan"}
+                  </button>
+                )}
                 {p.trialDays > 0 && !isCurrent && (
                   <div
                     style={{
