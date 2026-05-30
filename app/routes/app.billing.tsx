@@ -13,12 +13,13 @@
 //   4. A 30-day money-back guarantee card.
 //   5. A grouped FAQ accordion.
 //
-// Self-serve upgrade / downgrade / cancel. Prices shown BEFORE subscribe.
+// Self-serve upgrade / downgrade. Prices shown BEFORE subscribe. Downgrading
+// to Free cancels any active subscription as a side effect of the FREE-tier
+// subscribe path, so a separate "Cancel" button is unnecessary.
 // Volume-gate messaging is neutral / informational only — no fear framing, no
 // hidden data, NO feature gating (every feature is on every plan; only the
-// monthly loyalty-order volume differs). Save bar wired with the contact-email
-// field (the plan actions are immediate POSTs, not a dirty form).
-import { useCallback, useEffect, useRef, useState } from "react";
+// monthly loyalty-order volume differs).
+import { useEffect } from "react";
 import type {
   ActionFunctionArgs,
   HeadersFunction,
@@ -34,14 +35,13 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { useSaveBar, useSuccessToast } from "../lib/polaris-bindings";
+import { useSuccessToast } from "../lib/polaris-bindings";
 import {
   PLANS,
   PLAN_ORDER,
   planDef,
   subscribeToPlan,
   cancelActiveSubscription,
-  managedPricingUrl,
   billingTestMode,
 } from "../lib/billing.server";
 import { getQuotaState } from "../lib/quota.server";
@@ -79,11 +79,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       blurb: PLANS[t].blurb,
     })),
     testMode: billingTestMode(),
-    contactEmail:
-      (shop.aiConfigSnapshot &&
-      typeof shop.aiConfigSnapshot === "object" &&
-      (shop.aiConfigSnapshot as Record<string, unknown>).supportEmail) ||
-      "",
   };
 };
 
@@ -93,19 +88,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
   const intent = String(form.get("_intent") ?? "");
 
-  if (intent === "save_contact") {
-    const email = String(form.get("supportEmail") ?? "").trim();
-    const base =
-      shop.aiConfigSnapshot && typeof shop.aiConfigSnapshot === "object"
-        ? (shop.aiConfigSnapshot as Record<string, unknown>)
-        : {};
-    await prisma.shop.update({
-      where: { id: shop.id },
-      data: { aiConfigSnapshot: { ...base, supportEmail: email } },
-    });
-    return { ok: true, message: "Support contact saved." };
-  }
-
+  // Only one action surface remains: subscribe to a plan from one of the
+  // pricing cards. Downgrading is handled by subscribing to FREE — the FREE
+  // branch cancels any active Shopify subscription as a side effect, so a
+  // separate "Cancel subscription" button isn't needed.
   if (intent === "subscribe") {
     const tier = String(form.get("tier") ?? "") as keyof typeof PLANS;
     if (!PLANS[tier]) {
@@ -145,33 +131,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { ok: true, redirectTo: res.confirmationUrl };
   }
 
-  if (intent === "cancel") {
-    const res = await cancelActiveSubscription(admin.graphql);
-    if (!res.ok) {
-      return {
-        ok: false,
-        message:
-          res.error ?? "Could not cancel the subscription. Please try again.",
-      };
-    }
-    await prisma.shop.update({
-      where: { id: shop.id },
-      data: { plan: "FREE", planStatus: "CANCELLED", subscriptionId: null },
-    });
-    return {
-      ok: true,
-      message:
-        "Subscription cancelled. You remain on the Free plan with every feature available.",
-    };
-  }
-
-  if (intent === "managed_pricing") {
-    // Preferred path: hand off to Shopify-hosted Managed Pricing. appHandle is
-    // configured in the Partner Dashboard; SHOPIFY_APP_HANDLE env mirrors it.
-    const handle = process.env.SHOPIFY_APP_HANDLE || "royal-loyalty";
-    return { ok: true, redirectTo: managedPricingUrl(shop.shopDomain, handle) };
-  }
-
   return { ok: false, message: "Unknown action." };
 };
 
@@ -181,17 +140,10 @@ export default function BillingPage() {
   const nav = useNavigation();
   const submit = useSubmit();
   const appNav = useAppNavigate();
-  const saveBarRef = useRef<HTMLElement | null>(null);
-
-  const [contactEmail, setContactEmail] = useState(
-    String(data.contactEmail ?? ""),
-  );
-  const dirty = contactEmail !== String(data.contactEmail ?? "");
   const busy = nav.state === "submitting";
-  useSaveBar(saveBarRef, dirty);
   useSuccessToast(actionData as { ok?: boolean; message?: string } | undefined);
 
-  // Client-side redirect to Shopify-hosted confirmation / managed pricing.
+  // Client-side redirect to the Shopify-hosted subscription confirmation page.
   //
   // ⚠ IFRAME AUTH: We're in an embedded admin iframe; setting
   // `window.top.location.href = url` force-replaces the iframe's parent and
@@ -199,13 +151,11 @@ export default function BillingPage() {
   // page. Instead we hand the URL to App Bridge (`window.shopify`), which
   // navigates the parent admin frame while keeping our iframe alive.
   //
-  // Two URL shapes flow through here:
-  // - `shopify:admin/...` (managed-pricing handoff) — App Bridge's `open()`
-  //   handles this directly, same as a plain <a href="shopify:admin/...">.
-  // - `https://...myshopify.com/admin/charges/.../confirm_recurring_application_charge`
-  //   (subscribeToPlan confirmation URL) — `shopify.redirect.dispatch({
-  //   type: 'REMOTE', url, newContext: false })` is the documented App
-  //   Bridge v4 path for remote URLs that must take over the parent frame.
+  // The URL is the appSubscriptionCreate confirmation URL of the form
+  // `https://<shop>.myshopify.com/admin/charges/.../confirm_recurring_application_charge`.
+  // `shopify.redirect.dispatch({ type: 'REMOTE', url, newContext: false })` is
+  // the documented App Bridge v4 path for remote URLs that must take over the
+  // parent frame.
   useEffect(() => {
     if (actionData && "redirectTo" in actionData && actionData.redirectTo) {
       const target = actionData.redirectTo as string;
@@ -235,13 +185,6 @@ export default function BillingPage() {
     }
   }, [actionData]);
 
-  const saveContact = useCallback(() => {
-    submit(
-      { _intent: "save_contact", supportEmail: contactEmail },
-      { method: "POST" },
-    );
-  }, [contactEmail, submit]);
-
   const currentDef = data.plans.find((p) => p.tier === data.plan)!;
   const usagePct =
     data.quota.cap && data.quota.cap > 0
@@ -253,21 +196,6 @@ export default function BillingPage() {
       <s-button slot="primary-action" onClick={() => appNav("/app")}>
         Back to Home
       </s-button>
-
-      {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
-      <ui-save-bar id="billing-save-bar" ref={saveBarRef}>
-        <button
-          variant="primary"
-          onClick={saveContact}
-          {...(busy ? { loading: "" } : {})}
-        >
-          Save
-        </button>
-        <button onClick={() => setContactEmail(String(data.contactEmail ?? ""))}>
-          Discard
-        </button>
-        {/* @ts-expect-error - ui-save-bar custom element */}
-      </ui-save-bar>
 
       {actionData && !actionData.ok && (
         <s-section>
@@ -354,46 +282,6 @@ export default function BillingPage() {
       {/* Account-management actions — moved to a low-prominence row at the
           bottom of the page (Essent keeps these off the main billing surface
           entirely; we keep them accessible but quiet). */}
-      <s-section heading="Manage subscription">
-        <s-paragraph>
-          Use these if you want to handle your plan directly in Shopify admin or
-          cancel your subscription.
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
-          <s-button
-            variant="secondary"
-            onClick={() =>
-              submit({ _intent: "managed_pricing" }, { method: "POST" })
-            }
-          >
-            Manage plan on Shopify
-          </s-button>
-          {data.plan !== "FREE" && (
-            <s-button
-              tone="critical"
-              onClick={() => submit({ _intent: "cancel" }, { method: "POST" })}
-              {...(busy ? { loading: "" } : {})}
-            >
-              Cancel subscription
-            </s-button>
-          )}
-        </s-stack>
-      </s-section>
-
-      <s-section heading="Support contact">
-        <s-paragraph>
-          The email shown to your team for billing and plan questions inside
-          Royal.
-        </s-paragraph>
-        <s-text-field
-          label="Support email"
-          type="email"
-          value={contactEmail}
-          onChange={(e: { target: { value: string } }) =>
-            setContactEmail(e.target.value)
-          }
-        />
-      </s-section>
     </s-page>
   );
 }
