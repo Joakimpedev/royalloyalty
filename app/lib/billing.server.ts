@@ -62,7 +62,7 @@ export const PLANS: Record<PlanTier, PlanDef> = {
   GROWTH: {
     tier: "GROWTH",
     name: "Growth",
-    priceUsd: 29,
+    priceUsd: 20,
     cap: 2000,
     trialDays: 14,
     blurb:
@@ -71,7 +71,7 @@ export const PLANS: Record<PlanTier, PlanDef> = {
   PRO: {
     tier: "PRO",
     name: "Pro",
-    priceUsd: 79,
+    priceUsd: 49,
     cap: null,
     trialDays: 14,
     blurb:
