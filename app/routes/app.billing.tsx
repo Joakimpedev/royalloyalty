@@ -18,7 +18,6 @@
 // Volume-gate messaging is neutral / informational only — no fear framing, no
 // hidden data, NO feature gating (every feature is on every plan; only the
 // monthly loyalty-order volume differs).
-import { useEffect } from "react";
 import type {
   ActionFunctionArgs,
   HeadersFunction,
@@ -96,11 +95,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!PLANS[tier]) {
       return { ok: false, message: "Unknown plan selected." };
     }
-    const url = new URL(request.url);
-    const returnUrl = `${url.origin}/app/billing`;
 
     if (PLANS[tier].priceUsd <= 0) {
       // Downgrade to Free: cancel any active subscription, set plan now.
+      // Returns JSON so the page revalidates and shows the new plan with a
+      // success toast. No redirect needed (no Shopify confirmation page).
       await cancelActiveSubscription(admin.graphql);
       await prisma.shop.update({
         where: { id: shop.id },
@@ -112,6 +111,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           "You are now on the Free plan. Every feature stays available; only the monthly loyalty-order volume changes.",
       };
     }
+
+    // returnUrl MUST send the merchant back INTO the embedded admin, not to
+    // the bare Railway origin. After payment Shopify redirects the TOP-LEVEL
+    // browser to this URL; a Railway URL has no embedded session and would
+    // bounce through /auth/login. The admin.shopify.com/store/.../apps/<key>
+    // path is what the official SDK uses for embedded apps and lands the
+    // merchant back on /app/billing inside admin.
+    const apiKey = process.env.SHOPIFY_API_KEY ?? "";
+    const cleanShop = session.shop.replace(/\.myshopify\.com$/, "");
+    const returnUrl = `https://admin.shopify.com/store/${cleanShop}/apps/${apiKey}/app/billing`;
 
     const res = await subscribeToPlan({
       graphql: admin.graphql,
@@ -125,9 +134,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           res.error ?? "Could not start the subscription. Please try again.",
       };
     }
-    // The merchant must approve the charge on Shopify's hosted page. The plan
-    // flips when Shopify fires app_subscriptions/update.
-    return { ok: true, redirectTo: res.confirmationUrl };
+
+    // Success → send the merchant to Shopify's billing confirmation page.
+    //
+    // The Subscribe button submits through App Bridge's authenticated fetch.
+    // App Bridge's client-side interceptor inspects every response for the
+    // X-Shopify-API-Request-Failure-Reauthorize-Url header and, when it's
+    // present, performs the iframe-safe TOP-LEVEL redirect itself. This is
+    // the exact mechanism @shopify/shopify-app-react-router uses internally
+    // for billing.request() → redirectOutOfApp.
+    //
+    // MUST be `throw`, not `return` — a returned JSON `{redirectTo}` would
+    // need client code to navigate, and `redirect.dispatch({type:"REMOTE"})`
+    // does NOT exist in App Bridge v4; window.top.location.assign across
+    // origins inside the admin iframe throws SecurityError and ends up on
+    // an "admin.shopify.com refused to connect" page. That was the bug.
+    throw new Response(null, {
+      status: 401,
+      statusText: "Unauthorized",
+      headers: {
+        "X-Shopify-API-Request-Failure-Reauthorize-Url": res.confirmationUrl,
+      },
+    });
   }
 
   return { ok: false, message: "Unknown action." };
@@ -140,49 +168,12 @@ export default function BillingPage() {
   const submit = useSubmit();
   const appNav = useAppNavigate();
   const busy = nav.state === "submitting";
+  // Toast fires on Switch-to-Free (returns {ok, message}). The paid subscribe
+  // path THROWS a 401 + reauth header instead of returning JSON, so the toast
+  // never fires for that path — App Bridge intercepts the response and
+  // performs the iframe-safe top-level redirect to Shopify's confirmation
+  // page. No client-side redirect code needed.
   useSuccessToast(actionData as { ok?: boolean; message?: string } | undefined);
-
-  // Client-side redirect to the Shopify-hosted subscription confirmation page.
-  //
-  // ⚠ IFRAME AUTH: We're in an embedded admin iframe; setting
-  // `window.top.location.href = url` force-replaces the iframe's parent and
-  // destroys the embedded session, leaving the merchant on a broken auth
-  // page. Instead we hand the URL to App Bridge (`window.shopify`), which
-  // navigates the parent admin frame while keeping our iframe alive.
-  //
-  // The URL is the appSubscriptionCreate confirmation URL of the form
-  // `https://<shop>.myshopify.com/admin/charges/.../confirm_recurring_application_charge`.
-  // `shopify.redirect.dispatch({ type: 'REMOTE', url, newContext: false })` is
-  // the documented App Bridge v4 path for remote URLs that must take over the
-  // parent frame.
-  useEffect(() => {
-    if (actionData && "redirectTo" in actionData && actionData.redirectTo) {
-      const target = actionData.redirectTo as string;
-      const sh = (window as unknown as { shopify?: any }).shopify;
-      if (sh) {
-        if (target.startsWith("shopify:") && typeof sh.open === "function") {
-          sh.open(target);
-          return;
-        }
-        if (sh.redirect?.dispatch) {
-          sh.redirect.dispatch({
-            type: "REMOTE",
-            url: target,
-            newContext: false,
-          });
-          return;
-        }
-        if (typeof sh.open === "function") {
-          sh.open(target);
-          return;
-        }
-      }
-      // No App Bridge available — we're not embedded (local dev, or App
-      // Bridge failed to init). There's no iframe to break, so a plain
-      // navigation is safe.
-      window.location.href = target;
-    }
-  }, [actionData]);
 
   const currentDef = data.plans.find((p) => p.tier === data.plan)!;
   const usagePct =
