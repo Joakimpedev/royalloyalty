@@ -674,11 +674,12 @@ function PricingCards({
                 ))}
               </div>
 
-              {/* CTA — Essent uses a full-width solid-black primary button.
-                  Polaris's <s-button variant="primary"> renders the platform's
-                  dark primary, which is the closest Polaris-native match.
-                  We force full-width via a wrapper so the button stretches edge
-                  to edge inside the card. */}
+              {/* CTA — Essent uses a full-width solid-black primary button
+                  centered inside the card. We wrap <s-button> with a flex row
+                  whose child is set to flex: 1 so the button stretches edge to
+                  edge of the card's padding, with centered label. (s-button is
+                  a custom element and doesn't accept width props directly, so
+                  the wrapper carries the sizing.) */}
               <div
                 style={{
                   marginTop: "auto",
@@ -687,20 +688,37 @@ function PricingCards({
                   gap: 6,
                 }}
               >
-                <div style={{ display: "flex" }}>
-                  {isCurrent ? (
-                    <s-button disabled>Current plan</s-button>
-                  ) : (
-                    <s-button
-                      variant="primary"
-                      onClick={() => onSubscribe(p.tier)}
-                      {...(busy ? { loading: "" } : {})}
-                    >
-                      {p.trialDays > 0
-                        ? `Start ${p.trialDays}-day free trial`
-                        : "Choose plan"}
-                    </s-button>
-                  )}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "stretch",
+                    alignItems: "stretch",
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {isCurrent ? (
+                      <s-button disabled style={{ width: "100%" }}>
+                        Current plan
+                      </s-button>
+                    ) : (
+                      <s-button
+                        variant="primary"
+                        onClick={() => onSubscribe(p.tier)}
+                        style={{ width: "100%" }}
+                        {...(busy ? { loading: "" } : {})}
+                      >
+                        {p.trialDays > 0
+                          ? `Start ${p.trialDays}-day free trial`
+                          : "Choose plan"}
+                      </s-button>
+                    )}
+                  </div>
                 </div>
                 {p.trialDays > 0 && !isCurrent && (
                   <div
