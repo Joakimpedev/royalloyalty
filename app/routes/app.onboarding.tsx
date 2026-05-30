@@ -207,7 +207,7 @@ const CHECKLIST = [
     key: "klaviyo",
     title: "Connect Klaviyo",
     desc: "Send points, tier and reward events to your email flows.",
-    href: "/app/settings",
+    href: "/app/billing",
     cta: "Open integrations",
   },
   {

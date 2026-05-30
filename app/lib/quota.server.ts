@@ -3,7 +3,7 @@
 // NO feature is ever gated — volume only. A shop over its monthly loyalty-order
 // cap simply stops accruing new loyalty orders until the period rolls over or
 // it upgrades; nothing is hidden and no data is lost. The cap-hit surface is
-// neutral/informational (see app.settings.tsx) — no fear framing.
+// neutral/informational (see app.billing.tsx) — no fear framing.
 //
 // "Loyalty order" is defined in billing.server.ts (one Shopify order that
 // earned or redeemed via Royal within the current calendar-month period,

@@ -1530,7 +1530,7 @@ function PlanSummarySection({
           {plan} plan
         </span>
         {plan !== "PRO" && (
-          <s-button onClick={() => nav("/app/settings")}>Upgrade plan</s-button>
+          <s-button onClick={() => nav("/app/billing")}>Upgrade plan</s-button>
         )}
       </div>
       <div

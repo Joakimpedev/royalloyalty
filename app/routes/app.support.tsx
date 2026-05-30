@@ -112,7 +112,7 @@ export default function SupportPage() {
       <PageTitle
         title="Support"
         subtitle="Browse docs, send us a message, or review your recent requests"
-        backHref="/app/settings"
+        backHref="/app/billing"
       />
 
       <s-section heading="Help &amp; documentation">

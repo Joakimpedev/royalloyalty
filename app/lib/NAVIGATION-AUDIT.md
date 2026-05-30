@@ -13,7 +13,7 @@ follow-up request can land without the session token).
 
 ### Nav rail — `<s-app-nav>` in `app/routes/app.tsx`
 - 6 `<s-link href="/app/...">` items: Home / Program / Members / Branding /
-  Analytics / Settings.
+  Analytics / Billing.
 - Special-cased by Shopify App Bridge; these are the ONLY `<s-link href=>`
   allowed outside `<AppLink>`.
 
@@ -24,7 +24,7 @@ All 11 use `onClick={() => appNav(url)}`:
 - `app.members.tsx:177` Back to Home
 - `app.referrals.tsx:186` Back to Home
 - `app.rewards.tsx:200` Back to Home
-- `app.settings.tsx:261` Back to Home
+- `app.billing.tsx` Back to Home
 - `app.storecredit.tsx:143` Back to Home
 - `app.support.tsx:107` Back to Home
 - `app.tiers.tsx:181` Back to Home
@@ -55,7 +55,7 @@ All use `<s-button onClick={() => appNav(url)}>`:
 - `app.onboarding.tsx` post-activation checklist items
 - `app.suggestions.tsx` "View program analytics"
 - `app._index.tsx` collapsed checklist items
-- `app.settings.tsx` FAQ "Contact support"
+- `app.billing.tsx` FAQ "Contact support"
 
 ### Form-submit buttons (no navigation — action returns data, not redirect)
 All trigger `submit(fd, { method: "POST" })` / `fetcher.submit(...)`. The
@@ -78,7 +78,7 @@ updated `actionData`. Verified safe:
   Bridge's wrapped fetch. Verified safe.
 
 ### Action handlers that return `{ ok, redirectTo }` (NOT a Response redirect)
-- `app.settings.tsx` subscribe / managed_pricing — useEffect picks up
+- `app.billing.tsx` subscribe / managed_pricing — useEffect picks up
   `redirectTo` and routes via App Bridge `shopify.open()` for `shopify:` URLs
   or `redirect.dispatch({ type: "REMOTE" })` for the appSubscriptionCreate
   confirmation URL.

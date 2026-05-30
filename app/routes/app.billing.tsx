@@ -1,12 +1,23 @@
-// Settings — plan & billing management (ROYAL-LOYALTY-DEVELOPMENT.md Phase 5).
+// Billing — plan & subscription management (ROYAL-LOYALTY-DEVELOPMENT.md Phase 5).
+//
+// This is the page the merchant reaches from the "Billing" nav item. It used to
+// live at /app/settings; it was renamed to /app/billing so that /app/settings
+// can later host a true settings hub (General / POS / Integrations / Email /
+// Tagging). The layout deliberately mirrors Essent's billing screen — the
+// closest competitor in visual style — while staying Polaris-native per the
+// visual directive (no pink/illustration aesthetic):
+//   1. Current-plan banner with a live usage meter vs. the monthly cap.
+//   2. Three paid plan cards in a row, each with a green-check feature list and
+//      a 14-day-free-trial CTA.
+//   3. A full-width Free strip below with the "Current plan" pill.
+//   4. A 30-day money-back guarantee card.
+//   5. A grouped FAQ accordion.
 //
 // Self-serve upgrade / downgrade / cancel. Prices shown BEFORE subscribe.
 // Volume-gate messaging is neutral / informational only — no fear framing, no
 // hidden data, NO feature gating (every feature is on every plan; only the
-// monthly loyalty-order volume differs). Save bar wired with useBlocker() on
-// the one form surface here (the integrations note form is read-only display;
-// the plan actions are immediate POSTs, not a dirty form, so the save bar is
-// shown only when the contact-email field is edited).
+// monthly loyalty-order volume differs). Save bar wired with the contact-email
+// field (the plan actions are immediate POSTs, not a dirty form).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ActionFunctionArgs,
@@ -101,7 +112,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return { ok: false, message: "Unknown plan selected." };
     }
     const url = new URL(request.url);
-    const returnUrl = `${url.origin}/app/settings`;
+    const returnUrl = `${url.origin}/app/billing`;
 
     if (PLANS[tier].priceUsd <= 0) {
       // Downgrade to Free: cancel any active subscription, set plan now.
@@ -164,7 +175,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return { ok: false, message: "Unknown action." };
 };
 
-export default function SettingsPage() {
+export default function BillingPage() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
@@ -224,7 +235,6 @@ export default function SettingsPage() {
     }
   }, [actionData]);
 
-
   const saveContact = useCallback(() => {
     submit(
       { _intent: "save_contact", supportEmail: contactEmail },
@@ -239,10 +249,13 @@ export default function SettingsPage() {
       : null;
 
   return (
-    <s-page heading="Settings">
+    <s-page heading="Billing">
+      <s-button slot="primary-action" onClick={() => appNav("/app")}>
+        Back to Home
+      </s-button>
 
       {/* @ts-expect-error - ui-save-bar is an App Bridge custom element */}
-      <ui-save-bar id="settings-save-bar" ref={saveBarRef}>
+      <ui-save-bar id="billing-save-bar" ref={saveBarRef}>
         <button
           variant="primary"
           onClick={saveContact}
@@ -287,84 +300,50 @@ export default function SettingsPage() {
         </s-section>
       )}
 
-      {/* Usage vs cap — neutral, informational, no fear framing, no hidden data */}
-      <s-section heading="Plan & usage">
-        <s-stack direction="block" gap="base">
-          <s-stack direction="inline" gap="large">
-            <s-stack direction="block" gap="none">
-              <s-text tone="subdued">Current plan</s-text>
-              <s-heading>{currentDef.name}</s-heading>
-            </s-stack>
-            <s-stack direction="block" gap="none">
-              <s-text tone="subdued">Loyalty orders this month</s-text>
-              <s-heading>
-                {data.quota.used.toLocaleString()}
-                {currentDef.cap === null
-                  ? ""
-                  : ` / ${currentDef.cap.toLocaleString()}`}
-              </s-heading>
-            </s-stack>
-            <s-stack direction="block" gap="none">
-              <s-text tone="subdued">Status</s-text>
-              <s-badge
-                tone={
-                  data.planStatus === "ACTIVE"
-                    ? "success"
-                    : data.planStatus === "FROZEN"
-                      ? "warning"
-                      : "neutral"
-                }
-              >
-                {data.planStatus}
-              </s-badge>
-            </s-stack>
-          </s-stack>
+      {/* 1. Current-plan banner — Essent pattern: "Your plan: Name, $X/month"
+          + a usage meter bar + "Monthly order limit: X out of Y". Neutral,
+          informational; no fear framing, no hidden data. */}
+      <s-section>
+        <CurrentPlanBanner
+          planName={currentDef.name}
+          priceUsd={currentDef.priceUsd}
+          status={data.planStatus}
+          used={data.quota.used}
+          cap={currentDef.cap}
+          remaining={data.quota.remaining}
+          usagePct={usagePct}
+        />
 
-          {usagePct !== null && (
-            <s-stack direction="block" gap="none">
-              <s-text tone="subdued">
-                {usagePct}% of this month&apos;s allowance used.
-              </s-text>
-              <s-text tone="subdued">
-                {data.quota.remaining === null
-                  ? "Unlimited loyalty orders on this plan."
-                  : `${data.quota.remaining.toLocaleString()} loyalty orders remaining this month.`}
-              </s-text>
-            </s-stack>
-          )}
+        {data.quota.overCap && (
+          <s-banner tone="info" heading="Monthly loyalty-order limit reached">
+            <s-paragraph>
+              You&apos;ve reached the {currentDef.name} plan&apos;s allowance of{" "}
+              {currentDef.cap?.toLocaleString()} loyalty orders this month. New
+              orders won&apos;t accrue points or cashback until the count resets
+              at the start of next month, or you move to a higher volume plan.
+              Every feature stays available and no existing data is affected —
+              this is a volume allowance, not a feature limit.
+            </s-paragraph>
+          </s-banner>
+        )}
 
-          {data.quota.overCap && (
-            <s-banner tone="info" heading="Monthly loyalty-order limit reached">
-              <s-paragraph>
-                You&apos;ve reached the {currentDef.name} plan&apos;s allowance
-                of {currentDef.cap?.toLocaleString()} loyalty orders this month.
-                New orders won&apos;t accrue points or cashback until the count
-                resets at the start of next month, or you move to a higher
-                volume plan. Every feature stays available and no existing data
-                is affected — this is a volume allowance, not a feature limit.
-              </s-paragraph>
-            </s-banner>
-          )}
-
-          <s-paragraph>
-            A &quot;loyalty order&quot; is a single order that earned points or
-            cashback, or redeemed points or store credit, through Royal this
-            calendar month. An order counts once no matter how many loyalty
-            actions it triggers. The count resets at the start of each month.
-          </s-paragraph>
-        </s-stack>
+        <s-paragraph>
+          A &quot;loyalty order&quot; is a single order that earned points or
+          cashback, or redeemed points or store credit, through Royal this
+          calendar month. An order counts once no matter how many loyalty
+          actions it triggers. The count resets at the start of each month.
+        </s-paragraph>
       </s-section>
 
-      {/* Plan picker — Essent+BON archetype: 3 paid cards in a row + Free strip
-          below + FAQ accordion. Royal stays volume-only (no feature gating) so
-          every card lists the same feature bullets and only the order quota
-          differs. The middle tier (Growth) is the "Most popular" highlight. */}
+      {/* 2 + 3. Plan picker — Essent archetype: 3 paid cards in a row + Free
+          strip below. Royal stays volume-only (no feature gating) so every card
+          lists the same feature bullets and only the order quota differs. The
+          middle tier (Growth) is the "Most popular" highlight. */}
       <s-section heading="Choose a plan">
         <s-paragraph>
           Every plan includes every feature — points, VIP tiers, referrals,
           store credit, AI setup and branding. Plans differ only by how many
-          loyalty orders you can process per month.{" "}
-          <s-badge tone="info">30-day money-back guarantee</s-badge>
+          loyalty orders you can process per month.
         </s-paragraph>
 
         <PricingCards
@@ -372,10 +351,7 @@ export default function SettingsPage() {
           currentTier={data.plan}
           busy={busy}
           onSubscribe={(tier) =>
-            submit(
-              { _intent: "subscribe", tier },
-              { method: "POST" },
-            )
+            submit({ _intent: "subscribe", tier }, { method: "POST" })
           }
         />
 
@@ -391,9 +367,7 @@ export default function SettingsPage() {
           {data.plan !== "FREE" && (
             <s-button
               tone="critical"
-              onClick={() =>
-                submit({ _intent: "cancel" }, { method: "POST" })
-              }
+              onClick={() => submit({ _intent: "cancel" }, { method: "POST" })}
               {...(busy ? { loading: "" } : {})}
             >
               Cancel subscription
@@ -402,6 +376,12 @@ export default function SettingsPage() {
         </s-stack>
       </s-section>
 
+      {/* 4. Money-back guarantee — Essent pattern. */}
+      <s-section>
+        <MoneyBackGuarantee />
+      </s-section>
+
+      {/* 5. FAQ accordion. */}
       <BillingFAQ />
 
       <s-section heading="Support contact">
@@ -418,25 +398,21 @@ export default function SettingsPage() {
           }
         />
       </s-section>
-
     </s-page>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Pricing cards — Essent+BON archetype, Polaris-native styling per the visual
-// directive (no pink-magenta highlights, no illustrations, no bold gradients).
-// The 3 paid plans render as a horizontal card row with the middle tier
-// (Growth) outlined as "Most popular"; Free renders as a full-width strip
-// below with the current-plan disabled pill, matching BON's layout.
+// Styling note: plan prices render in USD ($) regardless of the shop's
+// currency. Shopify's Billing API (appSubscriptionCreate) only accepts USD, and
+// Shopify itself handles FX conversion to the merchant's payout currency.
+// Showing local currency here would be misleading (a NOK shop is still billed
+// in USD). All OTHER money in the app goes through useMoney() and renders in the
+// shop's actual currency. This page is the one exception.
 //
-// IMPORTANT: plan prices are intentionally rendered in USD ($) regardless of
-// the shop's currency. Shopify's Billing API (appSubscriptionCreate) only
-// accepts USD, and Shopify itself handles FX conversion to the merchant's
-// payout currency. Displaying these in the shop's local currency would be
-// misleading (a NOK shop is still billed in USD). All OTHER money in the app
-// — reward values, store credit, analytics, etc. — goes through useMoney()
-// and renders in the shop's actual currency. This is the one exception.
+// Colors follow the Polaris palette (subdued grays, #008060 success green for
+// check icons, #2c6ecb info blue for the "Most popular" accent) per the visual
+// directive — no pink-magenta highlights, illustrations, or bold gradients.
 // ---------------------------------------------------------------------------
 
 type PlanRow = {
@@ -447,6 +423,137 @@ type PlanRow = {
   trialDays: number;
   blurb: string;
 };
+
+// Headline features shown on every card with a green check. Royal has no
+// feature gating, so the list is identical across tiers (the visual echoes
+// Essent's per-card checklist while staying honest to the volume-only model).
+const CARD_FEATURES = [
+  "All earn rules (orders, signup, birthday, reviews, social)",
+  "VIP tiers, two-sided referrals & fraud controls",
+  "Native Shopify store credit & cashback",
+  "AI program builder, optimization & branding",
+];
+
+function Check() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        flex: "0 0 auto",
+        marginTop: 2,
+        color: "#008060",
+        fontWeight: 700,
+        lineHeight: 1,
+      }}
+    >
+      ✓
+    </span>
+  );
+}
+
+function CurrentPlanBanner({
+  planName,
+  priceUsd,
+  status,
+  used,
+  cap,
+  remaining,
+  usagePct,
+}: {
+  planName: string;
+  priceUsd: number;
+  status: string;
+  used: number;
+  cap: number | null;
+  remaining: number | null;
+  usagePct: number | null;
+}) {
+  return (
+    <div
+      style={{
+        padding: 20,
+        border: "1px solid #e3e5e7",
+        borderRadius: 10,
+        background: "#fff",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ fontSize: 15, color: "#202223" }}>
+          Your plan:{" "}
+          <strong>
+            {planName}, ${priceUsd.toFixed(2)}/month
+          </strong>
+        </div>
+        <s-badge
+          tone={
+            status === "ACTIVE"
+              ? "success"
+              : status === "FROZEN"
+                ? "warning"
+                : "neutral"
+          }
+        >
+          {status}
+        </s-badge>
+      </div>
+
+      {/* Usage meter — a single neutral accent fill (no color-shift at the cap;
+          color shifts would read as fear framing, which the volume model
+          deliberately avoids). */}
+      <div
+        style={{
+          height: 8,
+          borderRadius: 999,
+          background: "#f1f2f3",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${usagePct ?? 0}%`,
+            background: "#2c6ecb",
+            borderRadius: 999,
+            transition: "width 200ms ease",
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 13,
+          color: "#454f5b",
+        }}
+      >
+        <Check />
+        <span>
+          Monthly order limit:{" "}
+          <strong>
+            {used.toLocaleString()}
+            {cap === null ? " (unlimited)" : ` out of ${cap.toLocaleString()}`}
+          </strong>
+          {cap !== null && remaining !== null && (
+            <> · {remaining.toLocaleString()} remaining this month</>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function PricingCards({
   plans,
@@ -463,22 +570,12 @@ function PricingCards({
   const paid = plans.filter((p) => p.tier !== "FREE");
   const popularTier: PlanRow["tier"] = "GROWTH";
 
-  const sharedFeatures = [
-    "All earn rules (orders, signup, birthday, newsletter, social, reviews)",
-    "VIP tiers with per-tier earn multipliers",
-    "Two-sided referrals with fraud controls",
-    "Rewards catalog — discounts, free shipping, free products",
-    "Native Shopify store credit & cashback",
-    "AI program builder + ongoing optimization suggestions",
-    "Branding hub with palette presets & live preview",
-  ];
-
   return (
     <s-stack direction="block" gap="large">
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
           gap: 12,
           alignItems: "stretch",
         }}
@@ -492,14 +589,12 @@ function PricingCards({
               style={{
                 position: "relative",
                 padding: 20,
-                border: isPopular
-                  ? "2px solid #202223"
-                  : "1px solid #e3e5e7",
+                border: isPopular ? "2px solid #202223" : "1px solid #e3e5e7",
                 borderRadius: 10,
                 background: "#fff",
                 display: "flex",
                 flexDirection: "column",
-                gap: 12,
+                gap: 14,
               }}
             >
               {isPopular && (
@@ -519,39 +614,58 @@ function PricingCards({
                   Most popular
                 </div>
               )}
+
               <div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                    color: "#6d7175",
-                  }}
-                >
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#202223" }}>
                   {p.name}
                 </div>
-                <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 4 }}>
-                  <span style={{ fontSize: 14, color: "#6d7175" }}>$</span>
-                  <span style={{ fontSize: 36, fontWeight: 700, color: "#202223" }}>
-                    {p.priceUsd}
-                  </span>
-                  <span style={{ fontSize: 14, color: "#6d7175" }}>/month</span>
-                </div>
-                <div style={{ fontSize: 13, color: "#6d7175", marginTop: 4 }}>
+                <div
+                  style={{ fontSize: 13, color: "#6d7175", marginTop: 4 }}
+                >
                   {p.cap === null
-                    ? "Unlimited loyalty orders"
-                    : `Includes ${p.cap.toLocaleString()} loyalty orders / month`}
+                    ? "Unlimited loyalty orders."
+                    : `Up to ${p.cap.toLocaleString()} loyalty orders.`}
                 </div>
-                {p.trialDays > 0 && (
-                  <div style={{ fontSize: 12, color: "#6d7175", marginTop: 4 }}>
-                    {p.trialDays}-day free trial
-                  </div>
-                )}
               </div>
 
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#202223" }}>
-                Everything in Free, plus more volume.
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontSize: 14, color: "#6d7175" }}>$</span>
+                <span
+                  style={{ fontSize: 36, fontWeight: 700, color: "#202223" }}
+                >
+                  {p.priceUsd}
+                </span>
+                <span style={{ fontSize: 14, color: "#6d7175" }}>/month</span>
+              </div>
+
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 8 }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    fontSize: 13,
+                    color: "#202223",
+                  }}
+                >
+                  <Check />
+                  <span>Everything in Free</span>
+                </div>
+                {CARD_FEATURES.map((f) => (
+                  <div
+                    key={f}
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      fontSize: 13,
+                      color: "#202223",
+                    }}
+                  >
+                    <Check />
+                    <span>{f}</span>
+                  </div>
+                ))}
               </div>
 
               <div style={{ marginTop: "auto" }}>
@@ -559,12 +673,26 @@ function PricingCards({
                   <s-button disabled>Current plan</s-button>
                 ) : (
                   <s-button
-                    variant={isPopular ? "primary" : "secondary"}
+                    variant="primary"
                     onClick={() => onSubscribe(p.tier)}
                     {...(busy ? { loading: "" } : {})}
                   >
-                    Choose plan
+                    {p.trialDays > 0
+                      ? `Start ${p.trialDays}-day free trial`
+                      : "Choose plan"}
                   </s-button>
+                )}
+                {p.trialDays > 0 && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#6d7175",
+                      marginTop: 6,
+                      textAlign: "center",
+                    }}
+                  >
+                    Free {p.trialDays}-day trial
+                  </div>
                 )}
               </div>
             </div>
@@ -572,9 +700,8 @@ function PricingCards({
         })}
       </div>
 
-      {/* Free-tier strip below the paid row (BON pattern). Royal enumerates the
-          Free features (Essent pattern) so Free reads as a real product, not a
-          teaser. */}
+      {/* Free-tier strip below the paid row. Royal enumerates the Free features
+          (Essent pattern) so Free reads as a real product, not a teaser. */}
       <div
         style={{
           padding: 20,
@@ -583,33 +710,29 @@ function PricingCards({
           background: "#fff",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-                color: "#6d7175",
-              }}
-            >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#202223" }}>
               {free.name}
             </div>
-            <div style={{ marginTop: 6, display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontSize: 14, color: "#6d7175" }}>$</span>
-              <span style={{ fontSize: 32, fontWeight: 700, color: "#202223" }}>
-                0
-              </span>
-              <span style={{ fontSize: 14, color: "#6d7175" }}>/month</span>
+            <div style={{ fontSize: 13, color: "#6d7175" }}>
+              — {free.cap?.toLocaleString() ?? "250"} loyalty orders / month
             </div>
-            <div style={{ fontSize: 13, color: "#6d7175", marginTop: 4 }}>
-              Includes {free.cap?.toLocaleString() ?? "250"} loyalty orders / month
-            </div>
+            {currentTier === "FREE" && (
+              <s-badge tone="success">Current plan</s-badge>
+            )}
           </div>
           <div>
             {currentTier === "FREE" ? (
-              <s-button disabled>Your current plan</s-button>
+              <s-button disabled>Current plan</s-button>
             ) : (
               <s-button
                 variant="secondary"
@@ -623,17 +746,26 @@ function PricingCards({
         </div>
         <div
           style={{
-            marginTop: 12,
-            paddingTop: 12,
+            marginTop: 14,
+            paddingTop: 14,
             borderTop: "1px solid #f1f2f3",
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-            gap: 6,
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gap: 8,
           }}
         >
-          {sharedFeatures.map((f) => (
-            <div key={f} style={{ fontSize: 13, color: "#202223" }}>
-              ✓ {f}
+          {["Everything in Free", ...CARD_FEATURES].map((f) => (
+            <div
+              key={f}
+              style={{
+                display: "flex",
+                gap: 8,
+                fontSize: 13,
+                color: "#202223",
+              }}
+            >
+              <Check />
+              <span>{f}</span>
             </div>
           ))}
         </div>
@@ -642,9 +774,56 @@ function PricingCards({
   );
 }
 
-// FAQ accordion with grouped sub-headers (BON pattern: General / Payment /
-// Customization). Plain HTML details/summary so we don't pull in a third-party
-// accordion library.
+function MoneyBackGuarantee() {
+  return (
+    <div
+      style={{
+        padding: 20,
+        border: "1px solid #e3e5e7",
+        borderRadius: 10,
+        background: "#fff",
+        display: "flex",
+        alignItems: "center",
+        gap: 18,
+        flexWrap: "wrap",
+      }}
+    >
+      <div
+        style={{
+          flex: "0 0 auto",
+          width: 72,
+          height: 72,
+          borderRadius: "50%",
+          border: "2px solid #008060",
+          color: "#008060",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          lineHeight: 1.1,
+          fontWeight: 700,
+        }}
+      >
+        <span style={{ fontSize: 20 }}>30</span>
+        <span style={{ fontSize: 9, letterSpacing: "0.04em" }}>DAY</span>
+      </div>
+      <div style={{ flex: "1 1 240px" }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#202223" }}>
+          30-day money-back guarantee — no questions asked
+        </div>
+        <div style={{ fontSize: 13, color: "#454f5b", marginTop: 4 }}>
+          If a paid plan isn&apos;t a fit, request a refund within the first 30
+          days of your subscription and we&apos;ll refund you through
+          Shopify&apos;s billing. No questions asked.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// FAQ accordion with grouped sub-headers (General / Payment / Customization).
+// Plain HTML details/summary so we don't pull in a third-party accordion lib.
 function BillingFAQ() {
   const groups: { heading: string; items: { q: string; a: string }[] }[] = [
     {
@@ -711,8 +890,9 @@ function BillingFAQ() {
   return (
     <s-section heading="Frequently asked questions">
       <s-paragraph>
-        Don't see your answer? <AppLink href="/app/support">Contact support</AppLink> and
-        we'll get back to you within one business day.
+        Don&apos;t see your answer?{" "}
+        <AppLink href="/app/support">Contact support</AppLink> and we&apos;ll
+        get back to you within one business day.
       </s-paragraph>
       <s-stack direction="block" gap="large">
         {groups.map((g) => (
@@ -738,9 +918,7 @@ function BillingFAQ() {
               {g.items.map((item, i) => (
                 <details
                   key={item.q}
-                  style={{
-                    borderTop: i === 0 ? "none" : "1px solid #f1f2f3",
-                  }}
+                  style={{ borderTop: i === 0 ? "none" : "1px solid #f1f2f3" }}
                 >
                   <summary
                     style={{

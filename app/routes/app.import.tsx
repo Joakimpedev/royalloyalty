@@ -111,7 +111,7 @@ export default function ImportPage() {
       <PageTitle
         title="Import members & balances"
         subtitle="Bring existing customers and their point balances over from another loyalty app"
-        backHref="/app/settings"
+        backHref="/app/billing"
       />
       {data?.ok === false && (
         <s-banner tone="critical">
