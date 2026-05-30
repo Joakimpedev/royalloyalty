@@ -238,8 +238,8 @@ export default function BillingPage() {
               {currentDef.cap?.toLocaleString()} loyalty orders this month. New
               orders won&apos;t accrue points or cashback until the count resets
               at the start of next month, or you move to a higher volume plan.
-              Every feature stays available and no existing data is affected —
-              this is a volume allowance, not a feature limit.
+              Every feature stays available and no existing data is affected.
+              This is a volume allowance, not a feature limit.
             </s-paragraph>
           </s-banner>
         )}
@@ -645,7 +645,7 @@ function PricingCards({
             }}
           >
             <div style={{ fontSize: 16, color: "#202223" }}>
-              <strong>{free.name}</strong> — {free.cap?.toLocaleString() ?? "250"}{" "}
+              <strong>{free.name}</strong> - {free.cap?.toLocaleString() ?? "250"}{" "}
               loyalty program orders.
             </div>
             {currentTier === "FREE" && (
@@ -706,11 +706,7 @@ function BillingFAQ() {
       items: [
         {
           q: "Do you offer a free trial?",
-          a: "Yes — every paid plan starts with a 14-day free trial. You can cancel any time during the trial without being charged.",
-        },
-        {
-          q: "Is there a free plan?",
-          a: "Yes. The Free plan keeps every feature available — points, VIP tiers, referrals, store credit, AI setup and branding — with room for up to 250 loyalty orders per month.",
+          a: "Yes. Every paid plan starts with a 14-day free trial. You can cancel any time during the trial without being charged.",
         },
         {
           q: "Are any features locked to paid plans?",
