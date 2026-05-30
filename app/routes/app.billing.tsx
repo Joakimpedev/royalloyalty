@@ -249,7 +249,7 @@ export default function BillingPage() {
       : null;
 
   return (
-    <s-page heading="Billing">
+    <s-page heading="Billing" subheading="Manage your subscription and billing details">
       <s-button slot="primary-action" onClick={() => appNav("/app")}>
         Back to Home
       </s-button>
@@ -310,7 +310,6 @@ export default function BillingPage() {
           status={data.planStatus}
           used={data.quota.used}
           cap={currentDef.cap}
-          remaining={data.quota.remaining}
           usagePct={usagePct}
         />
 
@@ -326,26 +325,14 @@ export default function BillingPage() {
             </s-paragraph>
           </s-banner>
         )}
-
-        <s-paragraph>
-          A &quot;loyalty order&quot; is a single order that earned points or
-          cashback, or redeemed points or store credit, through Royal this
-          calendar month. An order counts once no matter how many loyalty
-          actions it triggers. The count resets at the start of each month.
-        </s-paragraph>
       </s-section>
 
       {/* 2 + 3. Plan picker — Essent archetype: 3 paid cards in a row + Free
           strip below. Royal stays volume-only (no feature gating) so every card
-          lists the same feature bullets and only the order quota differs. The
-          middle tier (Growth) is the "Most popular" highlight. */}
-      <s-section heading="Choose a plan">
-        <s-paragraph>
-          Every plan includes every feature — points, VIP tiers, referrals,
-          store credit, AI setup and branding. Plans differ only by how many
-          loyalty orders you can process per month.
-        </s-paragraph>
-
+          lists the same short feature bullets and only the order quota differs.
+          No "Most popular" highlight — all three cards treated equally, as in
+          Essent's screenshot. */}
+      <s-section>
         <PricingCards
           plans={data.plans}
           currentTier={data.plan}
@@ -354,7 +341,24 @@ export default function BillingPage() {
             submit({ _intent: "subscribe", tier }, { method: "POST" })
           }
         />
+      </s-section>
 
+      {/* 4. Money-back guarantee — Essent pattern. */}
+      <s-section>
+        <MoneyBackGuarantee />
+      </s-section>
+
+      {/* 5. FAQ accordion. */}
+      <BillingFAQ />
+
+      {/* Account-management actions — moved to a low-prominence row at the
+          bottom of the page (Essent keeps these off the main billing surface
+          entirely; we keep them accessible but quiet). */}
+      <s-section heading="Manage subscription">
+        <s-paragraph>
+          Use these if you want to handle your plan directly in Shopify admin or
+          cancel your subscription.
+        </s-paragraph>
         <s-stack direction="inline" gap="base">
           <s-button
             variant="secondary"
@@ -375,14 +379,6 @@ export default function BillingPage() {
           )}
         </s-stack>
       </s-section>
-
-      {/* 4. Money-back guarantee — Essent pattern. */}
-      <s-section>
-        <MoneyBackGuarantee />
-      </s-section>
-
-      {/* 5. FAQ accordion. */}
-      <BillingFAQ />
 
       <s-section heading="Support contact">
         <s-paragraph>
@@ -424,30 +420,47 @@ type PlanRow = {
   blurb: string;
 };
 
-// Headline features shown on every card with a green check. Royal has no
-// feature gating, so the list is identical across tiers (the visual echoes
-// Essent's per-card checklist while staying honest to the volume-only model).
+// Headline features shown on every paid card with an outlined-circle check.
+// Royal has no feature gating, so the list is identical across tiers and items
+// stay short (matching Essent's 4-bullet rhythm: each item ~3 words).
 const CARD_FEATURES = [
-  "All earn rules (orders, signup, birthday, reviews, social)",
-  "VIP tiers, two-sided referrals & fraud controls",
-  "Native Shopify store credit & cashback",
-  "AI program builder, optimization & branding",
+  "Everything in Free",
+  "Higher monthly volume",
+  "Full feature access",
+  "Cancel anytime",
 ];
 
+// Features shown on the Free strip — short, scannable, single-row.
+const FREE_FEATURES = [
+  "Points & VIP tiers",
+  "Referrals & fraud controls",
+  "Store credit & cashback",
+  "AI setup & branding",
+];
+
+// Essent's check icon is an outlined green circle with a check stroke inside
+// (not a filled badge, not a raw ✓ character). SVG is the only way to match
+// that exact treatment — a literal "✓" renders heavy and pixelated.
 function Check() {
   return (
-    <span
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 20 20"
+      fill="none"
       aria-hidden="true"
-      style={{
-        flex: "0 0 auto",
-        marginTop: 2,
-        color: "#008060",
-        fontWeight: 700,
-        lineHeight: 1,
-      }}
+      style={{ flex: "0 0 auto", marginTop: 1 }}
     >
-      ✓
-    </span>
+      <circle cx="10" cy="10" r="9" stroke="#008060" strokeWidth="1.5" />
+      <path
+        d="M6 10.5l2.5 2.5L14 7.5"
+        stroke="#008060"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
   );
 }
 
@@ -457,7 +470,6 @@ function CurrentPlanBanner({
   status,
   used,
   cap,
-  remaining,
   usagePct,
 }: {
   planName: string;
@@ -465,19 +477,23 @@ function CurrentPlanBanner({
   status: string;
   used: number;
   cap: number | null;
-  remaining: number | null;
   usagePct: number | null;
 }) {
+  // Essent shows NO status badge on a normal ACTIVE plan. We surface a badge
+  // only when the status is non-routine (FROZEN/CANCELLED/EXPIRED) so the
+  // banner stays as visually clean as Essent's when nothing is wrong.
+  const showStatusBadge = status !== "ACTIVE";
+
   return (
     <div
       style={{
-        padding: 20,
+        padding: 24,
         border: "1px solid #e3e5e7",
         borderRadius: 10,
         background: "#fff",
         display: "flex",
         flexDirection: "column",
-        gap: 14,
+        gap: 16,
       }}
     >
       <div
@@ -489,31 +505,31 @@ function CurrentPlanBanner({
           flexWrap: "wrap",
         }}
       >
-        <div style={{ fontSize: 15, color: "#202223" }}>
+        <div style={{ fontSize: 16, color: "#202223" }}>
           Your plan:{" "}
           <strong>
             {planName}, ${priceUsd.toFixed(2)}/month
           </strong>
         </div>
-        <s-badge
-          tone={
-            status === "ACTIVE"
-              ? "success"
-              : status === "FROZEN"
+        {showStatusBadge && (
+          <s-badge
+            tone={
+              status === "FROZEN"
                 ? "warning"
                 : "neutral"
-          }
-        >
-          {status}
-        </s-badge>
+            }
+          >
+            {status}
+          </s-badge>
+        )}
       </div>
 
-      {/* Usage meter — a single neutral accent fill (no color-shift at the cap;
-          color shifts would read as fear framing, which the volume model
-          deliberately avoids). */}
+      {/* Usage meter — Essent uses a thin light-gray bar with a barely-visible
+          fill. We match that: 6px height, full-width gray track, neutral fill
+          (no color shift at the cap to avoid fear framing). */}
       <div
         style={{
-          height: 8,
+          height: 6,
           borderRadius: 999,
           background: "#f1f2f3",
           overflow: "hidden",
@@ -523,7 +539,7 @@ function CurrentPlanBanner({
           style={{
             height: "100%",
             width: `${usagePct ?? 0}%`,
-            background: "#2c6ecb",
+            background: "#8c9196",
             borderRadius: 999,
             transition: "width 200ms ease",
           }}
@@ -535,8 +551,8 @@ function CurrentPlanBanner({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          fontSize: 13,
-          color: "#454f5b",
+          fontSize: 14,
+          color: "#202223",
         }}
       >
         <Check />
@@ -546,9 +562,6 @@ function CurrentPlanBanner({
             {used.toLocaleString()}
             {cap === null ? " (unlimited)" : ` out of ${cap.toLocaleString()}`}
           </strong>
-          {cap !== null && remaining !== null && (
-            <> · {remaining.toLocaleString()} remaining this month</>
-          )}
         </span>
       </div>
     </div>
@@ -568,98 +581,91 @@ function PricingCards({
 }) {
   const free = plans.find((p) => p.tier === "FREE")!;
   const paid = plans.filter((p) => p.tier !== "FREE");
-  const popularTier: PlanRow["tier"] = "GROWTH";
 
   return (
     <s-stack direction="block" gap="large">
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-          gap: 12,
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: 16,
           alignItems: "stretch",
         }}
       >
         {paid.map((p) => {
           const isCurrent = p.tier === currentTier;
-          const isPopular = p.tier === popularTier;
           return (
             <div
               key={p.tier}
               style={{
                 position: "relative",
-                padding: 20,
-                border: isPopular ? "2px solid #202223" : "1px solid #e3e5e7",
+                padding: 28,
+                border: "1px solid #e3e5e7",
                 borderRadius: 10,
                 background: "#fff",
                 display: "flex",
                 flexDirection: "column",
-                gap: 14,
+                gap: 18,
               }}
             >
-              {isPopular && (
+              {/* Plan name — Essent: large dark normal-case (not small uppercase
+                  gray). The sub-line lives directly underneath. */}
+              <div>
                 <div
                   style={{
-                    position: "absolute",
-                    top: -10,
-                    left: 16,
-                    padding: "2px 10px",
-                    background: "#2c6ecb",
-                    color: "#fff",
-                    borderRadius: 999,
-                    fontSize: 12,
+                    fontSize: 20,
                     fontWeight: 600,
+                    color: "#202223",
+                    lineHeight: 1.2,
                   }}
                 >
-                  Most popular
-                </div>
-              )}
-
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "#202223" }}>
                   {p.name}
                 </div>
                 <div
-                  style={{ fontSize: 13, color: "#6d7175", marginTop: 4 }}
+                  style={{
+                    fontSize: 14,
+                    color: "#6d7175",
+                    marginTop: 6,
+                    lineHeight: 1.4,
+                  }}
                 >
-                  {p.cap === null
-                    ? "Unlimited loyalty orders."
-                    : `Up to ${p.cap.toLocaleString()} loyalty orders.`}
+                  Up to{" "}
+                  <strong style={{ color: "#202223" }}>
+                    {p.cap === null
+                      ? "Unlimited"
+                      : p.cap.toLocaleString()}
+                  </strong>{" "}
+                  loyalty program orders.
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                <span style={{ fontSize: 14, color: "#6d7175" }}>$</span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
                 <span
-                  style={{ fontSize: 36, fontWeight: 700, color: "#202223" }}
+                  style={{
+                    fontSize: 36,
+                    fontWeight: 700,
+                    color: "#202223",
+                    lineHeight: 1,
+                  }}
                 >
-                  {p.priceUsd}
+                  ${p.priceUsd}
                 </span>
                 <span style={{ fontSize: 14, color: "#6d7175" }}>/month</span>
               </div>
 
               <div
-                style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    fontSize: 13,
-                    color: "#202223",
-                  }}
-                >
-                  <Check />
-                  <span>Everything in Free</span>
-                </div>
                 {CARD_FEATURES.map((f) => (
                   <div
                     key={f}
                     style={{
                       display: "flex",
-                      gap: 8,
-                      fontSize: 13,
+                      gap: 10,
+                      alignItems: "flex-start",
+                      fontSize: 14,
                       color: "#202223",
+                      lineHeight: 1.4,
                     }}
                   >
                     <Check />
@@ -668,26 +674,39 @@ function PricingCards({
                 ))}
               </div>
 
-              <div style={{ marginTop: "auto" }}>
-                {isCurrent ? (
-                  <s-button disabled>Current plan</s-button>
-                ) : (
-                  <s-button
-                    variant="primary"
-                    onClick={() => onSubscribe(p.tier)}
-                    {...(busy ? { loading: "" } : {})}
-                  >
-                    {p.trialDays > 0
-                      ? `Start ${p.trialDays}-day free trial`
-                      : "Choose plan"}
-                  </s-button>
-                )}
-                {p.trialDays > 0 && (
+              {/* CTA — Essent uses a full-width solid-black primary button.
+                  Polaris's <s-button variant="primary"> renders the platform's
+                  dark primary, which is the closest Polaris-native match.
+                  We force full-width via a wrapper so the button stretches edge
+                  to edge inside the card. */}
+              <div
+                style={{
+                  marginTop: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex" }}>
+                  {isCurrent ? (
+                    <s-button disabled>Current plan</s-button>
+                  ) : (
+                    <s-button
+                      variant="primary"
+                      onClick={() => onSubscribe(p.tier)}
+                      {...(busy ? { loading: "" } : {})}
+                    >
+                      {p.trialDays > 0
+                        ? `Start ${p.trialDays}-day free trial`
+                        : "Choose plan"}
+                    </s-button>
+                  )}
+                </div>
+                {p.trialDays > 0 && !isCurrent && (
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: 13,
                       color: "#6d7175",
-                      marginTop: 6,
                       textAlign: "center",
                     }}
                   >
@@ -700,11 +719,12 @@ function PricingCards({
         })}
       </div>
 
-      {/* Free-tier strip below the paid row. Royal enumerates the Free features
-          (Essent pattern) so Free reads as a real product, not a teaser. */}
+      {/* Free-tier strip — Essent layout: header line with the plan name + cap
+          + inline "Current plan" pill, then a single horizontal row of feature
+          bullets (NOT a grid). Right-aligned action button. */}
       <div
         style={{
-          padding: 20,
+          padding: 24,
           border: "1px solid #e3e5e7",
           borderRadius: 10,
           background: "#fff",
@@ -714,17 +734,22 @@ function PricingCards({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-start",
+            alignItems: "center",
             gap: 16,
             flexWrap: "wrap",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "#202223" }}>
-              {free.name}
-            </div>
-            <div style={{ fontSize: 13, color: "#6d7175" }}>
-              — {free.cap?.toLocaleString() ?? "250"} loyalty orders / month
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ fontSize: 16, color: "#202223" }}>
+              <strong>{free.name}</strong> — {free.cap?.toLocaleString() ?? "250"}{" "}
+              loyalty program orders.
             </div>
             {currentTier === "FREE" && (
               <s-badge tone="success">Current plan</s-badge>
@@ -746,21 +771,22 @@ function PricingCards({
         </div>
         <div
           style={{
-            marginTop: 14,
-            paddingTop: 14,
+            marginTop: 16,
+            paddingTop: 16,
             borderTop: "1px solid #f1f2f3",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: 8,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "10px 28px",
           }}
         >
-          {["Everything in Free", ...CARD_FEATURES].map((f) => (
+          {FREE_FEATURES.map((f) => (
             <div
               key={f}
               style={{
                 display: "flex",
                 gap: 8,
-                fontSize: 13,
+                alignItems: "center",
+                fontSize: 14,
                 color: "#202223",
               }}
             >
