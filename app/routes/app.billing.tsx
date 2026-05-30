@@ -580,7 +580,8 @@ function PricingCards({
                       <span
                         style={{
                           display: "inline-block",
-                          paddingInline: 48,
+                          padding: "6px 48px",
+                          fontSize: 15,
                         }}
                       >
                         Current plan
@@ -596,7 +597,8 @@ function PricingCards({
                       <span
                         style={{
                           display: "inline-block",
-                          paddingInline: 48,
+                          padding: "6px 48px",
+                          fontSize: 15,
                         }}
                       >
                         {p.trialDays > 0
