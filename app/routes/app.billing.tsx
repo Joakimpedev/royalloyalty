@@ -562,35 +562,56 @@ function PricingCards({
                 ))}
               </div>
 
-              {/* CTA — full-width Polaris s-button. Polaris's <s-button> has
-                  no fullWidth prop and is intrinsically inline-sized, BUT it's
-                  still a plain custom element: wrapping it in <s-stack
-                  direction="block"> (which stretches children edge-to-edge) +
-                  setting display:block + inline-size:100% on the host makes the
-                  shadow-DOM button fill the container. size="large" gives the
-                  chunky ~44px Essent silhouette. */}
-              <s-stack direction="block" gap="tight">
-                {isCurrent ? (
-                  <s-button
-                    disabled
-                    size="large"
-                    style={{ display: "block", inlineSize: "100%" }}
-                  >
-                    Current plan
-                  </s-button>
-                ) : (
-                  <s-button
-                    variant="primary"
-                    size="large"
-                    onClick={() => onSubscribe(p.tier)}
-                    style={{ display: "block", inlineSize: "100%" }}
-                    {...(busy ? { loading: "" } : {})}
-                  >
-                    {p.trialDays > 0
-                      ? `Start ${p.trialDays}-day free trial`
-                      : "Choose plan"}
-                  </s-button>
-                )}
+              {/* CTA — Polaris s-button kept (per design directive), but
+                  Polaris's button host is intrinsically inline-sized and
+                  refuses to stretch via width/inline-size on its host. The
+                  workaround that actually moves pixels: center the button with
+                  a flex row, then inflate it by padding its INNER label
+                  content. Polaris does respect padding on the s-button's child
+                  nodes (the label slot), so wrapping the label text in a span
+                  with large horizontal padding pushes the button toward the
+                  card edges without breaking the Polaris styling. */}
+              <div
+                style={{
+                  marginTop: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  {isCurrent ? (
+                    <s-button disabled size="large">
+                      <span
+                        style={{
+                          display: "inline-block",
+                          paddingInline: 48,
+                        }}
+                      >
+                        Current plan
+                      </span>
+                    </s-button>
+                  ) : (
+                    <s-button
+                      variant="primary"
+                      size="large"
+                      onClick={() => onSubscribe(p.tier)}
+                      {...(busy ? { loading: "" } : {})}
+                    >
+                      <span
+                        style={{
+                          display: "inline-block",
+                          paddingInline: 48,
+                        }}
+                      >
+                        {p.trialDays > 0
+                          ? `Start ${p.trialDays}-day free trial`
+                          : "Choose plan"}
+                      </span>
+                    </s-button>
+                  )}
+                </div>
                 {p.trialDays > 0 && !isCurrent && (
                   <div
                     style={{
@@ -602,7 +623,7 @@ function PricingCards({
                     Free {p.trialDays}-day trial
                   </div>
                 )}
-              </s-stack>
+              </div>
             </div>
           );
         })}
