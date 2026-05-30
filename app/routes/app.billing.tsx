@@ -317,7 +317,7 @@ const FREE_FEATURES = [
   "Points & VIP tiers",
   "Referrals & fraud controls",
   "Store credit & cashback",
-  "AI setup & branding",
+  "Storefront widget",
 ];
 
 // Essent's check icon is an outlined green circle with a check stroke inside
