@@ -10,8 +10,7 @@
 //   2. Three paid plan cards in a row, each with a green-check feature list and
 //      a 14-day-free-trial CTA.
 //   3. A full-width Free strip below with the "Current plan" pill.
-//   4. A 30-day money-back guarantee card.
-//   5. A grouped FAQ accordion.
+//   4. A grouped FAQ accordion.
 //
 // Self-serve upgrade / downgrade. Prices shown BEFORE subscribe. Downgrading
 // to Free cancels any active subscription as a side effect of the FREE-tier
@@ -271,12 +270,7 @@ export default function BillingPage() {
         />
       </s-section>
 
-      {/* 4. Money-back guarantee — Essent pattern. */}
-      <s-section>
-        <MoneyBackGuarantee />
-      </s-section>
-
-      {/* 5. FAQ accordion. */}
+      {/* 4. FAQ accordion. */}
       <BillingFAQ />
 
       {/* Account-management actions — moved to a low-prominence row at the
@@ -710,54 +704,6 @@ function PricingCards({
   );
 }
 
-function MoneyBackGuarantee() {
-  return (
-    <div
-      style={{
-        padding: 20,
-        border: "1px solid #e3e5e7",
-        borderRadius: 10,
-        background: "#fff",
-        display: "flex",
-        alignItems: "center",
-        gap: 18,
-        flexWrap: "wrap",
-      }}
-    >
-      <div
-        style={{
-          flex: "0 0 auto",
-          width: 72,
-          height: 72,
-          borderRadius: "50%",
-          border: "2px solid #008060",
-          color: "#008060",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          lineHeight: 1.1,
-          fontWeight: 700,
-        }}
-      >
-        <span style={{ fontSize: 20 }}>30</span>
-        <span style={{ fontSize: 9, letterSpacing: "0.04em" }}>DAY</span>
-      </div>
-      <div style={{ flex: "1 1 240px" }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: "#202223" }}>
-          30-day money-back guarantee — no questions asked
-        </div>
-        <div style={{ fontSize: 13, color: "#454f5b", marginTop: 4 }}>
-          If a paid plan isn&apos;t a fit, request a refund within the first 30
-          days of your subscription and we&apos;ll refund you through
-          Shopify&apos;s billing. No questions asked.
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // FAQ accordion with grouped sub-headers (General / Payment / Customization).
 // Plain HTML details/summary so we don't pull in a third-party accordion lib.
 function BillingFAQ() {
@@ -801,10 +747,6 @@ function BillingFAQ() {
         {
           q: "What happens if I exceed my monthly loyalty-order limit?",
           a: "On a paid plan you stay live and the next tier's volume kicks in automatically (no manual upgrade required for one-off spikes). On Free, new orders stop accruing points or cashback until the count resets at the start of next month. No data is lost in either case.",
-        },
-        {
-          q: "Money-back guarantee?",
-          a: "Yes — 30 days. If Royal isn't a fit, contact us within 30 days of your first paid charge and we'll refund the most recent month.",
         },
       ],
     },
