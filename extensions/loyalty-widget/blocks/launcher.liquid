@@ -167,25 +167,53 @@
 <script src="{{ 'loyalty.js' | asset_url }}" defer></script>
 <script>
   (function () {
+    function mark(stage) {
+      try {
+        window.__royalDiag = window.__royalDiag || {};
+        window.__royalDiag.launcherStage = stage;
+      } catch (e) {}
+    }
+    function fail(stage, e) {
+      try {
+        window.__royalDiag = window.__royalDiag || {};
+        window.__royalDiag.errors = window.__royalDiag.errors || [];
+        var msg = (e && e.message) ? e.message : String(e);
+        window.__royalDiag.errors.push("launcher@" + stage + ": " + msg);
+        window.__royalDiag.launcherStage = "FAILED at " + stage + " (" + msg + ")";
+      } catch (e2) {}
+    }
+    mark("script-entered");
     try { console.log('[RoyalLoyalty] launcher block rendered'); } catch (e) {}
     var tries = 0;
     function init() {
-      var root = document.getElementById('royal-launcher-root');
-      if (!root || !window.RoyalLoyalty) {
-        tries++;
-        if (tries === 40) {
-          // ~2s in: warn loudly if loyalty.js never showed up.
-          try {
-            console.warn(
-              '[RoyalLoyalty] still waiting for window.RoyalLoyalty after 2s — ' +
-              'loyalty.js probably failed to load. Check Network tab for loyalty.js.'
-            );
-          } catch (e) {}
+      try {
+        var root = document.getElementById('royal-launcher-root');
+        if (!root || !window.RoyalLoyalty) {
+          tries++;
+          mark("retry " + tries + " (root=" + !!root + " RL=" + !!window.RoyalLoyalty + ")");
+          if (tries === 40) {
+            try {
+              console.warn(
+                '[RoyalLoyalty] still waiting for window.RoyalLoyalty after 2s — ' +
+                'loyalty.js probably failed to load. Check Network tab for loyalty.js.'
+              );
+            } catch (e) {}
+          }
+          return setTimeout(init, 50);
         }
-        return setTimeout(init, 50);
+        mark("after retry-check");
+      } catch (e) {
+        fail("retry-check", e);
+        return;
       }
+      try { _init_body(); } catch (e) { fail("init-body", e); }
+    }
+    function _init_body() {
+      mark("body-start");
+      var root = document.getElementById('royal-launcher-root');
       var R = window.RoyalLoyalty;
       var cfg = R.readConfig(root);
+      mark("got R + cfg");
       var btn = document.getElementById('royal-launcher-btn');
       var panel = document.getElementById('royal-panel');
       var closeBtn = document.getElementById('royal-panel-close');
@@ -193,6 +221,16 @@
       var status = document.getElementById('royal-status');
       var titleEl = document.getElementById('royal-panel-title');
       var subtitleEl = document.getElementById('royal-panel-subtitle');
+      mark(
+        "got DOM refs: " +
+        "btn=" + !!btn +
+        " panel=" + !!panel +
+        " close=" + !!closeBtn +
+        " back=" + !!backBtn +
+        " status=" + !!status +
+        " title=" + !!titleEl +
+        " sub=" + !!subtitleEl
+      );
       var payload = null;
       var loaded = false;
       var fetched = false;
@@ -228,10 +266,11 @@
         if (!fetched) { fetched = true; load(); }
       }
 
+      mark("about to call load()");
       // Fetch on page load so the launcher pill gets the merchant's branding
       // (colors + custom label) immediately — without it, the pill renders
       // the Liquid defaults until the visitor actually clicks it open.
-      if (!fetched) { fetched = true; load(); }
+      if (!fetched) { fetched = true; load(); mark("load() called"); }
 
       function close() {
         panel.hidden = true;

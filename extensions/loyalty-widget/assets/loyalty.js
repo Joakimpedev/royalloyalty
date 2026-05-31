@@ -148,6 +148,7 @@
           "launcher block in DOM:    " + (root ? "yes" : "NO"),
           "launcher load() called:   " +
             (__royalDiag.payloadStartedAt ? "yes" : "NO (init never reached load())"),
+          "launcher stage:           " + (__royalDiag.launcherStage || "(none)"),
           "/loyalty/balance:         " + balanceLine,
         ];
         if (ssr) {
