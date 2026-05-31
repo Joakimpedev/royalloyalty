@@ -192,6 +192,20 @@
         // --- Referral claim diagnostics ---
         lines.push("--- referral claim ---");
         try {
+          var cfgEl = document.getElementById("royal-launcher-root");
+          var cfgJson = cfgEl ? JSON.parse(cfgEl.getAttribute("data-royal-config") || "{}") : {};
+          lines.push(
+            "cfg.loggedIn (SSR):       " +
+              (cfgJson.loggedIn === true ? "true" : "false"),
+          );
+          lines.push(
+            "cfg.customerId (SSR):     " +
+              (cfgJson.customerId == null ? "(null)" : JSON.stringify(cfgJson.customerId)),
+          );
+        } catch (e) {
+          lines.push("cfg (SSR):                (parse failed)");
+        }
+        try {
           var cookieMatch = document.cookie.match(/(?:^|; )royal_ref=([^;]+)/);
           var cookieVal = cookieMatch ? decodeURIComponent(cookieMatch[1]) : "(none)";
           lines.push("royal_ref cookie:         " + cookieVal);
@@ -425,9 +439,15 @@
     }
 
     if (_claimAttempted) { log("skip: already attempted this page load"); return; }
-    if (!cfg.loggedIn) { log("skip: not logged in"); return; }
     var code = readRefCookie();
     if (!code) { log("skip: no royal_ref cookie"); return; }
+    // Note: we deliberately do NOT gate on cfg.loggedIn here. Shopify's
+    // {% if customer %} can be false on the first page after signup
+    // (notably with New Customer Accounts), while the storefront App Proxy
+    // is still able to read logged_in_customer_id from the signed query.
+    // Let the server be the source of truth — if no customer is attached
+    // it returns status="no_customer" and we leave the cookie for retry.
+    log("cfg.loggedIn snapshot = " + (cfg.loggedIn ? "true" : "false"));
     _claimAttempted = true;
 
     if (window.__royalDiag) {
