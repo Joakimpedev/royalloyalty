@@ -45,33 +45,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       safeLog(topic, shop, "redemption code mark-used failed");
     }
 
-    // Referral payout: if the order's customer email matches an ACTIVE
-    // pending referral row (one created when the friend signed up via a
-    // referral link), mark it qualified and pay the referrer.
-    try {
-      const order = payload as OrdersCreatePayload;
-      const email = order.customer?.email ?? "";
-      if (email) {
-        const { default: prisma } = await import("../db.server");
-        const { qualifyReferralByEmail } = await import(
-          "../lib/referrals.server"
-        );
-        const shopRow = await prisma.shop.findUnique({
-          where: { shopDomain: shop },
-          select: { id: true },
-        });
-        if (shopRow) {
-          const res = await qualifyReferralByEmail({
-            shopId: shopRow.id,
-            refereeEmail: email,
-            orderId: String(order.id),
-          });
-          safeLog(topic, shop, `referral by email: ${res.outcome}`);
-        }
-      }
-    } catch {
-      safeLog(topic, shop, "referral qualification failed");
-    }
+    // Referrals are paid at signup (both sides), so orders/create has
+    // nothing to do for them. Earn rules + cashback above are the only
+    // order-time loyalty side effects.
   } catch (err) {
     // Never leak PII. Log the shop + a generic note only.
     safeLog(topic, shop, "order processing error");

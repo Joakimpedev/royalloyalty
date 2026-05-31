@@ -156,14 +156,11 @@ export interface StorefrontPayload {
   earnRules: StorefrontEarnRule[];
   rewards: StorefrontReward[];
   referralLink: string | null;
-  /** Per-side rewards for a qualified referral. Drives the
-   *  "You'll get X points / Your friend will get $N store credit" copy
-   *  on the launcher and loyalty page. Comes from the merchant's
-   *  referral settings. */
+  /** Per-side referral rewards. Both sides get points the moment the
+   *  friend creates an account via the referral link. */
   referralRewards: {
     referrer: number;
-    refereeStoreCreditAmount: number;
-    refereeStoreCreditCurrency: string;
+    referee: number;
   };
   activity: StorefrontActivity[];
   /** Flat key→value map for the active storefront locale, merging merchant
@@ -368,22 +365,18 @@ export async function buildStorefrontLoyaltyPayload(params: {
 
   const cashback: StorefrontCashback = readCashbackSettings(shop.aiConfigSnapshot);
 
-  // Referral reward sizes — fed to the launcher / loyalty page so the
-  // "You'll get X / Your friend gets $Y store credit" copy can substitute
-  // live values.
+  // Referral reward sizes — fed to the launcher / loyalty page / banner.
   const referralSettings = await (async () => {
     try {
       const { getReferralSettings } = await import("./referrals.server");
       return await getReferralSettings(shop.id);
     } catch {
-      return { referrerPoints: 0, refereeStoreCreditAmount: 0 };
+      return { referrerPoints: 0, refereePoints: 0 };
     }
   })();
   const referralRewards = {
     referrer: referralSettings.referrerPoints || 0,
-    refereeStoreCreditAmount:
-      referralSettings.refereeStoreCreditAmount || 0,
-    refereeStoreCreditCurrency: shop.currencyCode ?? "USD",
+    referee: referralSettings.refereePoints || 0,
   };
 
   // Build the social platforms list off the social earn rule's config blob.

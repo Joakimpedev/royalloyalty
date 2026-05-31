@@ -600,23 +600,16 @@
             '</p>';
           return;
         }
-        var rr = payload.referralRewards || {
-          referrer: 0,
-          refereeStoreCreditAmount: 0,
-          refereeStoreCreditCurrency: payload.currencyCode || 'USD',
-        };
+        var rr = payload.referralRewards || { referrer: 0, referee: 0 };
         var youGetTpl = R.t('refer.youGet', "You'll get {points} points");
         var friendGetsTpl = R.t(
-          'refer.friendGetsCredit',
-          'Your friend will get {amount} store credit'
+          'refer.friendGets',
+          'Your friend will get {points} points'
         );
-        var amountText = R.formatMoney
-          ? R.formatMoney(rr.refereeStoreCreditAmount, rr.refereeStoreCreditCurrency)
-          : (rr.refereeStoreCreditCurrency + ' ' + Number(rr.refereeStoreCreditAmount).toFixed(2));
         var rewardLines =
           '<div class="royal-refer-rewards">' +
             '<div class="royal-refer-rewards__line">' + R.tSubstitute(youGetTpl, { points: rr.referrer }) + '</div>' +
-            '<div class="royal-refer-rewards__line">' + R.tSubstitute(friendGetsTpl, { amount: amountText }) + '</div>' +
+            '<div class="royal-refer-rewards__line">' + R.tSubstitute(friendGetsTpl, { points: rr.referee }) + '</div>' +
           '</div>';
         box.innerHTML =
           rewardLines +

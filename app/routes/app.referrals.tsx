@@ -77,16 +77,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       0,
       Number.parseInt(String(form.get("referrerPoints")), 10) || 0,
     ),
-    refereeStoreCreditAmount: Math.max(
+    refereePoints: Math.max(
       0,
-      Number.parseFloat(String(form.get("refereeStoreCreditAmount"))) || 0,
+      Number.parseInt(String(form.get("refereePoints")), 10) || 0,
     ),
   };
-  if (next.referrerPoints <= 0 && next.refereeStoreCreditAmount <= 0) {
+  if (next.referrerPoints <= 0 && next.refereePoints <= 0) {
     return {
       ok: false,
       message:
-        "Set at least one reward (your points or your friend's store credit) above 0.",
+        "Set at least one reward (your points or your friend's points) above 0.",
     };
   }
   await saveReferralSettings(shop.id, next);
@@ -121,10 +121,7 @@ export default function ReferralsPage() {
     fd.set("_intent", "save");
     fd.set("enabled", String(form.enabled));
     fd.set("referrerPoints", String(form.referrerPoints));
-    fd.set(
-      "refereeStoreCreditAmount",
-      String(form.refereeStoreCreditAmount),
-    );
+    fd.set("refereePoints", String(form.refereePoints));
     submit(fd, { method: "POST" });
   }, [form, submit]);
 
@@ -168,10 +165,9 @@ export default function ReferralsPage() {
             <s-choice value="off">Disabled</s-choice>
           </ChoiceList>
           <s-paragraph>
-            When a friend creates an account from your customer&apos;s
-            referral link, they get store credit immediately. When the
-            friend places their first order, you award the referrer
-            points.
+            Both rewards fire the instant the friend creates an account
+            from the referral link. Only new customers (no prior orders)
+            qualify for the welcome bonus.
           </s-paragraph>
           <PointsField
             label="You get (referrer reward)"
@@ -183,30 +179,20 @@ export default function ReferralsPage() {
               }))
             }
           />
-          <s-paragraph>
-            Points awarded to the referrer after the friend&apos;s first
-            qualifying order.
-          </s-paragraph>
-          <MoneyField
-            label="Your friend gets (welcome store credit)"
-            value={form.refereeStoreCreditAmount}
-            currencyCode={shopMoney.currencyCode}
-            locale={shopMoney.locale}
-            step={0.01}
+          <PointsField
+            label="Your friend gets (welcome bonus)"
+            value={form.refereePoints}
             onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                refereeStoreCreditAmount: Math.max(
-                  0,
-                  Number.parseFloat(next) || 0,
-                ),
+                refereePoints: Math.max(0, Number.parseInt(next, 10) || 0),
               }))
             }
           />
           <s-paragraph>
-            Issued the moment the friend creates an account from the
-            referral link. Native Shopify store credit, applied automatically
-            at their next checkout (when signed in).
+            The friend&apos;s welcome bonus stacks with the &quot;Create
+            an account&quot; earn rule if you have that enabled in the
+            program.
           </s-paragraph>
         </s-stack>
       </s-section>

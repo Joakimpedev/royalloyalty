@@ -38,18 +38,19 @@ type GraphqlClient = (
 
 export interface ReferralSettings {
   enabled: boolean;
-  /** Points the referrer earns when the friend's first qualifying order
-   *  comes through. */
+  /** Points the referrer earns the moment the friend creates an account
+   *  from their referral link. */
   referrerPoints: number;
-  /** Store credit the friend gets the moment they sign up via a referral
-   *  link. Denominated in the shop's currency. */
-  refereeStoreCreditAmount: number;
+  /** Points the friend earns the moment they create an account from the
+   *  referral link (stacks with the "Create an account" earn rule if
+   *  that rule is enabled). */
+  refereePoints: number;
 }
 
 const DEFAULT_SETTINGS: ReferralSettings = {
   enabled: false,
   referrerPoints: 500,
-  refereeStoreCreditAmount: 10,
+  refereePoints: 200,
 };
 
 function readSettings(snapshot: unknown): ReferralSettings {
@@ -164,25 +165,35 @@ export interface ClaimReferralResult {
     | "no_code"
     | "disabled"
     | "no_customer"
-    | "credit_failed";
-  amount?: number;
-  currencyCode?: string;
+    | "claim_failed";
+  referrerPoints?: number;
+  refereePoints?: number;
   error?: string;
 }
+
+// Type used to satisfy the optional graphql param now that we no longer
+// need an admin client for the claim (we removed the store-credit issue).
+type AnyGraphqlClient = GraphqlClient;
 
 /**
  * Friend just landed on the storefront WHILE logged in and the storefront
  * JS handed us the cookie value + logged-in customer id. Validate, record,
- * and issue store credit.
+ * and award points to BOTH sides immediately.
+ *
+ * The friend also enrolls in the loyalty program as part of the same
+ * transaction (creating a Member row if needed). Their "Create an account"
+ * earn rule, if enabled, is handled independently by the customers/create
+ * webhook — this function intentionally does NOT touch that path.
  */
 export async function claimReferral(params: {
   shopId: string;
   shopifyCustomerId: string;
   customerEmail: string | null;
+  customerName?: string | null;
   code: string;
-  graphql: GraphqlClient;
-  shopCurrencyCode: string;
+  graphql?: AnyGraphqlClient;
 }): Promise<ClaimReferralResult> {
+  void params.graphql; // reserved for future use; currently unused
   const settings = await getReferralSettings(params.shopId);
   if (!settings.enabled) return { ok: false, status: "disabled" };
 
@@ -216,13 +227,13 @@ export async function claimReferral(params: {
   }
 
   // Idempotency — was this customer already claimed against this code?
+  const email = (params.customerEmail || "").toLowerCase().trim();
   const dup = await prisma.referral.findFirst({
     where: {
       shopId: params.shopId,
       referrerId: baseRow.referrerId,
-      refereeEmail: (params.customerEmail || "").toLowerCase().trim() || null,
-      status: { not: "CANCELLED" },
-      // Has a refereeEmail set so it's a per-friend row, not the base invite.
+      refereeEmail: email || null,
+      status: "COMPLETED",
       NOT: { refereeEmail: null },
     },
   });
@@ -230,151 +241,76 @@ export async function claimReferral(params: {
     return {
       ok: true,
       status: "already_claimed",
-      amount: settings.refereeStoreCreditAmount,
-      currencyCode: params.shopCurrencyCode,
+      referrerPoints: settings.referrerPoints,
+      refereePoints: settings.refereePoints,
     };
   }
 
-  // Quota gate (the credit issue counts toward monthly volume in
-  // canAwardLoyalty's accounting).
+  // Quota gate (each point award counts toward monthly volume).
   const allowed = await canAwardLoyalty(params.shopId);
   if (!allowed) {
-    return { ok: false, status: "credit_failed", error: "Plan quota reached." };
+    return { ok: false, status: "claim_failed", error: "Plan quota reached." };
   }
 
-  // Record the attribution row first so a partial credit failure still
-  // leaves a trail.
+  // Enroll the friend if they're not already a Member, so we can write to
+  // their points ledger.
+  const refereeMember = await prisma.member.upsert({
+    where: {
+      shopId_shopifyCustomerId: {
+        shopId: params.shopId,
+        shopifyCustomerId: params.shopifyCustomerId,
+      },
+    },
+    update: {},
+    create: {
+      shopId: params.shopId,
+      shopifyCustomerId: params.shopifyCustomerId,
+      email: email || null,
+      name: params.customerName ?? null,
+      enrolledAt: new Date(),
+    },
+  });
+
+  // Record the attribution row and mark it complete in one go (no later
+  // qualifying event needed for this model — both sides paid now).
   const claimRow = await prisma.referral.create({
     data: {
       shopId: params.shopId,
       referrerId: baseRow.referrerId,
       code: `${baseRow.code}-${genCode().slice(0, 4)}`,
-      refereeEmail: (params.customerEmail || "").toLowerCase().trim() || null,
+      refereeEmail: email || null,
       status: "ACTIVE",
     },
   });
 
-  // Issue the store credit.
-  if (settings.refereeStoreCreditAmount > 0) {
-    const { creditStoreCredit } = await import("./storecredit.server");
-    const credit = await creditStoreCredit({
-      graphql: params.graphql,
+  // Award referrer.
+  if (settings.referrerPoints > 0) {
+    await recordPointTransaction({
       shopId: params.shopId,
-      shopifyCustomerId: params.shopifyCustomerId,
-      amount: settings.refereeStoreCreditAmount,
-      currencyCode: params.shopCurrencyCode,
-      reason: `Referral welcome credit [referral:${claimRow.id}]`,
+      memberId: baseRow.referrerId,
+      type: "EARN",
+      points: settings.referrerPoints,
+      reason: `Referral reward (referrer) [referral:${claimRow.id}]`,
     });
-    if (!credit.ok) {
-      return {
-        ok: false,
-        status: "credit_failed",
-        error: credit.error ?? "Store credit issue failed.",
-      };
-    }
   }
+  // Award referee.
+  if (settings.refereePoints > 0) {
+    await recordPointTransaction({
+      shopId: params.shopId,
+      memberId: refereeMember.id,
+      type: "EARN",
+      points: settings.refereePoints,
+      reason: `Referral welcome (referee) [referral:${claimRow.id}]`,
+    });
+  }
+  await transitionStatus("referral", claimRow.id, "COMPLETED").catch(
+    () => undefined,
+  );
 
   return {
     ok: true,
     status: "claimed",
-    amount: settings.refereeStoreCreditAmount,
-    currencyCode: params.shopCurrencyCode,
+    referrerPoints: settings.referrerPoints,
+    refereePoints: settings.refereePoints,
   };
-}
-
-export interface QualifyResult {
-  outcome: "paid" | "blocked_quota" | "no_referral" | "already_qualified";
-  referralId?: string;
-}
-
-/**
- * Friend just placed an order. If their email matches a previously-claimed
- * pending referral row (status=ACTIVE, qualifiedOrderId=null), mark it
- * qualified and pay the referrer their points.
- */
-export async function qualifyReferralByEmail(params: {
-  shopId: string;
-  refereeEmail: string;
-  orderId: string;
-}): Promise<QualifyResult> {
-  const settings = await getReferralSettings(params.shopId);
-  if (!settings.enabled) return { outcome: "no_referral" };
-
-  const email = (params.refereeEmail || "").toLowerCase().trim();
-  if (!email) return { outcome: "no_referral" };
-
-  const claim = await prisma.referral.findFirst({
-    where: {
-      shopId: params.shopId,
-      refereeEmail: email,
-      qualifiedOrderId: null,
-      status: "ACTIVE",
-    },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!claim) return { outcome: "no_referral" };
-
-  const dupOrder = await prisma.referral.findFirst({
-    where: { shopId: params.shopId, qualifiedOrderId: params.orderId },
-    select: { id: true },
-  });
-  if (dupOrder) return { outcome: "already_qualified" };
-
-  await prisma.referral.update({
-    where: { id: claim.id },
-    data: { qualifiedOrderId: params.orderId },
-  });
-
-  await payoutReferral({
-    shopId: params.shopId,
-    referralId: claim.id,
-    settings,
-  });
-  return { outcome: "paid", referralId: claim.id };
-}
-
-/**
- * Pay out the referrer for a qualified referral row. Idempotent against the
- * point-transaction reason tag.
- */
-export async function payoutReferral(params: {
-  shopId: string;
-  referralId: string;
-  settings?: ReferralSettings;
-}): Promise<{ ok: boolean; reason?: string }> {
-  const settings =
-    params.settings ?? (await getReferralSettings(params.shopId));
-
-  const referral = await prisma.referral.findFirst({
-    where: { id: params.referralId, shopId: params.shopId },
-  });
-  if (!referral) return { ok: false, reason: "not_found" };
-  if (!referral.qualifiedOrderId)
-    return { ok: false, reason: "not_qualified" };
-
-  const priorPayout = await prisma.pointTransaction.findFirst({
-    where: {
-      shopId: params.shopId,
-      reason: { contains: `[referral:${referral.id}]` },
-    },
-    select: { id: true },
-  });
-  if (priorPayout) {
-    return { ok: false, reason: "already_paid" };
-  }
-
-  const allowed = await canAwardLoyalty(params.shopId);
-  if (!allowed) return { ok: false, reason: "quota" };
-
-  await recordPointTransaction({
-    shopId: params.shopId,
-    memberId: referral.referrerId,
-    type: "EARN",
-    points: settings.referrerPoints,
-    reason: `Referral reward (referrer) [referral:${referral.id}]`,
-    orderId: referral.qualifiedOrderId ?? undefined,
-  });
-
-  await transitionStatus("referral", referral.id, "COMPLETED");
-  return { ok: true };
 }

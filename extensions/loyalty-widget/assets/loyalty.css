@@ -504,21 +504,6 @@
   background: rgba(0, 0, 0, 0.05);
   border-radius: 999px;
 }
-.royal-tier-card__badge {
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 2px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #fff;
-  background: var(--royal-primary, #2C2A29);
-  border-radius: 999px;
-  white-space: nowrap;
-}
 
 /* Metallic palettes — Bronze / Silver / Gold. The crown takes the metal
  * color; the rest stays subtle so the cards read as a row, not a rainbow. */
@@ -527,30 +512,12 @@
 .royal-tier-card--gold   .royal-tier-card__crown { color: #F2B821; }
 .royal-tier-card--platinum .royal-tier-card__crown { color: #5F7B97; }
 
-/* Current tier — lift it, soft glow in the tier's metal. */
+/* Current tier — flat, no glow, no lift. Just a thicker stroke in the
+ * merchant's brand color so the user reads "this is mine" at a glance. */
 .royal-tier-card--current {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-  border-color: transparent;
-}
-.royal-tier-card--current.royal-tier-card--bronze {
-  background: linear-gradient(180deg, #FFF6EA 0%, #fff 70%);
-  box-shadow: 0 12px 24px rgba(176, 122, 58, 0.18);
-}
-.royal-tier-card--current.royal-tier-card--silver {
-  background: linear-gradient(180deg, #F4F5F7 0%, #fff 70%);
-  box-shadow: 0 12px 24px rgba(156, 160, 168, 0.22);
-}
-.royal-tier-card--current.royal-tier-card--gold {
-  background: linear-gradient(180deg, #FFF7DD 0%, #fff 70%);
-  box-shadow: 0 12px 24px rgba(242, 184, 33, 0.28);
-}
-.royal-tier-card--current.royal-tier-card--platinum {
-  background: linear-gradient(180deg, #ECF1F7 0%, #fff 70%);
-  box-shadow: 0 12px 24px rgba(95, 123, 151, 0.22);
-}
-.royal-tier-card--current.royal-tier-card--custom {
-  background: linear-gradient(180deg, rgba(0,0,0,0.04) 0%, #fff 70%);
+  border: 2px solid var(--royal-primary, #2C2A29);
+  /* Compensate the extra 1px so the card height/width matches its siblings */
+  padding: 15px 13px;
 }
 
 .royal-tier-progress {

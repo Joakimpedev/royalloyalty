@@ -410,26 +410,15 @@
     } catch (e) {
       /* sessionStorage may be unavailable in private modes */
     }
-    var rr = (d && d.referralRewards) || {
-      refereeStoreCreditAmount: 0,
-      refereeStoreCreditCurrency: (d && d.currencyCode) || "USD",
-    };
-    if (!(rr.refereeStoreCreditAmount > 0)) return;
-    var amountText = formatMoney
-      ? formatMoney(
-          rr.refereeStoreCreditAmount,
-          rr.refereeStoreCreditCurrency,
-        )
-      : rr.refereeStoreCreditCurrency +
-        " " +
-        Number(rr.refereeStoreCreditAmount).toFixed(2);
+    var rr = (d && d.referralRewards) || { referee: 0 };
+    if (!(rr.referee > 0)) return;
     var title = t("refer.bannerTitle", "You've been referred");
     var desc = tSubstitute(
       t(
         "refer.bannerDesc",
-        "Sign up to claim {amount} store credit on your next order",
+        "Sign up to claim {points} points",
       ),
-      { amount: amountText },
+      { points: rr.referee },
     );
     var cta = t("refer.bannerCta", "Create account");
     var dismiss = t("refer.bannerDismiss", "Dismiss");
@@ -1189,7 +1178,6 @@
           '<div class="royal-tier-card__name">' + escapeHtml(ti.name) + '</div>' +
           '<div class="royal-tier-card__thresh">' + threshLabel + '</div>' +
           '<div class="royal-tier-card__mult">' + ti.earnMultiplier + '&times; earn</div>' +
-          (isCurrent ? '<div class="royal-tier-card__badge" data-loc-key="page.tiers.youAreHere">You are here</div>' : '') +
         '</div>';
     }
     html += '</div>';

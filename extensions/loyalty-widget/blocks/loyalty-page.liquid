@@ -285,11 +285,7 @@
           });
         }
         // Populate the per-side reward lines under "Refer a friend".
-        var rr = d.referralRewards || {
-          referrer: 0,
-          refereeStoreCreditAmount: 0,
-          refereeStoreCreditCurrency: d.currencyCode || 'USD',
-        };
+        var rr = d.referralRewards || { referrer: 0, referee: 0 };
         var youGetEl = document.getElementById('royal-page-refer-you');
         var friendGetEl = document.getElementById('royal-page-refer-friend');
         if (youGetEl) {
@@ -299,12 +295,9 @@
           );
         }
         if (friendGetEl) {
-          var amountText = R.formatMoney
-            ? R.formatMoney(rr.refereeStoreCreditAmount, rr.refereeStoreCreditCurrency)
-            : (rr.refereeStoreCreditCurrency + ' ' + Number(rr.refereeStoreCreditAmount).toFixed(2));
           friendGetEl.textContent = R.tSubstitute(
-            R.t('refer.friendGetsCredit', 'Your friend will get {amount} store credit'),
-            { amount: amountText }
+            R.t('refer.friendGets', 'Your friend will get {points} points'),
+            { points: rr.referee }
           );
         }
 
