@@ -60,6 +60,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         where: { shopId: shop.id },
         orderBy: { sortOrder: "asc" },
       });
+      // First seed of the ladder — recompute every member so existing
+      // balances land in the right tier immediately, not on next earn.
+      const { recomputeAllTiers } = await import("../lib/loyalty.server");
+      await recomputeAllTiers(shop.id);
     } catch {
       /* leave tiers empty — merchant can create manually */
     }
@@ -89,6 +93,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       data: { currentTierId: null },
     });
     await prisma.tier.deleteMany({ where: { id, shopId: shop.id } });
+    // Re-assign all members against the remaining tiers; without this the
+    // members of the deleted tier (and anyone whose ladder position shifted)
+    // would be stuck at null until their next earn event.
+    const { recomputeAllTiers } = await import("../lib/loyalty.server");
+    await recomputeAllTiers(shop.id);
     return { ok: true, message: "Tier deleted." };
   }
 
@@ -117,6 +126,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       where: { id, shopId: shop.id },
       data: { name, thresholdType, threshold, earnMultiplier, sortOrder },
     });
+    // Threshold or multiplier might have moved — recompute everyone so the
+    // ladder stays consistent with member balances.
+    const { recomputeAllTiers } = await import("../lib/loyalty.server");
+    await recomputeAllTiers(shop.id);
     return { ok: true, message: "Tier updated." };
   }
   await prisma.tier.create({
@@ -129,6 +142,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       sortOrder,
     },
   });
+  // A new tier means members above its threshold should land on it now,
+  // not on next earn. Recompute the whole ladder.
+  const { recomputeAllTiers } = await import("../lib/loyalty.server");
+  await recomputeAllTiers(shop.id);
   return { ok: true, message: "Tier created." };
 };
 

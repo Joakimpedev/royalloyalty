@@ -716,6 +716,39 @@ export async function recomputeTier(
 }
 
 /**
+ * Recompute tier assignment for every non-redacted member of a shop. Call
+ * this after any tier mutation (create / update / delete / first-seed) so
+ * existing members land in the right tier without waiting for their next
+ * earn event. Idempotent — members already on the correct tier are not
+ * touched. Failures per member are swallowed; the function never throws.
+ *
+ * Performance note: O(N) DB round trips per call (one recomputeTier per
+ * member). At typical shop sizes (< few thousand members) this finishes
+ * inside a request. Move to a background job if a shop grows past that.
+ */
+export async function recomputeAllTiers(
+  shopId: string,
+  admin?: { graphql: GraphqlClient },
+): Promise<{ scanned: number; changed: number }> {
+  const members = await prisma.member.findMany({
+    where: { shopId, redactedAt: null },
+    select: { id: true },
+  });
+  let changed = 0;
+  await Promise.all(
+    members.map(async (m) => {
+      try {
+        const res = await recomputeTier(shopId, m.id, admin);
+        if (res.changed) changed++;
+      } catch {
+        /* per-member error is non-fatal */
+      }
+    }),
+  );
+  return { scanned: members.length, changed };
+}
+
+/**
  * Tag a Shopify customer with their tier. GraphQL mutation: `tagsAdd`.
  */
 async function tagCustomerTier(
