@@ -59,17 +59,23 @@
 
   {%- if customer -%}
     <div class="royal-page__balance-card">
-      <div class="royal-page__balance-label" data-loc-key="page.balanceLabel">Your balance</div>
-      <div class="royal-page__balance-value">
-        <span id="royal-page-balance" class="royal-page__balance-num">&hellip;</span>
-        <span class="royal-page__balance-suffix">{{ mf_points_name | default: 'points' }}</span>
+      <div class="royal-page__balance-grid">
+        <div class="royal-page__balance-col">
+          <div class="royal-page__balance-label" data-loc-key="page.balanceLabel">Points balance</div>
+          <div class="royal-page__balance-value">
+            <span id="royal-page-balance" class="royal-page__balance-num">&hellip;</span>
+            <span class="royal-page__balance-suffix">{{ mf_points_name | default: 'points' }}</span>
+          </div>
+          <div id="royal-page-tier-line" class="royal-page__tier-line" hidden></div>
+        </div>
+        <div class="royal-page__balance-col royal-page__balance-col--credit">
+          <div class="royal-page__balance-label" data-loc-key="page.storeCreditLabel">Store credit</div>
+          <div class="royal-page__balance-value">
+            <span id="royal-page-storecredit" class="royal-page__balance-num">&hellip;</span>
+          </div>
+          <div class="royal-page__balance-caption" data-loc-key="page.storeCreditCaption">Applied at checkout, no code needed</div>
+        </div>
       </div>
-      <div id="royal-page-tier-line" class="royal-page__tier-line" hidden></div>
-    </div>
-
-    <div id="royal-page-active-codes-wrap" hidden>
-      <h2 class="royal-page__section-h" data-loc-key="page.activeCodesHeading">Your active codes</h2>
-      <div id="royal-page-active-codes"></div>
     </div>
   {%- else -%}
     <div class="royal-page__signin">
@@ -94,7 +100,7 @@
 
   {%- if block.settings.show_rewards -%}
     <h2 class="royal-page__section-h" data-loc-key="page.rewardsHeading">Rewards</h2>
-    <div id="royal-page-rewards" class="royal-page__grid"><p class="royal-page__muted" data-loc-key="page.loading">Loading&hellip;</p></div>
+    <div id="royal-page-rewards" class="royal-page__reward-list"><p class="royal-page__muted" data-loc-key="page.loading">Loading&hellip;</p></div>
   {%- endif -%}
 
   <div id="royal-page-social-wrap" hidden>
@@ -143,22 +149,29 @@
           if (heroP && d.branding.heroSubtitle) heroP.textContent = d.branding.heroSubtitle;
         }
 
-        if (d.enrolled) {
+        renderBalances(d);
+        renderRewards(d);
+
+        function renderBalances(d) {
+          if (!d.enrolled) return;
           var b = document.getElementById('royal-page-balance');
           if (b) b.textContent = (d.balance || 0).toLocaleString();
+
+          var sc = document.getElementById('royal-page-storecredit');
+          if (sc) {
+            var amount = d.storeCreditBalance || 0;
+            var curr = d.storeCreditCurrency || d.currencyCode || 'USD';
+            sc.textContent = R.formatMoney
+              ? R.formatMoney(amount, curr)
+              : (curr + ' ' + Number(amount).toFixed(2));
+          }
 
           var tierLine = document.getElementById('royal-page-tier-line');
           if (tierLine && d.currentTier) {
             tierLine.hidden = false;
-            tierLine.textContent = (d.branding && d.branding.pointsName ? '' : '') + d.currentTier.name + ' member';
+            tierLine.textContent = d.currentTier.name + ' member';
           }
         }
-
-        R.renderActiveCodes(
-          document.getElementById('royal-page-active-codes-wrap'),
-          document.getElementById('royal-page-active-codes'),
-          d.activeCodes
-        );
 
         // Cashback callout only when the merchant has it enabled.
         var cbWrap = document.getElementById('royal-page-cashback-wrap');
@@ -202,16 +215,71 @@
               }).join('')
             : '<p class="royal-page__muted">Earn rules will appear here soon.</p>';
         }
-        var rw = document.getElementById('royal-page-rewards');
-        if (rw) {
-          rw.innerHTML = (d.rewards && d.rewards.length)
-            ? d.rewards.map(function (x) {
-                return '<div class="royal-page__card">' +
-                  '<div class="royal-page__card-label">' + R.rewardLabel(x, d.currencyCode) + '</div>' +
-                  '<div class="royal-page__card-cost">' + x.pointsCost + ' pts</div>' +
-                  '</div>';
-              }).join('')
-            : '<p class="royal-page__muted">No rewards available yet. Check back soon.</p>';
+        function renderRewards(d) {
+          var rw = document.getElementById('royal-page-rewards');
+          if (!rw) return;
+          if (!(d.rewards && d.rewards.length)) {
+            rw.innerHTML = '<p class="royal-page__muted">No rewards available yet. Check back soon.</p>';
+            return;
+          }
+          var bal = d.balance || 0;
+          var loggedIn = cfg.loggedIn;
+          rw.innerHTML = d.rewards.map(function (x) {
+            var canAfford = bal >= x.pointsCost;
+            var btnLabel = !loggedIn
+              ? 'Sign in to redeem'
+              : canAfford
+                ? 'Redeem'
+                : ((x.pointsCost - bal).toLocaleString() + ' more pts');
+            var btnAttrs = !loggedIn
+              ? 'data-href="/account/login"'
+              : ('data-reward-id="' + x.id + '"' + (canAfford ? '' : ' disabled'));
+            return '<div class="royal-page__reward">' +
+              '<div class="royal-page__reward-main">' +
+                '<div class="royal-page__card-label">' + R.rewardLabel(x, d.currencyCode) + '</div>' +
+                '<div class="royal-page__card-cost">' + x.pointsCost + ' pts</div>' +
+              '</div>' +
+              '<button type="button" class="royal-page__btn royal-page__redeem-btn" ' + btnAttrs + '>' +
+                btnLabel +
+              '</button>' +
+            '</div>';
+          }).join('');
+
+          // Wire click handlers - redeem or sign-in redirect
+          var btns = rw.querySelectorAll('.royal-page__redeem-btn');
+          btns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              if (btn.disabled) return;
+              var href = btn.getAttribute('data-href');
+              if (href) { window.location.href = href; return; }
+              var rewardId = btn.getAttribute('data-reward-id');
+              var origLabel = btn.textContent;
+              btn.disabled = true;
+              btn.textContent = 'Redeeming...';
+              R.redeem(cfg, rewardId)
+                .then(function (res) {
+                  var ok = res && res.result && res.result.ok !== false;
+                  if (ok) {
+                    R.setStatus(status, 'success', 'Redeemed. Store credit added to your account.');
+                    // Re-fetch the payload so points + store credit update
+                    R.loadBalance(cfg, function (d2) {
+                      renderBalances(d2);
+                      renderRewards(d2);
+                    });
+                  } else {
+                    var err = (res && res.result && res.result.error) || 'Could not redeem right now.';
+                    R.setStatus(status, 'error', err);
+                    btn.disabled = false;
+                    btn.textContent = origLabel;
+                  }
+                })
+                .catch(function () {
+                  R.setStatus(status, 'error', 'Could not redeem. Please try again.');
+                  btn.disabled = false;
+                  btn.textContent = origLabel;
+                });
+            });
+          });
         }
         var link = document.getElementById('royal-ref-link');
         if (link && d.referralLink) {
