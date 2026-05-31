@@ -189,6 +189,54 @@
           lines.push("css --royal-primary:      " + cs.getPropertyValue("--royal-primary").trim());
           lines.push("css --royal-secondary:    " + cs.getPropertyValue("--royal-secondary").trim());
         }
+        // --- Referral claim diagnostics ---
+        lines.push("--- referral claim ---");
+        try {
+          var cookieMatch = document.cookie.match(/(?:^|; )royal_ref=([^;]+)/);
+          var cookieVal = cookieMatch ? decodeURIComponent(cookieMatch[1]) : "(none)";
+          lines.push("royal_ref cookie:         " + cookieVal);
+        } catch (e) {
+          lines.push("royal_ref cookie:         (read failed)");
+        }
+        if (__royalDiag.claimCode) {
+          lines.push("claim code:               " + __royalDiag.claimCode);
+        }
+        if (__royalDiag.claimStatus) {
+          lines.push("claim status:             " + __royalDiag.claimStatus);
+        } else {
+          lines.push("claim status:             (not attempted yet)");
+        }
+        if (__royalDiag.claimResult) {
+          try {
+            lines.push(
+              "claim result:             " +
+                JSON.stringify(__royalDiag.claimResult),
+            );
+          } catch (e) {
+            lines.push("claim result:             (unserialisable)");
+          }
+        }
+        if (__royalDiag.claimSteps && __royalDiag.claimSteps.length) {
+          lines.push("claim steps:");
+          var startedAt = __royalDiag.claimSteps[0].at;
+          for (var ci = 0; ci < __royalDiag.claimSteps.length; ci++) {
+            var step = __royalDiag.claimSteps[ci];
+            var t = ((step.at - startedAt) / 1000).toFixed(2);
+            var extraStr = "";
+            if (step.extra) {
+              try {
+                extraStr =
+                  " " +
+                  (typeof step.extra === "string"
+                    ? step.extra
+                    : JSON.stringify(step.extra));
+              } catch (e) {
+                extraStr = " (extra unserialisable)";
+              }
+            }
+            lines.push("  +" + t + "s  " + step.msg + extraStr);
+          }
+        }
         if (pillCs) {
           lines.push("pill bg (computed):       " + pillCs.backgroundColor);
           lines.push("pill color (computed):    " + pillCs.color);
