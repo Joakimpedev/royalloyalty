@@ -133,12 +133,22 @@
         if (root) {
           try { ssr = JSON.parse(root.getAttribute("data-royal-ssr") || "null"); } catch (e) {}
         }
+        var fetchElapsed = __royalDiag.payloadStartedAt
+          ? ((Date.now() - __royalDiag.payloadStartedAt) / 1000).toFixed(1)
+          : null;
+        var balanceLine =
+          __royalDiag.payloadStatus +
+          (fetchElapsed != null && __royalDiag.payloadStatus === "fetching…"
+            ? "  (" + fetchElapsed + "s elapsed)"
+            : "");
         var lines = [
           "Royal Loyalty diagnostics  (t+" + elapsed + "s)",
           "loyalty.js loaded:        " + (__royalDiag.loyaltyJsLoaded ? "yes" : "NO"),
           "window.RoyalLoyalty:      " + (__royalDiag.royalLoyaltyDefined ? "yes" : "NO"),
           "launcher block in DOM:    " + (root ? "yes" : "NO"),
-          "/loyalty/balance:         " + __royalDiag.payloadStatus,
+          "launcher load() called:   " +
+            (__royalDiag.payloadStartedAt ? "yes" : "NO (init never reached load())"),
+          "/loyalty/balance:         " + balanceLine,
         ];
         if (ssr) {
           lines.push("--- Liquid SSR (first paint) ---");
@@ -683,12 +693,28 @@
    * referral link + activity + branding). Anonymous visitors get the
    * shop-wide bits (earn rules, rewards, branding) but no balance/tier. */
   function loadBalance(cfg, onData, onError) {
+    var startedAt = Date.now();
     if (window.__royalDiag) {
       window.__royalDiag.lastFetchUrl = (cfg.proxy || "").replace(/\/$/, "") + "/loyalty/balance";
       window.__royalDiag.payloadStatus = "fetching…";
+      window.__royalDiag.payloadStartedAt = startedAt;
     }
-    api(cfg.proxy, "/loyalty/balance", { method: "GET" })
+    // 10s client-side timeout via AbortController so a hung server
+    // doesn't sit in "fetching…" forever. Surfaces as a visible
+    // "FAILED — TIMEOUT 10s" in the diag panel.
+    var ac =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timeoutId = setTimeout(function () {
+      if (ac) ac.abort();
+      if (window.__royalDiag && window.__royalDiag.payloadStatus === "fetching…") {
+        window.__royalDiag.payloadStatus = "FAILED — TIMEOUT 10s";
+      }
+    }, 10000);
+    var fetchOpts = { method: "GET" };
+    if (ac) fetchOpts.signal = ac.signal;
+    api(cfg.proxy, "/loyalty/balance", fetchOpts)
       .then(function (d) {
+        clearTimeout(timeoutId);
         if (window.__royalDiag) {
           window.__royalDiag.payloadStatus = "ok (200)";
           window.__royalDiag.lastFetchStatus = 200;
@@ -727,10 +753,14 @@
         onData(d);
       })
       .catch(function (err) {
+        clearTimeout(timeoutId);
         if (window.__royalDiag) {
           var d = err && err.royalDiag ? err.royalDiag : { note: "unknown" };
-          window.__royalDiag.payloadStatus =
-            "FAILED — " + (d.status ? "HTTP " + d.status : d.note || "error");
+          // Preserve the TIMEOUT message if the abort fired before the catch.
+          if (window.__royalDiag.payloadStatus !== "FAILED — TIMEOUT 10s") {
+            window.__royalDiag.payloadStatus =
+              "FAILED — " + (d.status ? "HTTP " + d.status : d.note || "error");
+          }
           window.__royalDiag.lastFetchStatus = d.status || null;
         }
         if (typeof onError === "function") onError(err && err.royalDiag ? err.royalDiag : { note: "unknown" });
