@@ -423,14 +423,39 @@
     var cta = t("refer.bannerCta", "Create account");
     var dismiss = t("refer.bannerDismiss", "Dismiss");
 
+    // The banner lives at the top of <body> so var(--royal-primary) /
+    // var(--royal-secondary) don't cascade from the widget root. Set them
+    // inline from the branding payload so the banner matches the merchant's
+    // chosen colors.
+    var br = (d && d.branding) || {};
+    var primary = br.primaryColor || "#2C2A29";
+    var secondary = br.secondaryColor || "#FFFFFF";
+
     var banner = document.createElement("div");
     banner.id = "royal-refer-banner";
     banner.className = "royal-refer-banner";
     banner.setAttribute("role", "region");
     banner.setAttribute("aria-label", title);
+    banner.setAttribute(
+      "style",
+      "--royal-primary:" + primary + ";--royal-secondary:" + secondary + ";",
+    );
+    // Gift-box icon (Material card_giftcard). currentColor inherits the
+    // banner's text color so it tracks the merchant's secondary color
+    // automatically.
+    var iconSvg =
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+      '<path d="M20 6h-2.18A2.99 2.99 0 0 0 15 4c-.83 0-1.58.34-2.12.88L12 5.76l-.88-.88A3.001 3.001 0 0 0 9 4a2.99 2.99 0 0 0-2.82 2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zM15 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2zM9 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm11 13H4v-2h16v2zm0-5h-7v-2h2v-2h-2V8h7v6z"/>' +
+      "</svg>";
+    // Close X (geometric, not a glyph) — keeps weight consistent with the
+    // gift icon and renders identically on every OS.
+    var closeSvg =
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">' +
+      '<path d="M6 6 L18 18 M18 6 L6 18"/>' +
+      "</svg>";
     banner.innerHTML =
       '<div class="royal-refer-banner__inner">' +
-      '<div class="royal-refer-banner__icon" aria-hidden="true">&#127873;</div>' +
+      '<div class="royal-refer-banner__icon">' + iconSvg + "</div>" +
       '<div class="royal-refer-banner__text">' +
       '<div class="royal-refer-banner__title">' +
       escapeAttr(title) +
@@ -444,7 +469,7 @@
       "</a>" +
       '<button type="button" class="royal-refer-banner__close" aria-label="' +
       escapeAttr(dismiss) +
-      '">&times;</button>' +
+      '">' + closeSvg + "</button>" +
       "</div>";
     document.body.appendChild(banner);
     var closeBtn = banner.querySelector(".royal-refer-banner__close");

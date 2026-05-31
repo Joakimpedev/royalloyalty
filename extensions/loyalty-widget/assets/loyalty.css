@@ -1153,9 +1153,17 @@
   padding: 12px 16px;
 }
 .royal-refer-banner__icon {
-  font-size: 28px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
   flex-shrink: 0;
+}
+.royal-refer-banner__icon svg {
+  display: block;
 }
 .royal-refer-banner__text {
   flex: 1;
@@ -1192,13 +1200,15 @@
   border: 0;
   color: inherit;
   opacity: 0.65;
-  font-size: 22px;
-  line-height: 1;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 6px;
   border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .royal-refer-banner__close:hover { opacity: 1; }
+.royal-refer-banner__close svg { display: block; }
 @media (max-width: 560px) {
   .royal-refer-banner__inner { flex-wrap: wrap; row-gap: 8px; }
   .royal-refer-banner__text { order: 2; width: 100%; }
