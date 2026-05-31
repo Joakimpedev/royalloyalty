@@ -30,10 +30,8 @@ import prisma from "../db.server";
 import {
   getReferralSettings,
   saveReferralSettings,
-  payoutReferral,
   type ReferralSettings,
 } from "../lib/referrals.server";
-import { transitionStatus } from "../lib/status.server";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -46,22 +44,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shop = await requireShop(session.shop);
   const settings = await getReferralSettings(shop.id);
 
-  const [referrals, heldForReview] = await Promise.all([
-    prisma.referral.findMany({
-      where: { shopId: shop.id, refereeEmail: { not: null } },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    }),
-    prisma.referral.findMany({
-      where: {
-        shopId: shop.id,
-        status: "ACTIVE",
-        qualifiedOrderId: { not: null },
-      },
-      orderBy: { statusChangedAt: "asc" },
-      take: 50,
-    }),
-  ]);
+  const referrals = await prisma.referral.findMany({
+    where: { shopId: shop.id, refereeEmail: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
 
   return {
     settings,
@@ -75,12 +62,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       qualified: Boolean(r.qualifiedOrderId),
       createdAt: r.createdAt.toISOString().slice(0, 10),
     })),
-    heldForReview: heldForReview.map((r) => ({
-      id: r.id,
-      code: r.code,
-      refereeEmail: r.refereeEmail ?? "—",
-      since: r.statusChangedAt.toISOString().slice(0, 10),
-    })),
   };
 };
 
@@ -89,26 +70,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const shop = await requireShop(session.shop);
   const form = await request.formData();
   const intent = String(form.get("_intent"));
-
-  if (intent === "approve") {
-    const id = String(form.get("id"));
-    const res = await payoutReferral({ shopId: shop.id, referralId: id });
-    return res.ok
-      ? { ok: true, message: "Referral approved and paid out." }
-      : { ok: false, message: `Could not pay out: ${res.reason}.` };
-  }
-  if (intent === "reject") {
-    const id = String(form.get("id"));
-    try {
-      await transitionStatus("referral", id, "CANCELLED");
-      return { ok: true, message: "Referral rejected." };
-    } catch (e) {
-      return {
-        ok: false,
-        message: e instanceof Error ? e.message : "Could not reject.",
-      };
-    }
-  }
 
   const refereeType = String(form.get("refereeDiscountType") ?? "percent_off");
   const next: ReferralSettings = {
@@ -123,12 +84,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       0,
       Number.parseFloat(String(form.get("refereeDiscountValue"))) || 0,
     ),
-    reviewBeforePayout: form.get("reviewBeforePayout") === "true",
-    holdbackHours: Math.max(
-      0,
-      Number.parseInt(String(form.get("holdbackHours")), 10) || 0,
-    ),
-    sameIpBlocks: form.get("sameIpBlocks") === "true",
   };
   if (next.referrerPoints <= 0 && next.refereeDiscountValue <= 0) {
     return {
@@ -151,8 +106,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function ReferralsPage() {
-  const { settings, referrals, heldForReview } =
-    useLoaderData<typeof loader>();
+  const { settings, referrals } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const submit = useSubmit();
@@ -181,9 +135,6 @@ export default function ReferralsPage() {
     fd.set("referrerPoints", String(form.referrerPoints));
     fd.set("refereeDiscountType", form.refereeDiscountType);
     fd.set("refereeDiscountValue", String(form.refereeDiscountValue));
-    fd.set("reviewBeforePayout", String(form.reviewBeforePayout));
-    fd.set("holdbackHours", String(form.holdbackHours));
-    fd.set("sameIpBlocks", String(form.sameIpBlocks));
     submit(fd, { method: "POST" });
   }, [form, submit]);
 
@@ -299,113 +250,13 @@ export default function ReferralsPage() {
         </s-stack>
       </s-section>
 
-      <s-section heading="Fraud &amp; anti-cheat">
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            Self-referrals (referee email equals the referrer&apos;s) and
-            customers who were already members before the referral are always
-            blocked automatically.
-          </s-paragraph>
-          <ChoiceList
-            label="Same-IP referrals"
-            value={form.sameIpBlocks ? "block" : "flag"}
-            onChange={(v) =>
-              setForm((f) => ({ ...f, sameIpBlocks: v === "block" }))
-            }
-          >
-            <s-choice value="block">Block automatically</s-choice>
-            <s-choice value="flag">Flag for review</s-choice>
-          </ChoiceList>
-          <ChoiceList
-            label="Payout approval"
-            value={form.reviewBeforePayout ? "manual" : "auto"}
-            onChange={(v) =>
-              setForm((f) => ({ ...f, reviewBeforePayout: v === "manual" }))
-            }
-          >
-            <s-choice value="auto">
-              Pay out automatically after the holdback window
-            </s-choice>
-            <s-choice value="manual">
-              Require manual approval for every payout
-            </s-choice>
-          </ChoiceList>
-          <PointsField
-            label="Post-order holdback"
-            suffix="hours"
-            value={form.holdbackHours}
-            onChange={(next) =>
-              setForm((f) => ({
-                ...f,
-                holdbackHours: Math.max(0, Number.parseInt(next, 10) || 0),
-              }))
-            }
-          />
-        </s-stack>
-      </s-section>
-
-      <s-section heading="Pending review">
-        {heldForReview.length === 0 ? (
-          <s-paragraph>
-            No referrals are waiting for approval. Flagged or held referrals
-            appear here for you to approve or reject before any points are paid
-            out.
-          </s-paragraph>
-        ) : (
-          <s-table>
-            <s-table-header-row>
-              <s-table-header>Code</s-table-header>
-              <s-table-header>Referee</s-table-header>
-              <s-table-header>Held since</s-table-header>
-              <s-table-header>Actions</s-table-header>
-            </s-table-header-row>
-            <s-table-body>
-              {heldForReview.map((r) => (
-                <s-table-row key={r.id}>
-                  <s-table-cell>{r.code}</s-table-cell>
-                  <s-table-cell>{r.refereeEmail}</s-table-cell>
-                  <s-table-cell>{r.since}</s-table-cell>
-                  <s-table-cell>
-                    <s-stack direction="inline" gap="base">
-                      <s-button
-                        variant="primary"
-                        onClick={() =>
-                          submit(
-                            { _intent: "approve", id: r.id },
-                            { method: "POST" },
-                          )
-                        }
-                      >
-                        Approve
-                      </s-button>
-                      <s-button
-                        tone="critical"
-                        onClick={() =>
-                          submit(
-                            { _intent: "reject", id: r.id },
-                            { method: "POST" },
-                          )
-                        }
-                      >
-                        Reject
-                      </s-button>
-                    </s-stack>
-                  </s-table-cell>
-                </s-table-row>
-              ))}
-            </s-table-body>
-          </s-table>
-        )}
-      </s-section>
-
       <s-section heading="Referrals">
         {referrals.length === 0 ? (
           <s-stack direction="block" gap="base">
             <s-heading>No referrals yet</s-heading>
             <s-paragraph>
               When a customer shares their referral link and a friend places a
-              qualifying order, the referral shows up here with its fraud and
-              payout status.
+              qualifying order, the referral shows up here.
             </s-paragraph>
             <s-button
               variant="primary"
