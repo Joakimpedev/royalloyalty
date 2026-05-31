@@ -170,7 +170,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       }
       return jsonCors({ ok: true, result });
     }
-    if (sub === "loyalty/claim-referral") {
+    if (sub === "claim-referral") {
       // Storefront detected `royal_ref` cookie + a logged-in customer and
       // is asking us to record the attribution + award both sides points.
       // App Proxy already supplied the customerId via the signed query
