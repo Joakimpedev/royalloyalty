@@ -1457,6 +1457,7 @@
     claimSocial: claimSocial,
     renderSocial: renderSocial,
     renderTierGrid: renderTierGrid,
+    maybeClaimReferral: maybeClaimReferral,
   };
 
   // Signal that RoyalLoyalty is ready. Used by the launcher block inline
