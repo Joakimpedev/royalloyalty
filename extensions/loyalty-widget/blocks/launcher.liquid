@@ -311,21 +311,6 @@
       // the Liquid defaults until the visitor actually clicks it open.
       if (!fetched) { fetched = true; load(); mark("load() called"); }
 
-      // Fire the referral claim independently of loadBalance — in some
-      // storefront contexts (notably New Customer Accounts incognito sessions)
-      // the /loyalty/balance fetch hangs in the JS pipeline even though the
-      // server responds instantly to a direct request. Gating the claim on
-      // loadBalance success means it never fires in those contexts. The
-      // claim endpoint only needs the cookie + the customer id the App Proxy
-      // attaches from the signed query string, both of which are available
-      // RIGHT NOW.
-      try {
-        if (R.maybeClaimReferral) {
-          mark("calling maybeClaimReferral directly");
-          R.maybeClaimReferral(cfg, null);
-        }
-      } catch (e) { /* non-fatal */ }
-
       function close() {
         panel.hidden = true;
         btn.setAttribute('aria-expanded', 'false');
@@ -350,6 +335,22 @@
           else if (name === 'referral') renderReferral();
         });
       });
+
+      // Fire the referral claim AFTER click handlers are attached. In
+      // some storefront contexts /loyalty/balance hangs in the JS fetch
+      // pipeline even though the server returns fine — but the claim POST
+      // is independent and only needs cookie + customer id (both
+      // available right now from the App Proxy signed query string).
+      // Deferred to setTimeout(0) so nothing it does can block the
+      // launcher pill click handler that was just registered above.
+      setTimeout(function () {
+        try {
+          if (R.maybeClaimReferral) {
+            mark("calling maybeClaimReferral directly");
+            R.maybeClaimReferral(cfg, null);
+          }
+        } catch (e) { /* non-fatal */ }
+      }, 0);
 
       function applyLocaleDom() {
         // Walk every element with data-loc-key and replace its text with
