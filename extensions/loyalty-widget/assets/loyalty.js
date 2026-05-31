@@ -1425,6 +1425,17 @@
     renderTierGrid: renderTierGrid,
   };
 
+  // Signal that RoyalLoyalty is ready. Used by the launcher block inline
+  // script to escape its setTimeout retry loop, which has been observed
+  // to silently stop firing after one callback inside Shopify's New
+  // Customer Accounts session context.
+  try {
+    document.dispatchEvent(new CustomEvent("royal-loyalty-ready"));
+  } catch (e) {
+    /* CustomEvent unsupported (extremely old browser): the launcher
+       will fall back to its retry loop. */
+  }
+
   /* POST the social claim to the proxy. Used by renderSocial below. */
   function claimSocial(cfg, platform) {
     return api(cfg.proxy, "/loyalty/claim-social", {

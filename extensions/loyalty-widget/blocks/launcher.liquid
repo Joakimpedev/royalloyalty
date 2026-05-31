@@ -190,33 +190,62 @@
     }
     mark("script-entered");
     try { console.log('[RoyalLoyalty] launcher block rendered'); } catch (e) {}
-    var tries = 0;
-    function init() {
+
+    // Event-driven handshake. Some storefront contexts (notably the New
+    // Customer Accounts session) silently kill setTimeout callbacks after
+    // the first fire, which used to leave us stuck on "retry 1" forever.
+    // Instead: if RoyalLoyalty is already on window, go now. Otherwise
+    // listen ONCE for the "royal-loyalty-ready" event loyalty.js dispatches
+    // at the end of its IIFE.
+    function runInit() {
       try {
-        // Independent counter that increments every time init runs,
-        // regardless of branch taken. Lets the diag panel show whether
-        // setTimeout retries are firing at all.
         window.__royalInitCalls = (window.__royalInitCalls || 0) + 1;
         var root = document.getElementById('royal-launcher-root');
-        if (!root || !window.RoyalLoyalty) {
-          tries++;
-          mark("retry " + tries + " (root=" + !!root + " RL=" + !!window.RoyalLoyalty + ")");
-          if (tries === 40) {
-            try {
-              console.warn(
-                '[RoyalLoyalty] still waiting for window.RoyalLoyalty after 2s — ' +
-                'loyalty.js probably failed to load. Check Network tab for loyalty.js.'
-              );
-            } catch (e) {}
-          }
-          return setTimeout(init, 50);
+        if (!root) {
+          mark("no-root");
+          return;
+        }
+        if (!window.RoyalLoyalty) {
+          mark("no-RoyalLoyalty");
+          return;
         }
         mark("after retry-check");
       } catch (e) {
-        fail("retry-check", e);
+        fail("entry-check", e);
         return;
       }
       try { _init_body(); } catch (e) { fail("init-body", e); }
+    }
+    function init() {
+      try {
+        mark("scheduling");
+        if (window.RoyalLoyalty) {
+          mark("RL already ready, running inline");
+          runInit();
+          return;
+        }
+        mark("waiting for royal-loyalty-ready event");
+        document.addEventListener(
+          "royal-loyalty-ready",
+          function () {
+            try { mark("event received"); } catch (_) {}
+            runInit();
+          },
+          { once: true }
+        );
+        // Safety net: still poll once at +200ms in case the event fired
+        // before this listener attached (race). One extra check is cheap.
+        setTimeout(function () {
+          try {
+            if (window.RoyalLoyalty && window.__royalInitCalls < 2) {
+              mark("safety-net check, RL ready");
+              runInit();
+            }
+          } catch (_) {}
+        }, 200);
+      } catch (e) {
+        fail("scheduling", e);
+      }
     }
     function _init_body() {
       mark("body-start");
