@@ -193,6 +193,10 @@
     var tries = 0;
     function init() {
       try {
+        // Independent counter that increments every time init runs,
+        // regardless of branch taken. Lets the diag panel show whether
+        // setTimeout retries are firing at all.
+        window.__royalInitCalls = (window.__royalInitCalls || 0) + 1;
         var root = document.getElementById('royal-launcher-root');
         if (!root || !window.RoyalLoyalty) {
           tries++;

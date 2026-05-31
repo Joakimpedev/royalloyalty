@@ -165,6 +165,8 @@
             (__royalDiag.launcherStage ||
               window.__royalLauncherStage ||
               "(none)"),
+          "init() calls fired:       " +
+            (window.__royalInitCalls || 0),
           "inline-script canary:     " +
             (typeof window.__royalCanary === "number"
               ? "yes (n=" + window.__royalCanary + ")"
