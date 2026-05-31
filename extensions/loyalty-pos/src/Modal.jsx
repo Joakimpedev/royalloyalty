@@ -1,12 +1,18 @@
-// Royal Loyalty POS — modal. Earn + redeem in-store + balance lookup by
+// Royal Loyalty POS - modal. Earn + redeem in-store + balance lookup by
 // customer. All mutations go through the app's App Proxy (server-side
 // validated, HMAC-verified by the proxy). Graceful errors; no PII logged.
+//
+// POS UI is constrained - we can't bring custom typography, brand colors,
+// or images into the modal. What we CAN control: information hierarchy,
+// copy clarity, empty states, prominence of the balance, helpful banner
+// feedback. This file leans on that.
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Navigator,
   Screen,
   ScrollView,
   Section,
+  Stack,
   Text,
   Button,
   Banner,
@@ -58,22 +64,23 @@ const ModalComponent = () => {
         : fallback) || "",
     [locBundle],
   );
-  const tSub = useCallback(
-    (template, vars) => {
-      let out = String(template == null ? "" : template);
-      Object.keys(vars || {}).forEach((k) => {
-        out = out.replace(new RegExp(`\\{${k}\\}`, "g"), String(vars[k]));
-      });
-      return out;
-    },
-    [],
-  );
+  const tSub = useCallback((template, vars) => {
+    let out = String(template == null ? "" : template);
+    Object.keys(vars || {}).forEach((k) => {
+      out = out.replace(new RegExp(`\\{${k}\\}`, "g"), String(vars[k]));
+    });
+    return out;
+  }, []);
 
   // Pull the customer attached to the current POS cart, if any.
   useEffect(() => {
     try {
       const c = api.cart?.subscribable?.initial?.customer;
-      if (c) setCustomer({ id: c.id, name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() });
+      if (c)
+        setCustomer({
+          id: c.id,
+          name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim(),
+        });
     } catch (e) {
       /* no cart customer */
     }
@@ -124,6 +131,15 @@ const ModalComponent = () => {
       setBusy(false);
     }
   }, [call, customer, t]);
+
+  // Auto-lookup when a customer attaches to the cart - removes the extra
+  // tap before a cashier can see the balance.
+  useEffect(() => {
+    if (customer && !data && !busy) {
+      lookup();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer]);
 
   const earn = useCallback(async () => {
     if (!customer) return;
@@ -188,6 +204,9 @@ const ModalComponent = () => {
     [api, call, customer, lookup, t, tSub],
   );
 
+  const balance = data?.balance ?? 0;
+  const rewards = data?.rewards ?? [];
+
   return (
     <Navigator>
       <Screen name="RoyalLoyalty" title={t("pos.tileTitle", "Royal Loyalty")}>
@@ -200,74 +219,140 @@ const ModalComponent = () => {
             />
           ) : null}
 
-          <Section title="Customer">
-            <Text>
-              {customer
-                ? customer.name || customer.id
-                : t("pos.noCustomerOnCart", "No customer on cart")}
-            </Text>
-            <Button
-              title={t("pos.lookupBalanceButton", "Look up balance")}
-              onPress={lookup}
-              isDisabled={busy}
-            />
+          {/* CUSTOMER HEADER - one visible block at the top so the cashier
+              always knows who they're acting on. Auto-lookup runs the moment
+              a customer attaches to the cart. */}
+          <Section title={t("pos.sectionCustomer", "Customer")}>
+            {customer ? (
+              <Stack direction="vertical" spacing={0.5}>
+                <Text variant="headingLarge">
+                  {customer.name || t("pos.customerNoName", "Member")}
+                </Text>
+                <Text variant="captionRegular" color="TextSubdued">
+                  {t("pos.customerId", "Loyalty member")}
+                </Text>
+              </Stack>
+            ) : (
+              <Stack direction="vertical" spacing={1}>
+                <Text variant="bodyRegular" color="TextSubdued">
+                  {t(
+                    "pos.noCustomerOnCart",
+                    "Attach a customer to the cart to start.",
+                  )}
+                </Text>
+              </Stack>
+            )}
           </Section>
 
-          {data ? (
-            <>
-              <Section title={t("pos.sectionBalance", "Balance")}>
-                <Text>{data.balance ?? 0} points</Text>
-              </Section>
-
-              <Section title={t("pos.sectionEarn", "Earn")}>
+          {/* BALANCE - the headline number. Big, alone in its section so
+              the cashier can read it across the counter. */}
+          <Section title={t("pos.sectionBalance", "Points balance")}>
+            {customer ? (
+              <Stack direction="vertical" spacing={0.5}>
+                <Text variant="headingLarge">
+                  {balance.toLocaleString()} {t("pos.pts", "pts")}
+                </Text>
+                {data ? (
+                  <Text variant="captionRegular" color="TextSubdued">
+                    {t("pos.balanceUpdated", "Up to date")}
+                  </Text>
+                ) : null}
                 <Button
-                  title={t("pos.awardButton", "Award points for this cart")}
-                  onPress={earn}
-                  isDisabled={busy || !customer}
+                  title={t("pos.refreshButton", "Refresh balance")}
+                  type="plain"
+                  onPress={lookup}
+                  isDisabled={busy}
                 />
-              </Section>
-
-              <Section title={t("pos.sectionRedeem", "Redeem")}>
-                {data.rewards && data.rewards.length ? (
-                  <List
-                    data={data.rewards.map((r) => ({
-                      id: r.id,
-                      leftSide: {
-                        label: `${r.label || r.type} — ${r.pointsCost} pts`,
-                      },
-                      onPress: () =>
-                        (data.balance ?? 0) >= r.pointsCost
-                          ? redeem(r.id)
-                          : setStatus({
-                              kind: "error",
-                              msg: t(
-                                "pos.errorInsufficient",
-                                "Not enough points for that reward.",
-                              ),
-                            }),
-                    }))}
-                  />
-                ) : (
-                  <Text>{t("pos.noRewards", "No rewards available.")}</Text>
-                )}
-              </Section>
-            </>
-          ) : (
-            <Section title={t("pos.sectionBalance", "Balance")}>
-              <Text>
+              </Stack>
+            ) : (
+              <Text variant="bodyRegular" color="TextSubdued">
                 {t(
                   "pos.lookupHint",
-                  "Look up a customer to see their points and rewards.",
+                  "A customer needs to be attached to see their points.",
                 )}
               </Text>
-            </Section>
-          )}
+            )}
+          </Section>
+
+          {/* EARN - one primary action when a customer is on cart. */}
+          <Section title={t("pos.sectionEarn", "Award points for this sale")}>
+            <Button
+              title={t("pos.awardButton", "Award points for cart total")}
+              type="primary"
+              onPress={earn}
+              isDisabled={busy || !customer}
+            />
+            {!customer ? (
+              <Text variant="captionRegular" color="TextSubdued">
+                {t(
+                  "pos.earnDisabledHint",
+                  "Available once a customer is on the cart.",
+                )}
+              </Text>
+            ) : null}
+          </Section>
+
+          {/* REDEEM - list of available rewards. Disabled when insufficient
+              balance for that reward; the disabled state is the affordance. */}
+          <Section title={t("pos.sectionRedeem", "Redeem a reward")}>
+            {!customer ? (
+              <Text variant="bodyRegular" color="TextSubdued">
+                {t(
+                  "pos.redeemNoCustomer",
+                  "Attach a customer to redeem rewards.",
+                )}
+              </Text>
+            ) : !data ? (
+              <Text variant="bodyRegular" color="TextSubdued">
+                {t("pos.redeemLoading", "Loading rewards...")}
+              </Text>
+            ) : rewards.length === 0 ? (
+              <Text variant="bodyRegular" color="TextSubdued">
+                {t(
+                  "pos.noRewards",
+                  "No rewards available. Configure rewards in the Royal Loyalty admin.",
+                )}
+              </Text>
+            ) : (
+              <List
+                data={rewards.map((r) => {
+                  const canAfford = balance >= r.pointsCost;
+                  return {
+                    id: r.id,
+                    leftSide: {
+                      label: r.label || r.type,
+                      subtitle: `${r.pointsCost.toLocaleString()} ${t("pos.pts", "pts")}`,
+                    },
+                    rightSide: {
+                      label: canAfford
+                        ? t("pos.redeemActionLabel", "Redeem")
+                        : tSub(
+                            t(
+                              "pos.redeemNeedMore",
+                              "{n} more pts",
+                            ),
+                            { n: (r.pointsCost - balance).toLocaleString() },
+                          ),
+                    },
+                    onPress: () =>
+                      canAfford
+                        ? redeem(r.id)
+                        : setStatus({
+                            kind: "error",
+                            msg: t(
+                              "pos.errorInsufficient",
+                              "Not enough points for that reward.",
+                            ),
+                          }),
+                  };
+                })}
+              />
+            )}
+          </Section>
         </ScrollView>
       </Screen>
     </Navigator>
   );
 };
 
-export default reactExtension("pos.home.modal.render", () => (
-  <ModalComponent />
-));
+export default reactExtension("pos.home.modal.render", () => <ModalComponent />);

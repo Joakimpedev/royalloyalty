@@ -1,77 +1,113 @@
 {% comment %}
-  Royal Loyalty — full loyalty page block (add to a page template / section).
-  Shows hero, balance, ways to earn, rewards, referral share. Section toggles
-  are driven by block settings (Branding page on the paid plan). Graceful for
-  signed-out visitors; accessible headings + live region.
+  Royal Loyalty - full loyalty page block (add to a page template / section).
+  Self-isolating CSS root (.royal-page) so the block looks the same on every
+  theme. Reads branding from shop metafields the admin Branding page writes,
+  so colors and copy match the live preview without a JS roundtrip.
 {% endcomment %}
 
 <link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
 
-{%- assign theme = block.settings.theme_color | default: '#2C2A29' -%}
+{%- comment -%}
+  Branding metafields take precedence over the theme-editor block setting,
+  same priority order as launcher.liquid. Lets a merchant edit the Branding
+  page once and have it reflected in every block without re-editing the
+  theme.
+{%- endcomment -%}
+{%- assign mf_primary = shop.metafields.royal_loyalty.primary_color -%}
+{%- assign mf_secondary = shop.metafields.royal_loyalty.secondary_color -%}
+{%- assign mf_hero_title = shop.metafields.royal_loyalty.hero_title -%}
+{%- assign mf_hero_subtitle = shop.metafields.royal_loyalty.hero_subtitle -%}
+{%- assign mf_points_name = shop.metafields.royal_loyalty.points_name -%}
+
+{%- if mf_primary != blank -%}
+  {%- assign primary = mf_primary -%}
+{%- else -%}
+  {%- assign primary = block.settings.theme_color | default: '#2C2A29' -%}
+{%- endif -%}
+{%- if mf_secondary != blank -%}
+  {%- assign secondary = mf_secondary -%}
+{%- else -%}
+  {%- assign secondary = '#FFFFFF' -%}
+{%- endif -%}
+{%- if mf_hero_title != blank -%}
+  {%- assign hero_title = mf_hero_title -%}
+{%- else -%}
+  {%- assign hero_title = block.settings.hero_title | default: 'Earn points. Get rewards.' -%}
+{%- endif -%}
+{%- if mf_hero_subtitle != blank -%}
+  {%- assign hero_subtitle = mf_hero_subtitle -%}
+{%- else -%}
+  {%- assign hero_subtitle = block.settings.hero_subtitle | default: 'Join the program and earn on every order.' -%}
+{%- endif -%}
 
 <section
   id="royal-page-root"
-  style="--royal-primary: {{ theme }}; --royal-secondary: #fff;"
+  class="royal-page"
+  style="--royal-primary: {{ primary }}; --royal-secondary: {{ secondary }};"
   data-royal-config='{
     "proxy": {{ block.settings.proxy_base | default: "/apps/royal" | json }},
     "loggedIn": {% if customer %}true{% else %}false{% endif %}
   }'
 >
-  <header style="background: {{ theme }}; color:#fff; padding:32px 20px; border-radius:10px;">
+  <header class="royal-page__hero">
     {%- if block.settings.logo_url != blank -%}
-      <img src="{{ block.settings.logo_url }}" alt="" style="max-height:48px;display:block;margin-bottom:12px;">
+      <img class="royal-page__logo" src="{{ block.settings.logo_url }}" alt="">
     {%- endif -%}
-    <h1 style="margin:0;" data-loc-key="page.heroTitle">{{ block.settings.hero_title | default: 'Earn points. Get rewards.' | escape }}</h1>
-    <p style="margin:8px 0 0;opacity:.9;" data-loc-key="page.heroSubtitle">{{ block.settings.hero_subtitle | default: 'Join the program and earn on every order.' | escape }}</p>
+    <h1 class="royal-page__title" data-loc-key="page.heroTitle">{{ hero_title | escape }}</h1>
+    <p class="royal-page__sub" data-loc-key="page.heroSubtitle">{{ hero_subtitle | escape }}</p>
   </header>
 
   {%- if customer -%}
-    <p style="margin:20px 0 4px;"><span data-loc-key="page.balanceLabel">Your balance:</span> <span id="royal-page-balance" class="royal-points">…</span></p>
-    <div id="royal-page-active-codes-wrap" hidden style="margin:16px 0;">
-      <h2 style="margin:0 0 8px;" data-loc-key="page.activeCodesHeading">Your active codes</h2>
+    <div class="royal-page__balance-card">
+      <div class="royal-page__balance-label" data-loc-key="page.balanceLabel">Your balance</div>
+      <div class="royal-page__balance-value">
+        <span id="royal-page-balance" class="royal-page__balance-num">&hellip;</span>
+        <span class="royal-page__balance-suffix">{{ mf_points_name | default: 'points' }}</span>
+      </div>
+      <div id="royal-page-tier-line" class="royal-page__tier-line" hidden></div>
+    </div>
+
+    <div id="royal-page-active-codes-wrap" hidden>
+      <h2 class="royal-page__section-h" data-loc-key="page.activeCodesHeading">Your active codes</h2>
       <div id="royal-page-active-codes"></div>
     </div>
   {%- else -%}
-    <p style="margin:20px 0;">
-      <a class="royal-btn" href="/account/login" style="display:inline-block;text-decoration:none;" data-loc-key="page.signInCta">Sign in to view your points</a>
-    </p>
+    <div class="royal-page__signin">
+      <p class="royal-page__signin-text" data-loc-key="page.signinPrompt">Sign in to see your points and unlock rewards.</p>
+      <a class="royal-page__btn" href="/account/login" data-loc-key="page.signInCta">Sign in</a>
+    </div>
   {%- endif -%}
 
-  {%- comment -%}
-    VIP tier ladder. Shown to everyone (logged-out visitors see the program
-    structure too — same aspirational pattern Essent uses). Hidden by JS
-    when no tiers are configured.
-  {%- endcomment -%}
-  <div id="royal-page-tier-grid-wrap" hidden style="margin-top:24px;">
-    <h2 style="margin:0 0 12px;" data-loc-key="page.tiersHeading">VIP program</h2>
+  <div id="royal-page-cashback-wrap" hidden>
+    <div class="royal-page__cashback" id="royal-page-cashback"></div>
+  </div>
+
+  <div id="royal-page-tier-grid-wrap" class="royal-page__tier-section" hidden>
+    <h2 class="royal-page__section-h" data-loc-key="page.tiersHeading">VIP program</h2>
     <div id="royal-page-tier-grid" class="royal-tier-grid"></div>
   </div>
 
-  <div id="royal-page-cashback-wrap" hidden style="margin-top: 24px;">
-    <div class="royal-card" id="royal-page-cashback"></div>
-  </div>
-
   {%- if block.settings.show_earn -%}
-    <h2 data-loc-key="page.waysToEarnHeading">Ways to earn</h2>
-    <div id="royal-page-earn"><p class="royal-muted" data-loc-key="page.loading">Loading…</p></div>
+    <h2 class="royal-page__section-h" data-loc-key="page.waysToEarnHeading">Ways to earn</h2>
+    <div id="royal-page-earn" class="royal-page__grid"><p class="royal-page__muted" data-loc-key="page.loading">Loading&hellip;</p></div>
   {%- endif -%}
 
   {%- if block.settings.show_rewards -%}
-    <h2 data-loc-key="page.rewardsHeading">Rewards</h2>
-    <div id="royal-page-rewards"><p class="royal-muted" data-loc-key="page.loading">Loading…</p></div>
+    <h2 class="royal-page__section-h" data-loc-key="page.rewardsHeading">Rewards</h2>
+    <div id="royal-page-rewards" class="royal-page__grid"><p class="royal-page__muted" data-loc-key="page.loading">Loading&hellip;</p></div>
   {%- endif -%}
 
-  <div id="royal-page-social-wrap" hidden style="margin-top: 24px;">
-    <h2 data-loc-key="page.followUsHeading">Follow us</h2>
-    <div id="royal-page-social"></div>
+  <div id="royal-page-social-wrap" hidden>
+    <h2 class="royal-page__section-h" data-loc-key="page.followUsHeading">Follow us</h2>
+    <div id="royal-page-social" class="royal-page__grid"></div>
   </div>
 
   {%- if block.settings.show_referral and customer -%}
-    <h2 data-loc-key="page.referHeading">Refer a friend</h2>
-    <p data-loc-key="page.referDescription">Share your link — you both get rewarded.</p>
-    <div class="royal-card">
-      <code id="royal-ref-link" style="word-break:break-all;" data-loc-key="page.referLoadingLink">Loading your link…</code>
-      <button type="button" id="royal-ref-copy" class="royal-btn" style="margin-top:8px;" data-loc-key="page.referCopyButton">Copy link</button>
+    <h2 class="royal-page__section-h" data-loc-key="page.referHeading">Refer a friend</h2>
+    <p class="royal-page__referral-desc" data-loc-key="page.referDescription">Share your link. You both get rewarded.</p>
+    <div class="royal-page__referral-card">
+      <code id="royal-ref-link" class="royal-page__referral-link" data-loc-key="page.referLoadingLink">Loading your link&hellip;</code>
+      <button type="button" id="royal-ref-copy" class="royal-page__btn royal-page__btn--ghost" data-loc-key="page.referCopyButton">Copy link</button>
     </div>
   {%- endif -%}
 
@@ -87,16 +123,12 @@
       var R = window.RoyalLoyalty, cfg = R.readConfig(root);
       var status = document.getElementById('royal-page-status');
 
-      /* The loyalty page renders earn rules + rewards for everyone (so
-         signed-out visitors see the value prop), but only renders
-         balance / tier / referral for enrolled customers. */
       R.loadBalance(cfg, function (d) {
         R.applyBranding(root, d.branding);
 
         // Apply locale-resolved strings to every Liquid element marked
         // with data-loc-key. Branding-level overrides for heroTitle /
-        // heroSubtitle still take precedence (they live on the Branding
-        // page, but the value is the same key).
+        // heroSubtitle still take precedence.
         var locNodes = root.querySelectorAll('[data-loc-key]');
         for (var i = 0; i < locNodes.length; i++) {
           var k = locNodes[i].getAttribute('data-loc-key');
@@ -105,25 +137,22 @@
         }
 
         if (d.branding) {
-          var heroH1 = root.querySelector('header h1');
+          var heroH1 = root.querySelector('.royal-page__title');
           if (heroH1 && d.branding.heroTitle) heroH1.textContent = d.branding.heroTitle;
-          var heroP = root.querySelector('header p');
+          var heroP = root.querySelector('.royal-page__sub');
           if (heroP && d.branding.heroSubtitle) heroP.textContent = d.branding.heroSubtitle;
         }
 
         if (d.enrolled) {
           var b = document.getElementById('royal-page-balance');
-          if (b) b.textContent = (d.balance || 0) + ' ' + (d.branding && d.branding.pointsName ? d.branding.pointsName.toLowerCase() : 'points');
-        }
+          if (b) b.textContent = (d.balance || 0).toLocaleString();
 
-        // VIP tier ladder — render to the dedicated wrap. Hides itself when
-        // no tiers are configured. Shown to visitors AND members so the
-        // program structure is always visible (aspiration).
-        R.renderTierGrid(
-          document.getElementById('royal-page-tier-grid-wrap'),
-          document.getElementById('royal-page-tier-grid'),
-          d
-        );
+          var tierLine = document.getElementById('royal-page-tier-line');
+          if (tierLine && d.currentTier) {
+            tierLine.hidden = false;
+            tierLine.textContent = (d.branding && d.branding.pointsName ? '' : '') + d.currentTier.name + ' member';
+          }
+        }
 
         R.renderActiveCodes(
           document.getElementById('royal-page-active-codes-wrap'),
@@ -131,21 +160,25 @@
           d.activeCodes
         );
 
-        // Cashback callout — only when the merchant has it enabled.
+        // Cashback callout only when the merchant has it enabled.
         var cbWrap = document.getElementById('royal-page-cashback-wrap');
         var cbCard = document.getElementById('royal-page-cashback');
         if (d.cashback && d.cashback.enabled && d.cashback.percent > 0) {
           if (cbWrap) cbWrap.hidden = false;
           if (cbCard) {
             cbCard.innerHTML =
-              '<strong>Earn ' + d.cashback.percent + '% back as store credit</strong>' +
-              '<div class="royal-muted" style="font-size:13px;margin-top:4px;">' +
-              'Every order automatically credits your account. Use your store credit at checkout — no code required.' +
-              '</div>';
+              '<strong class="royal-page__cashback-title">Earn ' + d.cashback.percent + '% back as store credit</strong>' +
+              '<div class="royal-page__cashback-desc">Every order automatically credits your account. Use your store credit at checkout, no code required.</div>';
           }
         } else if (cbWrap) {
           cbWrap.hidden = true;
         }
+
+        R.renderTierGrid(
+          document.getElementById('royal-page-tier-grid-wrap'),
+          document.getElementById('royal-page-tier-grid'),
+          d
+        );
 
         var socialWrap = document.getElementById('royal-page-social-wrap');
         var socialList = document.getElementById('royal-page-social');
@@ -160,27 +193,25 @@
         if (earn) {
           earn.innerHTML = (d.earnRules && d.earnRules.length)
             ? d.earnRules.map(function (e) {
-                // Render the merchant-edited title (e.label) + description
-                // (e.description) from each rule's Content section. Both
-                // are pre-substituted on the server, so we just render
-                // them as-is. Description is optional — omit when empty.
                 var t = e.label || e.action;
                 var d2 = e.description || '';
-                return '<div class="royal-card">' +
-                  '<div class="royal-card__label">' + t + '</div>' +
-                  (d2 ? '<div class="royal-muted">' + d2 + '</div>' : '') +
+                return '<div class="royal-page__card">' +
+                  '<div class="royal-page__card-label">' + t + '</div>' +
+                  (d2 ? '<div class="royal-page__card-desc">' + d2 + '</div>' : '') +
                   '</div>';
               }).join('')
-            : '<p class="royal-muted">Earn rules will appear here soon.</p>';
+            : '<p class="royal-page__muted">Earn rules will appear here soon.</p>';
         }
         var rw = document.getElementById('royal-page-rewards');
         if (rw) {
           rw.innerHTML = (d.rewards && d.rewards.length)
             ? d.rewards.map(function (x) {
-                return '<div class="royal-card"><strong>' + R.rewardLabel(x, d.currencyCode) +
-                  '</strong> — ' + x.pointsCost + ' pts</div>';
+                return '<div class="royal-page__card">' +
+                  '<div class="royal-page__card-label">' + R.rewardLabel(x, d.currencyCode) + '</div>' +
+                  '<div class="royal-page__card-cost">' + x.pointsCost + ' pts</div>' +
+                  '</div>';
               }).join('')
-            : '<p class="royal-muted">No rewards available yet — check back soon.</p>';
+            : '<p class="royal-page__muted">No rewards available yet. Check back soon.</p>';
         }
         var link = document.getElementById('royal-ref-link');
         if (link && d.referralLink) {
@@ -191,7 +222,7 @@
               navigator.clipboard.writeText(d.referralLink);
               R.setStatus(status, 'success', 'Link copied.');
             } catch (e) {
-              R.setStatus(status, 'error', 'Could not copy — select and copy manually.');
+              R.setStatus(status, 'error', 'Could not copy. Select and copy manually.');
             }
           });
         }
@@ -211,7 +242,7 @@
   "settings": [
     { "type": "text", "id": "hero_title", "label": "Hero title", "default": "Earn points. Get rewards." },
     { "type": "text", "id": "hero_subtitle", "label": "Hero subtitle", "default": "Join the program and earn on every order." },
-    { "type": "color", "id": "theme_color", "label": "Theme color", "default": "#2C2A29" },
+    { "type": "color", "id": "theme_color", "label": "Fallback theme color", "default": "#2C2A29" },
     { "type": "text", "id": "logo_url", "label": "Logo URL" },
     { "type": "checkbox", "id": "show_earn", "label": "Show \"ways to earn\"", "default": true },
     { "type": "checkbox", "id": "show_rewards", "label": "Show rewards", "default": true },

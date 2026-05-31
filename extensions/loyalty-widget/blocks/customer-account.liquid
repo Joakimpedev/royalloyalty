@@ -1,43 +1,65 @@
 {% comment %}
-  Royal Loyalty — customer-account block. Placed on the account page (the
-  storefront customer area) so a signed-in customer sees their full loyalty
-  status: balance, tier, recent activity, rewards and their referral link.
-  Requires a logged-in customer (the account page always has one); still
-  degrades gracefully on a network failure.
+  Royal Loyalty - customer-account block. Renders inside the storefront
+  customer account page. Self-isolating CSS so it looks the same on every
+  theme. Reads branding from shop metafields so colors and copy match the
+  admin Branding live preview.
 {% endcomment %}
 
 <link rel="stylesheet" href="{{ 'loyalty.css' | asset_url }}">
 
+{%- assign mf_primary = shop.metafields.royal_loyalty.primary_color -%}
+{%- assign mf_secondary = shop.metafields.royal_loyalty.secondary_color -%}
+{%- if mf_primary != blank -%}
+  {%- assign primary = mf_primary -%}
+{%- else -%}
+  {%- assign primary = block.settings.accent | default: '#2C2A29' -%}
+{%- endif -%}
+{%- if mf_secondary != blank -%}
+  {%- assign secondary = mf_secondary -%}
+{%- else -%}
+  {%- assign secondary = '#FFFFFF' -%}
+{%- endif -%}
+
 <section
   id="royal-account-root"
-  style="--royal-primary: {{ block.settings.accent | default: '#2C2A29' }}; --royal-secondary:#fff;"
+  class="royal-account"
+  style="--royal-primary: {{ primary }}; --royal-secondary: {{ secondary }};"
   data-royal-config='{
     "proxy": {{ block.settings.proxy_base | default: "/apps/royal" | json }},
     "loggedIn": {% if customer %}true{% else %}false{% endif %}
   }'
 >
-  <h2 data-loc-key="account.heading">{{ block.settings.heading | default: 'Your loyalty' | escape }}</h2>
+  <h2 class="royal-account__heading" data-loc-key="account.heading">{{ block.settings.heading | default: 'Your loyalty' | escape }}</h2>
 
   {%- if customer -%}
-    <div class="royal-card">
-      <p style="font-size:1.3em;">
-        <span id="royal-acc-balance" class="royal-points">…</span><span data-loc-key="account.pointsSuffix"> points</span>
-      </p>
+    <div class="royal-account__balance-card">
+      <div class="royal-account__balance-label" data-loc-key="account.balanceLabel">Points balance</div>
+      <div class="royal-account__balance-row">
+        <span id="royal-acc-balance" class="royal-account__balance-num">&hellip;</span>
+        <span class="royal-account__balance-suffix" data-loc-key="account.pointsSuffix">points</span>
+      </div>
+      <div id="royal-acc-tier" class="royal-account__tier" hidden></div>
     </div>
 
-    <h3 data-loc-key="account.recentActivityHeading">Recent activity</h3>
-    <div id="royal-acc-activity"><p class="royal-muted" data-loc-key="page.loading">Loading…</p></div>
+    <h3 class="royal-account__section-h" data-loc-key="account.recentActivityHeading">Recent activity</h3>
+    <div id="royal-acc-activity" class="royal-account__activity">
+      <p class="royal-account__muted" data-loc-key="page.loading">Loading&hellip;</p>
+    </div>
 
-    <h3 data-loc-key="account.rewardsHeading">Rewards</h3>
-    <div id="royal-acc-rewards"><p class="royal-muted" data-loc-key="page.loading">Loading…</p></div>
+    <h3 class="royal-account__section-h" data-loc-key="account.rewardsHeading">Rewards</h3>
+    <div id="royal-acc-rewards" class="royal-account__rewards">
+      <p class="royal-account__muted" data-loc-key="page.loading">Loading&hellip;</p>
+    </div>
 
-    <h3 data-loc-key="account.referHeading">Refer a friend</h3>
-    <div class="royal-card">
-      <code id="royal-acc-ref" style="word-break:break-all;">…</code>
-      <button type="button" id="royal-acc-copy" class="royal-btn" style="margin-top:8px;" data-loc-key="account.referCopyButton">Copy link</button>
+    <h3 class="royal-account__section-h" data-loc-key="account.referHeading">Refer a friend</h3>
+    <div class="royal-account__referral-card">
+      <code id="royal-acc-ref" class="royal-account__referral-link">&hellip;</code>
+      <button type="button" id="royal-acc-copy" class="royal-account__btn royal-account__btn--ghost" data-loc-key="account.referCopyButton">Copy link</button>
     </div>
   {%- else -%}
-    <p data-loc-key="account.signInRequired">Please sign in to view your loyalty status.</p>
+    <div class="royal-account__signin">
+      <p data-loc-key="account.signInRequired">Please sign in to view your loyalty status.</p>
+    </div>
   {%- endif -%}
 
   <p id="royal-acc-status" class="royal-status" aria-live="polite"></p>
@@ -65,9 +87,13 @@
         }
 
         var b = document.getElementById('royal-acc-balance');
-        var t = document.getElementById('royal-acc-tier');
-        if (b) b.textContent = (d.balance || 0);
-        if (t) t.textContent = d.tier ? 'Tier: ' + d.tier : 'No tier yet';
+        if (b) b.textContent = (d.balance || 0).toLocaleString();
+
+        var tierEl = document.getElementById('royal-acc-tier');
+        if (tierEl && d.currentTier) {
+          tierEl.hidden = false;
+          tierEl.textContent = d.currentTier.name + ' member';
+        }
 
         var act = document.getElementById('royal-acc-activity');
         if (act) {
@@ -77,20 +103,26 @@
                   try { return new Date(a.date).toLocaleDateString(); }
                   catch (e) { return a.date; }
                 })();
-                return '<div class="royal-card">' + a.reason + ' — ' +
-                  (a.points > 0 ? '+' : '') + a.points + ' pts ' +
-                  '<span class="royal-muted">' + dateStr + '</span></div>';
+                return '<div class="royal-account__activity-row">' +
+                  '<div class="royal-account__activity-reason">' + a.reason + '</div>' +
+                  '<div class="royal-account__activity-meta">' +
+                    '<span class="royal-account__activity-points">' + (a.points > 0 ? '+' : '') + a.points + ' pts</span>' +
+                    '<span class="royal-account__activity-date">' + dateStr + '</span>' +
+                  '</div>' +
+                  '</div>';
               }).join('')
-            : '<p class="royal-muted">' + R.t('account.emptyActivity', 'No activity yet. Place an order to start earning.') + '</p>';
+            : '<p class="royal-account__muted">' + R.t('account.emptyActivity', 'No activity yet. Place an order to start earning.') + '</p>';
         }
         var rw = document.getElementById('royal-acc-rewards');
         if (rw) {
           rw.innerHTML = (d.rewards && d.rewards.length)
             ? d.rewards.map(function (x) {
-                return '<div class="royal-card"><strong>' + R.rewardLabel(x, d.currencyCode) +
-                  '</strong> — ' + x.pointsCost + ' pts</div>';
+                return '<div class="royal-account__reward-row">' +
+                  '<span class="royal-account__reward-label">' + R.rewardLabel(x, d.currencyCode) + '</span>' +
+                  '<span class="royal-account__reward-cost">' + x.pointsCost + ' pts</span>' +
+                  '</div>';
               }).join('')
-            : '<p class="royal-muted">' + R.t('empty.rewards', 'No rewards available yet — check back soon.') + '</p>';
+            : '<p class="royal-account__muted">' + R.t('empty.rewards', 'No rewards available yet. Check back soon.') + '</p>';
         }
         var ref = document.getElementById('royal-acc-ref');
         if (ref && d.referralLink) {
@@ -120,7 +152,7 @@
   "target": "section",
   "settings": [
     { "type": "text", "id": "heading", "label": "Heading", "default": "Your loyalty" },
-    { "type": "color", "id": "accent", "label": "Accent", "default": "#2C2A29" },
+    { "type": "color", "id": "accent", "label": "Fallback accent", "default": "#2C2A29" },
     { "type": "text", "id": "proxy_base", "label": "App proxy base path", "default": "/apps/royal" }
   ]
 }
