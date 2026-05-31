@@ -156,6 +156,10 @@ export interface StorefrontPayload {
   earnRules: StorefrontEarnRule[];
   rewards: StorefrontReward[];
   referralLink: string | null;
+  /** Per-side rewards for a qualified referral. Drives the "You'll get X /
+   *  Your friend will get Y" copy on the launcher and loyalty page. Both
+   *  values come from the merchant's referral settings. */
+  referralRewards: { referrer: number; referee: number };
   activity: StorefrontActivity[];
   /** Flat key→value map for the active storefront locale, merging merchant
    *  overrides on top of the baked defaults from
@@ -359,6 +363,21 @@ export async function buildStorefrontLoyaltyPayload(params: {
 
   const cashback: StorefrontCashback = readCashbackSettings(shop.aiConfigSnapshot);
 
+  // Referral reward sizes — fed to the launcher / loyalty page so the
+  // "You'll get X / Your friend gets Y" copy can substitute live values.
+  const referralSettings = await (async () => {
+    try {
+      const { getReferralSettings } = await import("./referrals.server");
+      return await getReferralSettings(shop.id);
+    } catch {
+      return { referrerPoints: 0, refereePoints: 0 } as { referrerPoints: number; refereePoints: number };
+    }
+  })();
+  const referralRewards = {
+    referrer: referralSettings.referrerPoints || 0,
+    referee: referralSettings.refereePoints || 0,
+  };
+
   // Build the social platforms list off the social earn rule's config blob.
   // Each entry becomes a Follow button on the storefront — server-side
   // computes the canonical platform URL so the client can be dumb.
@@ -503,6 +522,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       earnRules,
       rewards,
       referralLink: null,
+      referralRewards,
       activity: [],
       activeCodes: [],
       socialPlatforms,
@@ -547,6 +567,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
       earnRules,
       rewards,
       referralLink: null,
+      referralRewards,
       activity: [],
       activeCodes: [],
       socialPlatforms,
@@ -612,6 +633,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
     currencyCode: shop.currencyCode ?? "USD",
     earnRules,
     rewards,
+    referralRewards,
     referralLink: referralCode
       ? referralLink(shopDomain, referralCode)
       : null,

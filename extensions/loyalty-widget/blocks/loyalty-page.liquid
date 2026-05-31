@@ -110,7 +110,10 @@
 
   {%- if block.settings.show_referral and customer -%}
     <h2 class="royal-page__section-h" data-loc-key="page.referHeading">Refer a friend</h2>
-    <p class="royal-page__referral-desc" data-loc-key="page.referDescription">Share your link. You both get rewarded.</p>
+    <div class="royal-page__refer-rewards">
+      <div class="royal-page__refer-line" id="royal-page-refer-you"></div>
+      <div class="royal-page__refer-line" id="royal-page-refer-friend"></div>
+    </div>
     <div class="royal-page__referral-card">
       <code id="royal-ref-link" class="royal-page__referral-link" data-loc-key="page.referLoadingLink">Loading your link&hellip;</code>
       <button type="button" id="royal-ref-copy" class="royal-page__btn royal-page__btn--ghost" data-loc-key="page.referCopyButton">Copy link</button>
@@ -281,6 +284,23 @@
             });
           });
         }
+        // Populate the per-side reward lines under "Refer a friend".
+        var rr = d.referralRewards || { referrer: 0, referee: 0 };
+        var youGetEl = document.getElementById('royal-page-refer-you');
+        var friendGetEl = document.getElementById('royal-page-refer-friend');
+        if (youGetEl) {
+          youGetEl.textContent = R.tSubstitute(
+            R.t('refer.youGet', "You'll get {points} points"),
+            { points: rr.referrer }
+          );
+        }
+        if (friendGetEl) {
+          friendGetEl.textContent = R.tSubstitute(
+            R.t('refer.friendGets', 'Your friend will get {points} points'),
+            { points: rr.referee }
+          );
+        }
+
         var link = document.getElementById('royal-ref-link');
         if (link && d.referralLink) {
           link.textContent = d.referralLink;

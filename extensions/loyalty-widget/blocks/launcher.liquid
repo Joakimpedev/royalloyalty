@@ -600,10 +600,16 @@
             '</p>';
           return;
         }
+        var rr = payload.referralRewards || { referrer: 0, referee: 0 };
+        var youGetTpl = R.t('refer.youGet', "You'll get {points} points");
+        var friendGetsTpl = R.t('refer.friendGets', 'Your friend will get {points} points');
+        var rewardLines =
+          '<div class="royal-refer-rewards">' +
+            '<div class="royal-refer-rewards__line">' + R.tSubstitute(youGetTpl, { points: rr.referrer }) + '</div>' +
+            '<div class="royal-refer-rewards__line">' + R.tSubstitute(friendGetsTpl, { points: rr.referee }) + '</div>' +
+          '</div>';
         box.innerHTML =
-          '<p class="royal-muted" style="margin-bottom:8px;">' +
-          R.t('refer.descSignedIn', 'Share your link. You both earn when friends place their first order.') +
-          '</p>' +
+          rewardLines +
           '<div class="royal-active-code__row">' +
           '<code class="royal-active-code__code" id="royal-ref-link"></code>' +
           '<button type="button" class="royal-btn royal-btn--ghost" id="royal-ref-copy">' +
