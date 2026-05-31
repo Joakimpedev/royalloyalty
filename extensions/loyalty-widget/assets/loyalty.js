@@ -167,6 +167,10 @@
               "(none)"),
           "init() calls fired:       " +
             (window.__royalInitCalls || 0),
+          "balance watchdog ticks:   " +
+            (window.__royalBalanceTicks != null
+              ? window.__royalBalanceTicks
+              : "(not started)"),
           "inline-script canary:     " +
             (typeof window.__royalCanary === "number"
               ? "yes (n=" + window.__royalCanary + ")"
@@ -724,15 +728,43 @@
       window.__royalDiag.payloadStatus = "fetching…";
       window.__royalDiag.payloadStartedAt = startedAt;
     }
-    // 10s client-side timeout via AbortController so a hung server
-    // doesn't sit in "fetching…" forever. Surfaces as a visible
-    // "FAILED — TIMEOUT 10s" in the diag panel.
+    // Use a setInterval-based watchdog rather than setTimeout — the
+    // storefront/New Customer Accounts context has been observed to silently
+    // drop one-shot setTimeout callbacks, while setInterval keeps firing.
+    // Every 1s we (a) increment a tick counter so the diag can show that
+    // the watchdog is alive, and (b) at the 10s mark abort the fetch and
+    // flip payloadStatus.
     var ac =
       typeof AbortController !== "undefined" ? new AbortController() : null;
+    window.__royalBalanceTicks = 0;
+    var watchdog = setInterval(function () {
+      window.__royalBalanceTicks =
+        (window.__royalBalanceTicks || 0) + 1;
+      var status = window.__royalDiag && window.__royalDiag.payloadStatus;
+      if (status !== "fetching…") {
+        clearInterval(watchdog);
+        return;
+      }
+      if (window.__royalBalanceTicks >= 10) {
+        if (ac) {
+          try { ac.abort(); } catch (e) {}
+        }
+        if (window.__royalDiag) {
+          window.__royalDiag.payloadStatus =
+            "FAILED — TIMEOUT 10s (watchdog)";
+        }
+        clearInterval(watchdog);
+      }
+    }, 1000);
     var timeoutId = setTimeout(function () {
-      if (ac) ac.abort();
+      // Same job, redundant with the watchdog above. If setTimeout works
+      // we'll see "(setTimeout)"; if it doesn't, the watchdog will.
+      if (ac) {
+        try { ac.abort(); } catch (e) {}
+      }
       if (window.__royalDiag && window.__royalDiag.payloadStatus === "fetching…") {
-        window.__royalDiag.payloadStatus = "FAILED — TIMEOUT 10s";
+        window.__royalDiag.payloadStatus =
+          "FAILED — TIMEOUT 10s (setTimeout)";
       }
     }, 10000);
     var fetchOpts = { method: "GET" };
@@ -740,6 +772,7 @@
     api(cfg.proxy, "/loyalty/balance", fetchOpts)
       .then(function (d) {
         clearTimeout(timeoutId);
+        try { clearInterval(watchdog); } catch (e) {}
         if (window.__royalDiag) {
           window.__royalDiag.payloadStatus = "ok (200)";
           window.__royalDiag.lastFetchStatus = 200;
@@ -779,6 +812,7 @@
       })
       .catch(function (err) {
         clearTimeout(timeoutId);
+        try { clearInterval(watchdog); } catch (e) {}
         if (window.__royalDiag) {
           var d = err && err.royalDiag ? err.royalDiag : { note: "unknown" };
           // Preserve the TIMEOUT message if the abort fired before the catch.
