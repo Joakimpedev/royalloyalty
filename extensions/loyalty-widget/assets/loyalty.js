@@ -149,6 +149,12 @@
           "launcher load() called:   " +
             (__royalDiag.payloadStartedAt ? "yes" : "NO (init never reached load())"),
           "launcher stage:           " + (__royalDiag.launcherStage || "(none)"),
+          "inline-script canary:     " +
+            (typeof window.__royalCanary === "number"
+              ? "yes (n=" + window.__royalCanary + ")"
+              : "NO (inline scripts blocked — CSP?)"),
+          "script tags in body:      " +
+            document.querySelectorAll("script").length,
           "/loyalty/balance:         " + balanceLine,
         ];
         if (ssr) {
