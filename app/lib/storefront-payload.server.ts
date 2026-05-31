@@ -156,10 +156,15 @@ export interface StorefrontPayload {
   earnRules: StorefrontEarnRule[];
   rewards: StorefrontReward[];
   referralLink: string | null;
-  /** Per-side rewards for a qualified referral. Drives the "You'll get X /
-   *  Your friend will get Y" copy on the launcher and loyalty page. Both
-   *  values come from the merchant's referral settings. */
-  referralRewards: { referrer: number; referee: number };
+  /** Per-side rewards for a qualified referral. Drives the
+   *  "You'll get X points / Your friend will get N% off" copy on the
+   *  launcher and loyalty page. Comes from the merchant's referral
+   *  settings. */
+  referralRewards: {
+    referrer: number;
+    refereeDiscountType: "percent_off" | "amount_off";
+    refereeDiscountValue: number;
+  };
   activity: StorefrontActivity[];
   /** Flat key→value map for the active storefront locale, merging merchant
    *  overrides on top of the baked defaults from
@@ -370,12 +375,17 @@ export async function buildStorefrontLoyaltyPayload(params: {
       const { getReferralSettings } = await import("./referrals.server");
       return await getReferralSettings(shop.id);
     } catch {
-      return { referrerPoints: 0, refereePoints: 0 } as { referrerPoints: number; refereePoints: number };
+      return {
+        referrerPoints: 0,
+        refereeDiscountType: "percent_off" as const,
+        refereeDiscountValue: 0,
+      };
     }
   })();
   const referralRewards = {
     referrer: referralSettings.referrerPoints || 0,
-    referee: referralSettings.refereePoints || 0,
+    refereeDiscountType: referralSettings.refereeDiscountType || "percent_off",
+    refereeDiscountValue: referralSettings.refereeDiscountValue || 0,
   };
 
   // Build the social platforms list off the social earn rule's config blob.

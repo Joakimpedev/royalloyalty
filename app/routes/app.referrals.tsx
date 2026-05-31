@@ -108,15 +108,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
+  const refereeType = String(form.get("refereeDiscountType") ?? "percent_off");
   const next: ReferralSettings = {
     enabled: form.get("enabled") === "true",
     referrerPoints: Math.max(
       0,
       Number.parseInt(String(form.get("referrerPoints")), 10) || 0,
     ),
-    refereePoints: Math.max(
+    refereeDiscountType:
+      refereeType === "amount_off" ? "amount_off" : "percent_off",
+    refereeDiscountValue: Math.max(
       0,
-      Number.parseInt(String(form.get("refereePoints")), 10) || 0,
+      Number.parseFloat(String(form.get("refereeDiscountValue"))) || 0,
     ),
     reviewBeforePayout: form.get("reviewBeforePayout") === "true",
     holdbackHours: Math.max(
@@ -125,10 +128,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ),
     sameIpBlocks: form.get("sameIpBlocks") === "true",
   };
-  if (next.referrerPoints <= 0 && next.refereePoints <= 0) {
+  if (next.referrerPoints <= 0 && next.refereeDiscountValue <= 0) {
     return {
       ok: false,
-      message: "Set at least one reward (referrer or referee) above 0.",
+      message:
+        "Set at least one reward (your points or your friend's discount) above 0.",
+    };
+  }
+  if (
+    next.refereeDiscountType === "percent_off" &&
+    next.refereeDiscountValue > 100
+  ) {
+    return {
+      ok: false,
+      message: "Friend discount can't exceed 100%.",
     };
   }
   await saveReferralSettings(shop.id, next);
@@ -162,7 +175,8 @@ export default function ReferralsPage() {
     fd.set("_intent", "save");
     fd.set("enabled", String(form.enabled));
     fd.set("referrerPoints", String(form.referrerPoints));
-    fd.set("refereePoints", String(form.refereePoints));
+    fd.set("refereeDiscountType", form.refereeDiscountType);
+    fd.set("refereeDiscountValue", String(form.refereeDiscountValue));
     fd.set("reviewBeforePayout", String(form.reviewBeforePayout));
     fd.set("holdbackHours", String(form.holdbackHours));
     fd.set("sameIpBlocks", String(form.sameIpBlocks));
@@ -208,8 +222,13 @@ export default function ReferralsPage() {
             <s-choice value="on">Enabled</s-choice>
             <s-choice value="off">Disabled</s-choice>
           </ChoiceList>
+          <s-paragraph>
+            When someone uses your customer&apos;s referral link, Shopify
+            auto-applies a discount code at checkout. Once their first
+            qualifying order is placed, you award the referrer points.
+          </s-paragraph>
           <PointsField
-            label="Referrer reward"
+            label="You get (referrer reward)"
             value={form.referrerPoints}
             onChange={(next) =>
               setForm((f) => ({
@@ -218,16 +237,46 @@ export default function ReferralsPage() {
               }))
             }
           />
+          <s-paragraph>
+            Points awarded to the referrer after the friend&apos;s first
+            qualifying order (subject to the holdback below).
+          </s-paragraph>
+          <ChoiceList
+            label="Your friend gets (referee discount)"
+            value={form.refereeDiscountType}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                refereeDiscountType:
+                  v === "amount_off" ? "amount_off" : "percent_off",
+              }))
+            }
+          >
+            <s-choice value="percent_off">Percent off</s-choice>
+            <s-choice value="amount_off">Amount off</s-choice>
+          </ChoiceList>
           <PointsField
-            label="Referee reward"
-            value={form.refereePoints}
+            label={
+              form.refereeDiscountType === "percent_off"
+                ? "Discount percentage"
+                : "Discount amount"
+            }
+            suffix={form.refereeDiscountType === "percent_off" ? "%" : ""}
+            value={form.refereeDiscountValue}
             onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                refereePoints: Math.max(0, Number.parseInt(next, 10) || 0),
+                refereeDiscountValue: Math.max(
+                  0,
+                  Number.parseFloat(next) || 0,
+                ),
               }))
             }
           />
+          <s-paragraph>
+            Shopify auto-applies this discount when the friend opens the
+            referral link. Stacks with other discounts when both allow it.
+          </s-paragraph>
         </s-stack>
       </s-section>
 

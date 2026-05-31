@@ -44,6 +44,42 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     } catch {
       safeLog(topic, shop, "redemption code mark-used failed");
     }
+
+    // Try to qualify any Royal-issued referral codes present on this order.
+    // A code starting with ROYAL- and not matching a Redemption row is a
+    // referral code minted by issueReferralCode().
+    try {
+      const order = payload as OrdersCreatePayload;
+      const codes = (order.discount_codes ?? [])
+        .map((c) => (typeof c?.code === "string" ? c.code.trim() : ""))
+        .filter((c) => c && /^ROYAL-/i.test(c));
+      if (codes.length > 0) {
+        const { default: prisma } = await import("../db.server");
+        const { qualifyReferralByCode } = await import(
+          "../lib/referrals.server"
+        );
+        const shopRow = await prisma.shop.findUnique({
+          where: { shopDomain: shop },
+          select: { id: true },
+        });
+        if (shopRow) {
+          for (const code of codes) {
+            const res = await qualifyReferralByCode({
+              shopId: shopRow.id,
+              code,
+              orderId: String(order.id),
+              refereeEmail: order.customer?.email ?? null,
+              refereeShopifyCustomerId: order.customer?.id
+                ? String(order.customer.id)
+                : null,
+            });
+            safeLog(topic, shop, `referral code ${code}: ${res.outcome}`);
+          }
+        }
+      }
+    } catch {
+      safeLog(topic, shop, "referral qualification failed");
+    }
   } catch (err) {
     // Never leak PII. Log the shop + a generic note only.
     safeLog(topic, shop, "order processing error");
