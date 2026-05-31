@@ -1,59 +1,57 @@
 // Referral engine.
 //
-// Responsibilities:
-//  - issueReferralCode()       : unique code/link per member (idempotent),
-//                                also mints the matching Shopify discount
-//                                code so /discount/CODE auto-applies the
-//                                friend's discount at checkout
-//  - qualifyReferralByCode()   : on a qualifying order, immediately pay the
-//                                referrer their points
-//  - payoutReferral()          : ledger write (referrer earn)
+// Model:
+//   * Each member has one durable ROYAL- prefixed referral code.
+//   * The referral link is `https://store/?ref=CODE`. The storefront JS
+//     stores it in a cookie (royal_ref).
+//   * When a friend creates an account and lands on the storefront WHILE
+//     logged in, the storefront detects the cookie + the logged-in customer
+//     and POSTs to /loyalty/claim-referral, which:
+//       - validates the code
+//       - guards self-referral
+//       - records the attribution (refereeEmail on a new Referral row)
+//       - issues the configured store-credit amount to the friend
+//   * When that friend places their first order, orders/create matches the
+//     pending Referral row by email and pays the referrer their points.
+//
+// No Shopify discount codes are created or consumed. No `/discount/...` URL.
+// Store credit lives natively on the customer record so it survives logout
+// and applies the next time they check out logged in.
 //
 // Discipline:
-//  - Referral status only ever changes through transitionStatus("referral", ...).
-//  - Points only ever change through recordPointTransaction().
-//  - Every payout gates on canAwardLoyalty(shop).
-//  - No customer PII is ever logged.
-//
-// Fraud / holdback / review intentionally removed: the auto-detection caught
-// almost nothing in practice (a fresh email + fresh account bypassed every
-// heuristic), the holdback window delayed payouts without actually checking
-// for cancellations, and the manual review queue surfaced no useful signal to
-// the merchant. Referrers now get paid the instant the friend's order with
-// the referral code hits orders/create.
+//   * Referral status only ever changes through transitionStatus("referral", ...).
+//   * Points only ever change through recordPointTransaction().
+//   * Store credit only ever changes through creditStoreCredit().
+//   * Every payout gates on canAwardLoyalty(shop).
+//   * No customer PII is ever logged.
 import prisma from "../db.server";
 import { recordPointTransaction } from "./points.server";
 import { transitionStatus } from "./status.server";
 import { canAwardLoyalty } from "./quota.server";
 
-// Minimal GraphQL client shape — same one createDiscountCode uses in
-// loyalty.server.ts. We do NOT import that one to avoid a circular dep.
+// Minimal GraphQL client shape so we don't import from loyalty.server.ts
+// and create a cycle.
 type GraphqlClient = (
   query: string,
   options?: { variables?: Record<string, unknown> },
 ) => Promise<{ json: () => Promise<any> }>;
 
-export type RefereeDiscountType = "percent_off" | "amount_off";
-
 export interface ReferralSettings {
   enabled: boolean;
-  /** Points the referrer earns the moment the friend's first qualifying
-   *  order with the referral code is detected. */
+  /** Points the referrer earns when the friend's first qualifying order
+   *  comes through. */
   referrerPoints: number;
-  /** What the friend gets at checkout. Shopify auto-applies the discount
-   *  code embedded in the referral link. */
-  refereeDiscountType: RefereeDiscountType;
-  refereeDiscountValue: number;
+  /** Store credit the friend gets the moment they sign up via a referral
+   *  link. Denominated in the shop's currency. */
+  refereeStoreCreditAmount: number;
 }
 
 const DEFAULT_SETTINGS: ReferralSettings = {
   enabled: false,
   referrerPoints: 500,
-  refereeDiscountType: "percent_off",
-  refereeDiscountValue: 10,
+  refereeStoreCreditAmount: 10,
 };
 
-// Referral settings live on Shop.aiConfigSnapshot.referrals.
 function readSettings(snapshot: unknown): ReferralSettings {
   const snap =
     snapshot && typeof snapshot === "object"
@@ -105,22 +103,16 @@ function genCode(): string {
 
 /**
  * Issue (or fetch) the member's referral code. One PENDING "invite" Referral
- * row per member acts as the durable code holder. Idempotent — returns the
- * existing code if present.
+ * row per member acts as the durable code holder. Idempotent.
  *
- * Also mints the matching Shopify discount code so /discount/CODE auto-
- * applies the friend's discount at checkout. Caller may pass admin (admin
- * UI / webhooks) or omit it; in the omit case we lazily obtain an offline
- * session via withFreshToken so the storefront proxy can also trigger a
- * mint on the customer's first link open.
+ * If we find an existing row that uses the legacy plain-8-char code format
+ * (pre-ROYAL- prefix), we drop it and regenerate so the orders/create webhook
+ * can spot the code reliably.
  */
 export async function issueReferralCode(params: {
   shopId: string;
   memberId: string;
-  admin?: { graphql: GraphqlClient };
 }): Promise<{ code: string }> {
-  const settings = await getReferralSettings(params.shopId);
-
   const existing = await prisma.referral.findFirst({
     where: {
       shopId: params.shopId,
@@ -131,22 +123,12 @@ export async function issueReferralCode(params: {
     orderBy: { createdAt: "asc" },
   });
 
-  // If we already have a row but it predates the ROYAL- prefix format,
-  // regenerate it. Old rows can't be matched by the orders webhook and
-  // were never minted as Shopify discounts.
   if (existing && !/^ROYAL-/i.test(existing.code)) {
     await prisma.referral.delete({ where: { id: existing.id } });
   } else if (existing) {
-    // Self-heal: always attempt the mint on every issue. Shopify rejects
-    // duplicates with a userError we recognise and swallow, so this is
-    // safe to run on every link request.
-    if (settings.enabled) {
-      await tryMint(params, existing.code, settings);
-    }
     return { code: existing.code };
   }
 
-  // Retry on the unique(code) constraint.
   for (let attempt = 0; attempt < 6; attempt++) {
     const code = `ROYAL-${genCode()}`;
     try {
@@ -158,119 +140,146 @@ export async function issueReferralCode(params: {
           status: "PENDING",
         },
       });
-      if (settings.enabled) {
-        await tryMint(params, code, settings);
-      }
       return { code: row.code };
     } catch {
-      // unique violation — try another code
+      // unique violation — retry with another code
     }
   }
   throw new Error("Could not allocate a unique referral code.");
 }
 
-async function tryMint(
-  params: { shopId: string; admin?: { graphql: GraphqlClient } },
-  code: string,
-  settings: ReferralSettings,
-): Promise<void> {
-  try {
-    if (params.admin) {
-      await mintShopifyReferralDiscount(params.admin.graphql, code, settings);
-    } else {
-      const shop = await prisma.shop.findUnique({
-        where: { id: params.shopId },
-        select: { shopDomain: true },
-      });
-      if (!shop) return;
-      const { withFreshToken } = await import("./token.server");
-      await withFreshToken(shop.shopDomain, async (admin) =>
-        mintShopifyReferralDiscount(admin.graphql, code, settings),
-      );
-    }
-    // eslint-disable-next-line no-console
-    console.log(`[referrals] mint ok shop=${params.shopId} code=${code}`);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (/already exists|has already been taken/i.test(msg)) {
-      // Duplicate is the happy path on every subsequent issue call.
-      // eslint-disable-next-line no-console
-      console.log(`[referrals] mint dup ok shop=${params.shopId} code=${code}`);
-      return;
-    }
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[referrals] mint FAILED shop=${params.shopId} code=${code} reason=${msg}`,
-    );
-  }
+export function referralLink(shopDomain: string, code: string): string {
+  // ?ref=CODE on the homepage. The storefront extension reads the param and
+  // stores it in a cookie; the attribution fires the moment the customer is
+  // signed in.
+  return `https://${shopDomain}/?ref=${encodeURIComponent(code)}`;
+}
+
+export interface ClaimReferralResult {
+  ok: boolean;
+  status:
+    | "claimed"
+    | "already_claimed"
+    | "self_referral"
+    | "no_code"
+    | "disabled"
+    | "no_customer"
+    | "credit_failed";
+  amount?: number;
+  currencyCode?: string;
+  error?: string;
 }
 
 /**
- * Create a Shopify basic discount code with the merchant's configured
- * percent_off / amount_off value. Multi-use (every friend who clicks the
- * referrer's link applies the same code). Combines with other discounts.
+ * Friend just landed on the storefront WHILE logged in and the storefront
+ * JS handed us the cookie value + logged-in customer id. Validate, record,
+ * and issue store credit.
  */
-async function mintShopifyReferralDiscount(
-  graphql: GraphqlClient,
-  code: string,
-  settings: ReferralSettings,
-): Promise<void> {
-  const now = new Date().toISOString();
-  let customerGets: Record<string, unknown>;
-  if (settings.refereeDiscountType === "percent_off") {
-    const pct = Math.max(
-      0,
-      Math.min(1, (settings.refereeDiscountValue || 0) / 100),
-    );
-    customerGets = { value: { percentage: pct }, items: { all: true } };
-  } else {
-    customerGets = {
-      value: {
-        discountAmount: {
-          amount: (settings.refereeDiscountValue || 0).toFixed(2),
-          appliesOnEachItem: false,
-        },
-      },
-      items: { all: true },
+export async function claimReferral(params: {
+  shopId: string;
+  shopifyCustomerId: string;
+  customerEmail: string | null;
+  code: string;
+  graphql: GraphqlClient;
+  shopCurrencyCode: string;
+}): Promise<ClaimReferralResult> {
+  const settings = await getReferralSettings(params.shopId);
+  if (!settings.enabled) return { ok: false, status: "disabled" };
+
+  if (!params.shopifyCustomerId) {
+    return { ok: false, status: "no_customer" };
+  }
+
+  // Find the base PENDING invite row for this code.
+  const baseRow = await prisma.referral.findFirst({
+    where: {
+      shopId: params.shopId,
+      code: params.code,
+      refereeEmail: null,
+      qualifiedOrderId: null,
+    },
+  });
+  if (!baseRow) return { ok: false, status: "no_code" };
+
+  // Self-referral guard: referrer used their own code.
+  const referrer = await prisma.member.findUnique({
+    where: { id: baseRow.referrerId },
+    select: { shopifyCustomerId: true, email: true },
+  });
+  if (
+    referrer?.shopifyCustomerId === params.shopifyCustomerId ||
+    (referrer?.email &&
+      params.customerEmail &&
+      referrer.email.toLowerCase() === params.customerEmail.toLowerCase())
+  ) {
+    return { ok: false, status: "self_referral" };
+  }
+
+  // Idempotency — was this customer already claimed against this code?
+  const dup = await prisma.referral.findFirst({
+    where: {
+      shopId: params.shopId,
+      referrerId: baseRow.referrerId,
+      refereeEmail: (params.customerEmail || "").toLowerCase().trim() || null,
+      status: { not: "CANCELLED" },
+      // Has a refereeEmail set so it's a per-friend row, not the base invite.
+      NOT: { refereeEmail: null },
+    },
+  });
+  if (dup) {
+    return {
+      ok: true,
+      status: "already_claimed",
+      amount: settings.refereeStoreCreditAmount,
+      currencyCode: params.shopCurrencyCode,
     };
   }
-  const basicCodeDiscount: Record<string, unknown> = {
-    title: `Royal Loyalty referral`,
-    code,
-    startsAt: now,
-    customerSelection: { all: true },
-    customerGets,
-    appliesOncePerCustomer: true,
-    combinesWith: {
-      orderDiscounts: true,
-      productDiscounts: true,
-      shippingDiscounts: true,
-    },
-  };
-  const MUTATION = `#graphql
-    mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
-      discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscountNode { id }
-        userErrors { field message }
-      }
-    }`;
-  const resp = await graphql(MUTATION, {
-    variables: { basicCodeDiscount },
-  });
-  const body = await resp.json();
-  const errs = body?.data?.discountCodeBasicCreate?.userErrors as
-    | Array<{ message: string }>
-    | undefined;
-  if (errs && errs.length > 0) {
-    throw new Error(errs.map((e) => e.message).join("; "));
-  }
-}
 
-export function referralLink(shopDomain: string, code: string): string {
-  // /discount/CODE makes Shopify auto-apply the discount code at checkout
-  // and redirect the visitor to the store. When the friend places an order,
-  // the code shows up in order.discount_codes and we match by code.
-  return `https://${shopDomain}/discount/${encodeURIComponent(code)}`;
+  // Quota gate (the credit issue counts toward monthly volume in
+  // canAwardLoyalty's accounting).
+  const allowed = await canAwardLoyalty(params.shopId);
+  if (!allowed) {
+    return { ok: false, status: "credit_failed", error: "Plan quota reached." };
+  }
+
+  // Record the attribution row first so a partial credit failure still
+  // leaves a trail.
+  const claimRow = await prisma.referral.create({
+    data: {
+      shopId: params.shopId,
+      referrerId: baseRow.referrerId,
+      code: `${baseRow.code}-${genCode().slice(0, 4)}`,
+      refereeEmail: (params.customerEmail || "").toLowerCase().trim() || null,
+      status: "ACTIVE",
+    },
+  });
+
+  // Issue the store credit.
+  if (settings.refereeStoreCreditAmount > 0) {
+    const { creditStoreCredit } = await import("./storecredit.server");
+    const credit = await creditStoreCredit({
+      graphql: params.graphql,
+      shopId: params.shopId,
+      shopifyCustomerId: params.shopifyCustomerId,
+      amount: settings.refereeStoreCreditAmount,
+      currencyCode: params.shopCurrencyCode,
+      reason: `Referral welcome credit [referral:${claimRow.id}]`,
+    });
+    if (!credit.ok) {
+      return {
+        ok: false,
+        status: "credit_failed",
+        error: credit.error ?? "Store credit issue failed.",
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    status: "claimed",
+    amount: settings.refereeStoreCreditAmount,
+    currencyCode: params.shopCurrencyCode,
+  };
 }
 
 export interface QualifyResult {
@@ -279,71 +288,54 @@ export interface QualifyResult {
 }
 
 /**
- * Qualify a referral by the discount code applied to an order, and pay the
- * referrer immediately. No fraud heuristics, no holdback, no manual review.
- *
- * Idempotent on (shopId, orderId): a re-delivery of the orders/create
- * webhook is a no-op.
+ * Friend just placed an order. If their email matches a previously-claimed
+ * pending referral row (status=ACTIVE, qualifiedOrderId=null), mark it
+ * qualified and pay the referrer their points.
  */
-export async function qualifyReferralByCode(params: {
+export async function qualifyReferralByEmail(params: {
   shopId: string;
-  code: string;
+  refereeEmail: string;
   orderId: string;
-  refereeEmail?: string | null;
-  refereeIp?: string | null;
-  refereeShopifyCustomerId?: string | null;
 }): Promise<QualifyResult> {
   const settings = await getReferralSettings(params.shopId);
   if (!settings.enabled) return { outcome: "no_referral" };
 
-  // Find the base PENDING "invite" row for this code.
-  const baseRow = await prisma.referral.findFirst({
+  const email = (params.refereeEmail || "").toLowerCase().trim();
+  if (!email) return { outcome: "no_referral" };
+
+  const claim = await prisma.referral.findFirst({
     where: {
       shopId: params.shopId,
-      code: params.code,
+      refereeEmail: email,
       qualifiedOrderId: null,
+      status: "ACTIVE",
     },
     orderBy: { createdAt: "asc" },
   });
-  if (!baseRow) return { outcome: "no_referral" };
+  if (!claim) return { outcome: "no_referral" };
 
-  // Idempotency: this order already qualified some referral.
   const dupOrder = await prisma.referral.findFirst({
     where: { shopId: params.shopId, qualifiedOrderId: params.orderId },
     select: { id: true },
   });
   if (dupOrder) return { outcome: "already_qualified" };
 
-  const allowed = await canAwardLoyalty(params.shopId);
-  if (!allowed) return { outcome: "blocked_quota", referralId: baseRow.id };
-
-  // Spawn a fresh row representing THIS friend's qualified purchase. The
-  // base PENDING row stays usable for the next friend.
-  const qualifyingRow = await prisma.referral.create({
-    data: {
-      shopId: params.shopId,
-      referrerId: baseRow.referrerId,
-      code: `${baseRow.code}-${genCode().slice(0, 4)}`,
-      refereeEmail: (params.refereeEmail ?? "").toLowerCase().trim() || null,
-      refereeIp: params.refereeIp ?? null,
-      qualifiedOrderId: params.orderId,
-      status: "ACTIVE",
-    },
+  await prisma.referral.update({
+    where: { id: claim.id },
+    data: { qualifiedOrderId: params.orderId },
   });
 
   await payoutReferral({
     shopId: params.shopId,
-    referralId: qualifyingRow.id,
+    referralId: claim.id,
     settings,
   });
-  return { outcome: "paid", referralId: qualifyingRow.id };
+  return { outcome: "paid", referralId: claim.id };
 }
 
 /**
- * Pay out the referrer for a qualified referral row. The referee already
- * received their reward (the discount) at checkout, so no referee ledger
- * write here. Idempotent against the point-transaction reason tag, so a
- * second call is a no-op.
+ * Pay out the referrer for a qualified referral row. Idempotent against the
+ * point-transaction reason tag.
  */
 export async function payoutReferral(params: {
   shopId: string;
@@ -360,7 +352,6 @@ export async function payoutReferral(params: {
   if (!referral.qualifiedOrderId)
     return { ok: false, reason: "not_qualified" };
 
-  // Idempotency guard on the ledger.
   const priorPayout = await prisma.pointTransaction.findFirst({
     where: {
       shopId: params.shopId,

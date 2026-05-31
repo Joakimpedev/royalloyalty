@@ -338,6 +338,55 @@
     }
   }
 
+  /* Read the royal_ref cookie value (or null). */
+  function readRefCookie() {
+    try {
+      var m = document.cookie.match(/(?:^|; )royal_ref=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* Clear the royal_ref cookie (called after a successful claim). */
+  function clearRefCookie() {
+    try {
+      document.cookie =
+        "royal_ref=;path=/;max-age=0;SameSite=Lax";
+    } catch (e) {
+      /* non-fatal */
+    }
+  }
+
+  /* Once-per-session guard so we don't hammer the proxy. */
+  var _claimAttempted = false;
+
+  /* If a royal_ref cookie is present AND the current visitor is signed in,
+   * post the code to the claim endpoint. Server records the attribution,
+   * issues the welcome store credit, and we drop the cookie on success.
+   *
+   * Called from inside the loadBalance flow because that's the moment we
+   * know whether the visitor is signed in. */
+  function maybeClaimReferral(cfg, d) {
+    if (_claimAttempted) return;
+    if (!cfg.loggedIn) return;
+    var code = readRefCookie();
+    if (!code) return;
+    _claimAttempted = true;
+    api(cfg.proxy, "/loyalty/claim-referral", {
+      method: "POST",
+      body: JSON.stringify({ code: code }),
+    })
+      .then(function (res) {
+        if (res && (res.ok === true || res.status === "already_claimed")) {
+          clearRefCookie();
+        }
+      })
+      .catch(function () {
+        /* leave the cookie around for the next page load to retry */
+      });
+  }
+
   /* Apply branding (colors + copy) from the /loyalty/balance response onto a
    * widget's root element. Idempotent — safe to call on every reload.
    *
@@ -455,6 +504,9 @@
         // (ar/he/ur) get a global flag the renderers consult before
         // injecting cards.
         if (d && d.localization) setBundle(d.localization);
+        // Auto-claim referral if the visitor is signed in and has a
+        // royal_ref cookie. Idempotent on the server.
+        try { maybeClaimReferral(cfg, d); } catch (e) { /* non-fatal */ }
         if (d && d.locale) {
           _localeCode = d.locale.code || "en";
           _isRtl = !!d.locale.rtl;

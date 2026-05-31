@@ -170,6 +170,62 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       }
       return jsonCors({ ok: true, result });
     }
+    if (sub === "loyalty/claim-referral") {
+      // Storefront detected `royal_ref` cookie + a logged-in customer and
+      // is asking us to record the attribution + issue the welcome store
+      // credit. App Proxy already supplied the customerId via query string.
+      if (!customerId) {
+        return jsonCors({ ok: false, error: "no_customer" }, 401);
+      }
+      const code = typeof body.code === "string" ? body.code.trim() : "";
+      if (!code) return jsonCors({ ok: false, error: "no_code" }, 400);
+
+      // We need the customer's email and the shop currency; pull them now.
+      const shop = await prisma.shop.findUnique({
+        where: { shopDomain },
+        select: { id: true, currencyCode: true },
+      });
+      if (!shop) return jsonCors({ ok: false, error: "shop_not_found" }, 404);
+
+      const { claimReferral } = await import("../lib/referrals.server");
+      const result = await withFreshToken(shopDomain, async (admin) => {
+        // Read the customer's email server-side from Shopify so we don't
+        // trust client-submitted values.
+        let customerEmail: string | null = null;
+        try {
+          const r = await admin.graphql(
+            `#graphql
+            query refClaimCustomer($id: ID!) {
+              customer(id: $id) { email }
+            }`,
+            {
+              variables: {
+                id: `gid://shopify/Customer/${customerId}`,
+              },
+            },
+          );
+          const j = (await r.json()) as any;
+          customerEmail = j?.data?.customer?.email ?? null;
+        } catch {
+          /* email is best-effort; the claim still proceeds without it */
+        }
+        return claimReferral({
+          shopId: shop.id,
+          shopifyCustomerId: String(customerId),
+          customerEmail,
+          code,
+          graphql: admin.graphql,
+          shopCurrencyCode: shop.currencyCode ?? "USD",
+        });
+      });
+      if (!result) {
+        return jsonCors({
+          ok: false,
+          error: "Could not reach Shopify right now.",
+        });
+      }
+      return jsonCors(result);
+    }
     if (sub === "loyalty/claim-social") {
       // Self-report social follow: customer clicked the Follow button on
       // the storefront. We trust the click (industry standard pattern;

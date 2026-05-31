@@ -287,8 +287,8 @@
         // Populate the per-side reward lines under "Refer a friend".
         var rr = d.referralRewards || {
           referrer: 0,
-          refereeDiscountType: 'percent_off',
-          refereeDiscountValue: 0,
+          refereeStoreCreditAmount: 0,
+          refereeStoreCreditCurrency: d.currencyCode || 'USD',
         };
         var youGetEl = document.getElementById('royal-page-refer-you');
         var friendGetEl = document.getElementById('royal-page-refer-friend');
@@ -299,14 +299,12 @@
           );
         }
         if (friendGetEl) {
-          var discountText = rr.refereeDiscountType === 'amount_off'
-            ? (R.formatMoney
-                ? R.formatMoney(rr.refereeDiscountValue, d.currencyCode || 'USD') + ' off'
-                : rr.refereeDiscountValue + ' off')
-            : rr.refereeDiscountValue + '% off';
+          var amountText = R.formatMoney
+            ? R.formatMoney(rr.refereeStoreCreditAmount, rr.refereeStoreCreditCurrency)
+            : (rr.refereeStoreCreditCurrency + ' ' + Number(rr.refereeStoreCreditAmount).toFixed(2));
           friendGetEl.textContent = R.tSubstitute(
-            R.t('refer.friendGetsDiscount', 'Your friend will get {discount}'),
-            { discount: discountText }
+            R.t('refer.friendGetsCredit', 'Your friend will get {amount} store credit'),
+            { amount: amountText }
           );
         }
 

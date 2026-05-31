@@ -157,13 +157,13 @@ export interface StorefrontPayload {
   rewards: StorefrontReward[];
   referralLink: string | null;
   /** Per-side rewards for a qualified referral. Drives the
-   *  "You'll get X points / Your friend will get N% off" copy on the
-   *  launcher and loyalty page. Comes from the merchant's referral
-   *  settings. */
+   *  "You'll get X points / Your friend will get $N store credit" copy
+   *  on the launcher and loyalty page. Comes from the merchant's
+   *  referral settings. */
   referralRewards: {
     referrer: number;
-    refereeDiscountType: "percent_off" | "amount_off";
-    refereeDiscountValue: number;
+    refereeStoreCreditAmount: number;
+    refereeStoreCreditCurrency: string;
   };
   activity: StorefrontActivity[];
   /** Flat key→value map for the active storefront locale, merging merchant
@@ -369,23 +369,21 @@ export async function buildStorefrontLoyaltyPayload(params: {
   const cashback: StorefrontCashback = readCashbackSettings(shop.aiConfigSnapshot);
 
   // Referral reward sizes — fed to the launcher / loyalty page so the
-  // "You'll get X / Your friend gets Y" copy can substitute live values.
+  // "You'll get X / Your friend gets $Y store credit" copy can substitute
+  // live values.
   const referralSettings = await (async () => {
     try {
       const { getReferralSettings } = await import("./referrals.server");
       return await getReferralSettings(shop.id);
     } catch {
-      return {
-        referrerPoints: 0,
-        refereeDiscountType: "percent_off" as const,
-        refereeDiscountValue: 0,
-      };
+      return { referrerPoints: 0, refereeStoreCreditAmount: 0 };
     }
   })();
   const referralRewards = {
     referrer: referralSettings.referrerPoints || 0,
-    refereeDiscountType: referralSettings.refereeDiscountType || "percent_off",
-    refereeDiscountValue: referralSettings.refereeDiscountValue || 0,
+    refereeStoreCreditAmount:
+      referralSettings.refereeStoreCreditAmount || 0,
+    refereeStoreCreditCurrency: shop.currencyCode ?? "USD",
   };
 
   // Build the social platforms list off the social earn rule's config blob.

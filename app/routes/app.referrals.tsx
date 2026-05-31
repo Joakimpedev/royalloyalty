@@ -71,34 +71,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
   const intent = String(form.get("_intent"));
 
-  const refereeType = String(form.get("refereeDiscountType") ?? "percent_off");
   const next: ReferralSettings = {
     enabled: form.get("enabled") === "true",
     referrerPoints: Math.max(
       0,
       Number.parseInt(String(form.get("referrerPoints")), 10) || 0,
     ),
-    refereeDiscountType:
-      refereeType === "amount_off" ? "amount_off" : "percent_off",
-    refereeDiscountValue: Math.max(
+    refereeStoreCreditAmount: Math.max(
       0,
-      Number.parseFloat(String(form.get("refereeDiscountValue"))) || 0,
+      Number.parseFloat(String(form.get("refereeStoreCreditAmount"))) || 0,
     ),
   };
-  if (next.referrerPoints <= 0 && next.refereeDiscountValue <= 0) {
+  if (next.referrerPoints <= 0 && next.refereeStoreCreditAmount <= 0) {
     return {
       ok: false,
       message:
-        "Set at least one reward (your points or your friend's discount) above 0.",
-    };
-  }
-  if (
-    next.refereeDiscountType === "percent_off" &&
-    next.refereeDiscountValue > 100
-  ) {
-    return {
-      ok: false,
-      message: "Friend discount can't exceed 100%.",
+        "Set at least one reward (your points or your friend's store credit) above 0.",
     };
   }
   await saveReferralSettings(shop.id, next);
@@ -133,8 +121,10 @@ export default function ReferralsPage() {
     fd.set("_intent", "save");
     fd.set("enabled", String(form.enabled));
     fd.set("referrerPoints", String(form.referrerPoints));
-    fd.set("refereeDiscountType", form.refereeDiscountType);
-    fd.set("refereeDiscountValue", String(form.refereeDiscountValue));
+    fd.set(
+      "refereeStoreCreditAmount",
+      String(form.refereeStoreCreditAmount),
+    );
     submit(fd, { method: "POST" });
   }, [form, submit]);
 
@@ -178,9 +168,10 @@ export default function ReferralsPage() {
             <s-choice value="off">Disabled</s-choice>
           </ChoiceList>
           <s-paragraph>
-            When someone uses your customer&apos;s referral link, Shopify
-            auto-applies a discount code at checkout. Once their first
-            qualifying order is placed, you award the referrer points.
+            When a friend creates an account from your customer&apos;s
+            referral link, they get store credit immediately. When the
+            friend places their first order, you award the referrer
+            points.
           </s-paragraph>
           <PointsField
             label="You get (referrer reward)"
@@ -194,58 +185,28 @@ export default function ReferralsPage() {
           />
           <s-paragraph>
             Points awarded to the referrer after the friend&apos;s first
-            qualifying order (subject to the holdback below).
+            qualifying order.
           </s-paragraph>
-          <ChoiceList
-            label="Your friend gets (referee discount)"
-            value={form.refereeDiscountType}
-            onChange={(v) =>
+          <MoneyField
+            label="Your friend gets (welcome store credit)"
+            value={form.refereeStoreCreditAmount}
+            currencyCode={shopMoney.currencyCode}
+            locale={shopMoney.locale}
+            step={0.01}
+            onChange={(next) =>
               setForm((f) => ({
                 ...f,
-                refereeDiscountType:
-                  v === "amount_off" ? "amount_off" : "percent_off",
+                refereeStoreCreditAmount: Math.max(
+                  0,
+                  Number.parseFloat(next) || 0,
+                ),
               }))
             }
-          >
-            <s-choice value="percent_off">Percent off</s-choice>
-            <s-choice value="amount_off">Amount off</s-choice>
-          </ChoiceList>
-          {form.refereeDiscountType === "percent_off" ? (
-            <PointsField
-              label="Discount percentage"
-              suffix="%"
-              value={form.refereeDiscountValue}
-              onChange={(next) =>
-                setForm((f) => ({
-                  ...f,
-                  refereeDiscountValue: Math.max(
-                    0,
-                    Number.parseFloat(next) || 0,
-                  ),
-                }))
-              }
-            />
-          ) : (
-            <MoneyField
-              label="Discount amount"
-              value={form.refereeDiscountValue}
-              currencyCode={shopMoney.currencyCode}
-              locale={shopMoney.locale}
-              step={0.01}
-              onChange={(next) =>
-                setForm((f) => ({
-                  ...f,
-                  refereeDiscountValue: Math.max(
-                    0,
-                    Number.parseFloat(next) || 0,
-                  ),
-                }))
-              }
-            />
-          )}
+          />
           <s-paragraph>
-            Shopify auto-applies this discount when the friend opens the
-            referral link. Stacks with other discounts when both allow it.
+            Issued the moment the friend creates an account from the
+            referral link. Native Shopify store credit, applied automatically
+            at their next checkout (when signed in).
           </s-paragraph>
         </s-stack>
       </s-section>
