@@ -189,14 +189,16 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
       const { claimReferral } = await import("../lib/referrals.server");
       const result = await withFreshToken(shopDomain, async (admin) => {
-        // Read the customer's email server-side from Shopify so we don't
-        // trust client-submitted values.
+        // Read the customer's email + order count from Shopify. The order
+        // count gates the welcome credit to brand-new customers only —
+        // existing buyers can't pile on by using any random referral link.
         let customerEmail: string | null = null;
+        let numberOfOrders = 0;
         try {
           const r = await admin.graphql(
             `#graphql
             query refClaimCustomer($id: ID!) {
-              customer(id: $id) { email }
+              customer(id: $id) { email numberOfOrders }
             }`,
             {
               variables: {
@@ -206,8 +208,16 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           );
           const j = (await r.json()) as any;
           customerEmail = j?.data?.customer?.email ?? null;
+          numberOfOrders = Number(j?.data?.customer?.numberOfOrders ?? 0);
         } catch {
-          /* email is best-effort; the claim still proceeds without it */
+          /* read failure leaves numberOfOrders=0; we still gate below */
+        }
+        if (numberOfOrders > 0) {
+          return {
+            ok: false as const,
+            status: "existing_customer" as const,
+            error: "Welcome credit is only available for new customers.",
+          };
         }
         return claimReferral({
           shopId: shop.id,

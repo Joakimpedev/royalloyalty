@@ -1160,3 +1160,81 @@
   margin: 0;
   padding: 14px 16px;
 }
+
+/* ==========================================================================
+ * Referral welcome banner (top of page when an unsigned visitor lands with
+ * the royal_ref cookie set).
+ * ========================================================================== */
+.royal-refer-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147482000;
+  background: var(--royal-primary, #2C2A29);
+  color: var(--royal-secondary, #fff);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+}
+.royal-refer-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 16px;
+}
+.royal-refer-banner__icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.royal-refer-banner__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+.royal-refer-banner__title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.royal-refer-banner__desc {
+  font-size: 13px;
+  opacity: 0.92;
+  margin-top: 2px;
+}
+.royal-refer-banner__cta {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--royal-secondary, #fff);
+  color: var(--royal-primary, #2C2A29);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.royal-refer-banner__cta:hover { opacity: 0.92; }
+.royal-refer-banner__close {
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.royal-refer-banner__close:hover { opacity: 1; }
+@media (max-width: 560px) {
+  .royal-refer-banner__inner { flex-wrap: wrap; row-gap: 8px; }
+  .royal-refer-banner__text { order: 2; width: 100%; }
+  .royal-refer-banner__cta { order: 3; }
+  .royal-refer-banner__close { order: 1; margin-left: auto; }
+}

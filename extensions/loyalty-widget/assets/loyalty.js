@@ -378,13 +378,105 @@
       body: JSON.stringify({ code: code }),
     })
       .then(function (res) {
-        if (res && (res.ok === true || res.status === "already_claimed")) {
+        var terminal =
+          res &&
+          (res.ok === true ||
+            res.status === "already_claimed" ||
+            res.status === "existing_customer" ||
+            res.status === "self_referral");
+        if (terminal) {
           clearRefCookie();
+          var ex = document.getElementById("royal-refer-banner");
+          if (ex) ex.parentNode.removeChild(ex);
         }
       })
       .catch(function () {
         /* leave the cookie around for the next page load to retry */
       });
+  }
+
+  /* Sticky welcome banner shown at the top of the storefront whenever a
+   * royal_ref cookie is set AND the visitor is NOT signed in. Tells them
+   * how much store credit they'll get and links to /account/register. The
+   * banner is dismissible (session-storage-flagged so it doesn't re-appear
+   * on subsequent page loads in the same session). */
+  function injectReferralBanner(cfg, d) {
+    if (cfg.loggedIn) return;
+    if (!readRefCookie()) return;
+    if (document.getElementById("royal-refer-banner")) return;
+    try {
+      if (sessionStorage.getItem("royal_refer_banner_dismissed") === "1")
+        return;
+    } catch (e) {
+      /* sessionStorage may be unavailable in private modes */
+    }
+    var rr = (d && d.referralRewards) || {
+      refereeStoreCreditAmount: 0,
+      refereeStoreCreditCurrency: (d && d.currencyCode) || "USD",
+    };
+    if (!(rr.refereeStoreCreditAmount > 0)) return;
+    var amountText = formatMoney
+      ? formatMoney(
+          rr.refereeStoreCreditAmount,
+          rr.refereeStoreCreditCurrency,
+        )
+      : rr.refereeStoreCreditCurrency +
+        " " +
+        Number(rr.refereeStoreCreditAmount).toFixed(2);
+    var title = t("refer.bannerTitle", "You've been referred");
+    var desc = tSubstitute(
+      t(
+        "refer.bannerDesc",
+        "Sign up to claim {amount} store credit on your next order",
+      ),
+      { amount: amountText },
+    );
+    var cta = t("refer.bannerCta", "Create account");
+    var dismiss = t("refer.bannerDismiss", "Dismiss");
+
+    var banner = document.createElement("div");
+    banner.id = "royal-refer-banner";
+    banner.className = "royal-refer-banner";
+    banner.setAttribute("role", "region");
+    banner.setAttribute("aria-label", title);
+    banner.innerHTML =
+      '<div class="royal-refer-banner__inner">' +
+      '<div class="royal-refer-banner__icon" aria-hidden="true">&#127873;</div>' +
+      '<div class="royal-refer-banner__text">' +
+      '<div class="royal-refer-banner__title">' +
+      escapeAttr(title) +
+      "</div>" +
+      '<div class="royal-refer-banner__desc">' +
+      escapeAttr(desc) +
+      "</div>" +
+      "</div>" +
+      '<a class="royal-refer-banner__cta" href="/account/register">' +
+      escapeAttr(cta) +
+      "</a>" +
+      '<button type="button" class="royal-refer-banner__close" aria-label="' +
+      escapeAttr(dismiss) +
+      '">&times;</button>' +
+      "</div>";
+    document.body.appendChild(banner);
+    var closeBtn = banner.querySelector(".royal-refer-banner__close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", function () {
+        banner.parentNode && banner.parentNode.removeChild(banner);
+        try {
+          sessionStorage.setItem("royal_refer_banner_dismissed", "1");
+        } catch (e) {
+          /* non-fatal */
+        }
+      });
+    }
+  }
+
+  function escapeAttr(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   /* Apply branding (colors + copy) from the /loyalty/balance response onto a
@@ -507,6 +599,8 @@
         // Auto-claim referral if the visitor is signed in and has a
         // royal_ref cookie. Idempotent on the server.
         try { maybeClaimReferral(cfg, d); } catch (e) { /* non-fatal */ }
+        // Inject the welcome banner when NOT signed in but cookie present.
+        try { injectReferralBanner(cfg, d); } catch (e) { /* non-fatal */ }
         if (d && d.locale) {
           _localeCode = d.locale.code || "en";
           _isRtl = !!d.locale.rtl;
