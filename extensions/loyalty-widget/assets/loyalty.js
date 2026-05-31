@@ -1008,6 +1008,88 @@
     mo.observe(document.body, { childList: true, subtree: true });
   }
 
+  /* Render the VIP tier grid into the given container. Renders all configured
+   * tiers as left→right stair-step cards, highlights the current tier (if
+   * any), and appends a progress bar toward the next tier. Hides the entire
+   * wrap when no tiers are configured. */
+  function renderTierGrid(wrap, list, d) {
+    if (!list) return;
+    var tiers = (d && d.tiers) || [];
+    if (!tiers.length) {
+      if (wrap) wrap.hidden = true;
+      list.innerHTML = "";
+      return;
+    }
+    if (wrap) wrap.hidden = false;
+    // Sort ascending by threshold to defeat any sortOrder drift; the merchant
+    // may have re-ordered tiers after creating them.
+    var sorted = tiers.slice().sort(function (a, b) {
+      return a.threshold - b.threshold;
+    });
+    var currentId = d.currentTier && d.currentTier.id;
+    var balance = d.balance || 0;
+    var html = '<div class="royal-tier-cards">';
+    for (var i = 0; i < sorted.length; i++) {
+      var ti = sorted[i];
+      var isCurrent = ti.id === currentId;
+      var classes = "royal-tier-card royal-tier-card--" + tierClass(ti.name);
+      if (isCurrent) classes += " royal-tier-card--current";
+      var threshLabel = ti.thresholdType === "spend"
+        ? ti.threshold.toLocaleString() + " spent"
+        : ti.threshold.toLocaleString() + " pts";
+      html +=
+        '<div class="' + classes + '">' +
+          '<div class="royal-tier-card__crown" aria-hidden="true">&#9819;</div>' +
+          '<div class="royal-tier-card__name">' + escapeHtml(ti.name) + '</div>' +
+          '<div class="royal-tier-card__thresh">' + threshLabel + '</div>' +
+          '<div class="royal-tier-card__mult">' + ti.earnMultiplier + '&times; earn</div>' +
+          (isCurrent ? '<div class="royal-tier-card__badge" data-loc-key="page.tiers.youAreHere">You are here</div>' : '') +
+        '</div>';
+    }
+    html += '</div>';
+    // Progress bar toward the next tier (only when there's somewhere to go).
+    if (d.nextTier && d.nextTier.pointsRemaining > 0) {
+      // Anchor the bar between the current tier's threshold and the next.
+      // For not-yet-enrolled customers (no currentTier) we anchor at 0.
+      var fromThreshold = d.currentTier ? d.currentTier.threshold : 0;
+      var span = Math.max(1, d.nextTier.threshold - fromThreshold);
+      var progressed = Math.min(span, Math.max(0, balance - fromThreshold));
+      var pct = Math.min(100, Math.max(0, Math.round((progressed / span) * 100)));
+      html +=
+        '<div class="royal-tier-progress">' +
+          '<div class="royal-tier-progress__label">' +
+            d.nextTier.pointsRemaining.toLocaleString() + ' pts to ' + escapeHtml(d.nextTier.name) +
+          '</div>' +
+          '<div class="royal-tier-progress__bar">' +
+            '<span style="width:' + pct + '%"></span>' +
+          '</div>' +
+        '</div>';
+    } else if (d.currentTier && !d.nextTier) {
+      html +=
+        '<div class="royal-tier-progress royal-tier-progress--max">' +
+          '<div class="royal-tier-progress__label">Top tier reached</div>' +
+        '</div>';
+    }
+    list.innerHTML = html;
+  }
+
+  // Map a tier name to a CSS class slug. Recognises bronze/silver/gold/platinum
+  // and falls back to "custom" for anything else.
+  function tierClass(name) {
+    var n = String(name || "").toLowerCase();
+    if (n === "bronze" || n === "silver" || n === "gold" || n === "platinum") return n;
+    return "custom";
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   window.RoyalLoyalty = {
     readConfig: readConfig,
     setStatus: setStatus,
@@ -1029,6 +1111,7 @@
     copyText: copyText,
     claimSocial: claimSocial,
     renderSocial: renderSocial,
+    renderTierGrid: renderTierGrid,
   };
 
   /* POST the social claim to the proxy. Used by renderSocial below. */

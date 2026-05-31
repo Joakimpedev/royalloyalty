@@ -126,10 +126,32 @@ export interface StorefrontActiveCode {
   type: string;
 }
 
+export interface StorefrontTier {
+  id: string;
+  name: string;
+  threshold: number;
+  thresholdType: string;
+  earnMultiplier: number;
+  sortOrder: number;
+}
+
+export interface StorefrontNextTier {
+  name: string;
+  threshold: number;
+  /** Points the customer still needs to reach this tier. */
+  pointsRemaining: number;
+}
+
 export interface StorefrontPayload {
   balance: number;
   enrolled: boolean;
   tier: string | null;
+  /** All tiers configured by the merchant, sorted ascending by threshold. */
+  tiers: StorefrontTier[];
+  /** The customer's current tier (full object — name, threshold, multiplier). */
+  currentTier: StorefrontTier | null;
+  /** The next tier above the customer's current one, with the points gap. */
+  nextTier: StorefrontNextTier | null;
   currencyCode: string;
   earnRules: StorefrontEarnRule[];
   rewards: StorefrontReward[];
@@ -167,6 +189,31 @@ export interface StorefrontPayload {
    *  default currency when the customer has no account yet. */
   storeCreditCurrency: string;
   branding: StorefrontBranding;
+}
+
+// Find the next tier above the customer's current one. Returns null if
+// the customer is already at the highest tier (nothing left to climb). When
+// the customer has no tier yet, this returns the lowest non-zero tier so
+// the storefront can render "X points to <first tier>" for newly-joined
+// members and visitors.
+function computeNextTier(
+  tiers: StorefrontTier[],
+  currentTier: StorefrontTier | null,
+  balance: number,
+): StorefrontNextTier | null {
+  // Tier rows arrive sorted by sortOrder; sort by threshold (asc) here too
+  // so the math is independent of how the merchant numbered them.
+  const sorted = [...tiers].sort((a, b) => a.threshold - b.threshold);
+  const above = sorted.filter(
+    (t) => t.threshold > (currentTier?.threshold ?? -1),
+  );
+  const next = above[0];
+  if (!next) return null;
+  return {
+    name: next.name,
+    threshold: next.threshold,
+    pointsRemaining: Math.max(0, next.threshold - balance),
+  };
 }
 
 // Hardcoded defaults that match the Liquid block defaults — so a brand-new
@@ -270,9 +317,10 @@ export async function buildStorefrontLoyaltyPayload(params: {
 }): Promise<StorefrontPayload> {
   const { shop, shopDomain, shopifyCustomerId } = params;
 
-  // Earn rules and rewards are shop-wide — load them in parallel regardless
-  // of customer presence so signed-out visitors still see "ways to earn".
-  let [earnRulesRows, rewardsRows] = await Promise.all([
+  // Earn rules, rewards, and tiers are shop-wide — load in parallel regardless
+  // of customer presence so signed-out visitors still see "ways to earn" and
+  // the tier ladder.
+  let [earnRulesRows, rewardsRows, tierRows] = await Promise.all([
     prisma.earnRule.findMany({
       where: { shopId: shop.id, enabled: true },
       orderBy: { action: "asc" },
@@ -281,7 +329,20 @@ export async function buildStorefrontLoyaltyPayload(params: {
       where: { shopId: shop.id, enabled: true },
       orderBy: { pointsCost: "asc" },
     }),
+    prisma.tier.findMany({
+      where: { shopId: shop.id },
+      orderBy: { sortOrder: "asc" },
+    }),
   ]);
+
+  const tiers: StorefrontTier[] = tierRows.map((t) => ({
+    id: t.id,
+    name: t.name,
+    threshold: t.threshold,
+    thresholdType: t.thresholdType,
+    earnMultiplier: t.earnMultiplier,
+    sortOrder: t.sortOrder,
+  }));
 
   // Self-healing backfill for shops that activated the program before the
   // seeding fix shipped. If the program is live but no earn-rule rows
@@ -435,6 +496,9 @@ export async function buildStorefrontLoyaltyPayload(params: {
       balance: 0,
       enrolled: false,
       tier: null,
+      tiers,
+      currentTier: null,
+      nextTier: null,
       currencyCode: shop.currencyCode ?? "USD",
       earnRules,
       rewards,
@@ -474,6 +538,11 @@ export async function buildStorefrontLoyaltyPayload(params: {
       balance: 0,
       enrolled: false,
       tier: null,
+      tiers,
+      currentTier: null,
+      // For a not-yet-enrolled customer, the "next tier" is the lowest
+      // non-zero tier — gives them something visible to aim for.
+      nextTier: computeNextTier(tiers, null, 0),
       currencyCode: shop.currencyCode ?? "USD",
       earnRules,
       rewards,
@@ -522,10 +591,24 @@ export async function buildStorefrontLoyaltyPayload(params: {
       }),
     ]);
 
+  const currentTier: StorefrontTier | null = member.currentTier
+    ? {
+        id: member.currentTier.id,
+        name: member.currentTier.name,
+        threshold: member.currentTier.threshold,
+        thresholdType: member.currentTier.thresholdType,
+        earnMultiplier: member.currentTier.earnMultiplier,
+        sortOrder: member.currentTier.sortOrder,
+      }
+    : null;
+
   return {
     balance,
     enrolled: true,
     tier: member.currentTier?.name ?? null,
+    tiers,
+    currentTier,
+    nextTier: computeNextTier(tiers, currentTier, balance),
     currencyCode: shop.currencyCode ?? "USD",
     earnRules,
     rewards,

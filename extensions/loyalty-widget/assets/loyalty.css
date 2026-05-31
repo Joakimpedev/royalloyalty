@@ -455,3 +455,199 @@
   cursor: pointer;
 }
 .royal-btn--ghost:hover { border-color: var(--royal-primary, #2C2A29); }
+
+/* ==========================================================================
+ * VIP tier ladder (loyalty page block)
+ * ========================================================================== */
+.royal-tier-grid { display: block; }
+.royal-tier-grid[hidden] { display: none !important; }
+.royal-tier-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.royal-tier-card {
+  background: #fff;
+  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  padding: 16px 14px;
+  text-align: center;
+  position: relative;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.royal-tier-card__crown {
+  display: block;
+  font-size: 22px;
+  line-height: 1;
+  margin-bottom: 8px;
+  color: #c9cccf;
+}
+.royal-tier-card__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #202223;
+  letter-spacing: 0.02em;
+}
+.royal-tier-card__thresh {
+  font-size: 12px;
+  color: #6d7175;
+  margin-top: 4px;
+}
+.royal-tier-card__mult {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--royal-primary, #2C2A29);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+}
+.royal-tier-card__badge {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--royal-primary, #2C2A29);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Metallic palettes — Bronze / Silver / Gold. The crown takes the metal
+ * color; the rest stays subtle so the cards read as a row, not a rainbow. */
+.royal-tier-card--bronze .royal-tier-card__crown { color: #B07A3A; }
+.royal-tier-card--silver .royal-tier-card__crown { color: #9CA0A8; }
+.royal-tier-card--gold   .royal-tier-card__crown { color: #F2B821; }
+.royal-tier-card--platinum .royal-tier-card__crown { color: #5F7B97; }
+
+/* Current tier — lift it, soft glow in the tier's metal. */
+.royal-tier-card--current {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  border-color: transparent;
+}
+.royal-tier-card--current.royal-tier-card--bronze {
+  background: linear-gradient(180deg, #FFF6EA 0%, #fff 70%);
+  box-shadow: 0 12px 24px rgba(176, 122, 58, 0.18);
+}
+.royal-tier-card--current.royal-tier-card--silver {
+  background: linear-gradient(180deg, #F4F5F7 0%, #fff 70%);
+  box-shadow: 0 12px 24px rgba(156, 160, 168, 0.22);
+}
+.royal-tier-card--current.royal-tier-card--gold {
+  background: linear-gradient(180deg, #FFF7DD 0%, #fff 70%);
+  box-shadow: 0 12px 24px rgba(242, 184, 33, 0.28);
+}
+.royal-tier-card--current.royal-tier-card--platinum {
+  background: linear-gradient(180deg, #ECF1F7 0%, #fff 70%);
+  box-shadow: 0 12px 24px rgba(95, 123, 151, 0.22);
+}
+.royal-tier-card--current.royal-tier-card--custom {
+  background: linear-gradient(180deg, rgba(0,0,0,0.04) 0%, #fff 70%);
+}
+
+.royal-tier-progress {
+  margin-top: 6px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 10px;
+}
+.royal-tier-progress__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #202223;
+  margin-bottom: 8px;
+}
+.royal-tier-progress__bar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.royal-tier-progress__bar span {
+  display: block;
+  height: 100%;
+  background: var(--royal-primary, #2C2A29);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.royal-tier-progress--max .royal-tier-progress__label {
+  color: var(--royal-primary, #2C2A29);
+}
+
+/* ==========================================================================
+ * Tier pill inside the launcher panel hub (compact form of the tier card)
+ * ========================================================================== */
+.royal-tier-pill {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 4px 10px;
+}
+.royal-tier-pill__crown {
+  font-size: 13px;
+  line-height: 1;
+}
+.royal-tier-pill__mult {
+  margin-left: 2px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+}
+.royal-tier-pill--bronze {
+  background: linear-gradient(135deg, #C7975A, #8B6332);
+  color: #fff;
+}
+.royal-tier-pill--bronze .royal-tier-pill__mult {
+  background: rgba(0, 0, 0, 0.18);
+  color: #fff;
+}
+.royal-tier-pill--silver {
+  background: linear-gradient(135deg, #D9D9D9, #9CA0A8);
+  color: #1B2547;
+}
+.royal-tier-pill--silver .royal-tier-pill__mult {
+  background: rgba(0, 0, 0, 0.12);
+  color: #1B2547;
+}
+.royal-tier-pill--gold {
+  background: linear-gradient(135deg, #F2B821, #C68B0F);
+  color: #1B2547;
+}
+.royal-tier-pill--gold .royal-tier-pill__mult {
+  background: rgba(0, 0, 0, 0.18);
+  color: #1B2547;
+}
+.royal-tier-pill--platinum {
+  background: linear-gradient(135deg, #B7C3D2, #5F7B97);
+  color: #fff;
+}
+.royal-tier-pill--platinum .royal-tier-pill__mult {
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
+}
+.royal-tier-pill--custom {
+  background: var(--royal-primary, #2C2A29);
+  color: #fff;
+}
+.royal-tier-pill--custom .royal-tier-pill__mult {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.royal-status-card__nextTier {
+  margin-top: 10px;
+}
+.royal-status-card__nextTier .royal-status-card__nextMeta {
+  margin: 0 0 6px;
+}

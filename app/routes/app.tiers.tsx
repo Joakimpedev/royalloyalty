@@ -32,13 +32,38 @@ async function requireShop(shopDomain: string) {
   return shop;
 }
 
+// Default tier ladder seeded the first time the merchant opens this page.
+// Bronze is the entry-level (0 points / 1.0×) so every member lands somewhere;
+// Silver and Gold give them something to climb toward.
+const DEFAULT_TIERS = [
+  { name: "Bronze", thresholdType: "points", threshold: 0, earnMultiplier: 1.0, sortOrder: 0 },
+  { name: "Silver", thresholdType: "points", threshold: 500, earnMultiplier: 1.2, sortOrder: 1 },
+  { name: "Gold", thresholdType: "points", threshold: 1500, earnMultiplier: 1.5, sortOrder: 2 },
+] as const;
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
-  const tiers = await prisma.tier.findMany({
+  let tiers = await prisma.tier.findMany({
     where: { shopId: shop.id },
     orderBy: { sortOrder: "asc" },
   });
+  // Seed defaults the first time the page is opened. Best-effort — if the
+  // create races with another tab the unique-ish (shopId, name) collision
+  // surfaces as a regular tier list on the next refresh.
+  if (tiers.length === 0) {
+    try {
+      await prisma.tier.createMany({
+        data: DEFAULT_TIERS.map((t) => ({ ...t, shopId: shop.id })),
+      });
+      tiers = await prisma.tier.findMany({
+        where: { shopId: shop.id },
+        orderBy: { sortOrder: "asc" },
+      });
+    } catch {
+      /* leave tiers empty — merchant can create manually */
+    }
+  }
   return {
     tiers: tiers.map((t) => ({
       id: t.id,

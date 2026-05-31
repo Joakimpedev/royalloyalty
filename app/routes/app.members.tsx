@@ -78,6 +78,48 @@ interface Row {
   createdAt: string;
   enrolled: boolean;
   balance: number;
+  tier: string | null;
+}
+
+// Pick the badge styling for a tier name. Bronze / Silver / Gold get
+// metallic tones; everything else (custom tiers, Platinum, etc.) gets a
+// neutral navy badge. Inline-style based since s-badge tones don't include
+// metallic colors.
+function tierBadgeStyle(name: string | null): React.CSSProperties {
+  const n = (name || "").toLowerCase();
+  const base: React.CSSProperties = {
+    display: "inline-block",
+    padding: "2px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: "0.02em",
+    lineHeight: "18px",
+  };
+  if (n === "bronze")
+    return {
+      ...base,
+      background: "linear-gradient(135deg, #C7975A, #8B6332)",
+      color: "#fff",
+    };
+  if (n === "silver")
+    return {
+      ...base,
+      background: "linear-gradient(135deg, #D9D9D9, #9CA0A8)",
+      color: "#1B2547",
+    };
+  if (n === "gold")
+    return {
+      ...base,
+      background: "linear-gradient(135deg, #F2B821, #C68B0F)",
+      color: "#1B2547",
+    };
+  // Fallback for custom tiers (Platinum, etc.).
+  return {
+    ...base,
+    background: "#1B2547",
+    color: "#F2B821",
+  };
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -168,6 +210,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (customer) {
       const mem: any = await prisma.member.findFirst({
         where: { shopId: shop.id, shopifyCustomerId: memberId },
+        include: { currentTier: true },
       });
       const txns: any[] = mem
         ? await prisma.pointTransaction.findMany({
@@ -211,6 +254,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         currency: customer.amountSpent?.currencyCode ?? "USD",
         enrolled: !!mem,
         balance,
+        tier: mem?.currentTier?.name ?? null,
+        tierMultiplier: mem?.currentTier?.earnMultiplier ?? null,
         transactions: txns.map((t: any) => ({
           id: t.id,
           type: t.type,
@@ -255,6 +300,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       orderBy: { enrolledAt: "desc" },
       take: PAGE_SIZE + 1,
       skip: offset,
+      include: { currentTier: true },
     });
     const hasNext = members.length > PAGE_SIZE;
     const pageMembers = members.slice(0, PAGE_SIZE);
@@ -298,6 +344,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           (profile?.createdAt as string) ?? m.enrolledAt.toISOString(),
         enrolled: true,
         balance: balanceById.get(m.shopifyCustomerId) ?? 0,
+        tier: m.currentTier?.name ?? null,
       };
     });
     pageInfo = {
@@ -320,6 +367,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const localMembers: any[] = numericIds.length
       ? await prisma.member.findMany({
           where: { shopId: shop.id, shopifyCustomerId: { in: numericIds } },
+          include: { currentTier: true },
         })
       : [];
     const memberByCustomerId = new Map<string, any>(
@@ -347,6 +395,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         createdAt: n.createdAt as string,
         enrolled: !!mem,
         balance,
+        tier: mem?.currentTier?.name ?? null,
       };
     });
     pageInfo = {
@@ -481,7 +530,7 @@ export default function MembersPage() {
               <s-table-header-row>
                 <s-table-header>Name</s-table-header>
                 <s-table-header>Email</s-table-header>
-                <s-table-header>Status</s-table-header>
+                <s-table-header>Tier</s-table-header>
                 <s-table-header>Points</s-table-header>
                 <s-table-header>Orders</s-table-header>
                 <s-table-header>Customer since</s-table-header>
@@ -499,11 +548,11 @@ export default function MembersPage() {
                     <s-table-cell>{r.name}</s-table-cell>
                     <s-table-cell>{r.email}</s-table-cell>
                     <s-table-cell>
-                      {/* Every Shopify customer is implicitly a member of the
-                          loyalty program — the local Member row is created
-                          lazily on first earn. "Excluded" (when implemented)
-                          will be the only non-Member state. */}
-                      <s-badge tone="success">Member</s-badge>
+                      {r.tier ? (
+                        <span style={tierBadgeStyle(r.tier)}>{r.tier}</span>
+                      ) : (
+                        <span style={{ color: "#6d7175", fontSize: 13 }}>—</span>
+                      )}
                     </s-table-cell>
                     <s-table-cell>{r.balance.toLocaleString()}</s-table-cell>
                     <s-table-cell>{r.orders}</s-table-cell>
@@ -724,8 +773,29 @@ function DetailSlideOver({
               <KpiStrip
                 items={[
                   {
-                    label: "Status",
-                    valueNode: <s-badge tone="success">Member</s-badge>,
+                    label: "Tier",
+                    valueNode: detail.tier ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <span style={tierBadgeStyle(detail.tier)}>
+                          {detail.tier}
+                        </span>
+                        {detail.tierMultiplier ? (
+                          <span style={{ fontSize: 13, color: "#6d7175" }}>
+                            {detail.tierMultiplier}× earn
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      <span style={{ color: "#6d7175", fontSize: 14 }}>
+                        Not assigned yet
+                      </span>
+                    ),
                   },
                   {
                     label: "Points balance",

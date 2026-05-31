@@ -256,8 +256,12 @@ function ProgramCatalog() {
       description:
         "Two-sided rewards when a customer brings a friend who buys.",
     },
-    // VIP tiers tile hidden — feature exists in backend but is not yet
-    // user-facing. Re-enable when tier UX is complete.
+    {
+      href: "/app/tiers",
+      title: "VIP tiers",
+      description:
+        "Promote customers automatically as they earn — each tier multiplies how fast they earn.",
+    },
     {
       href: "/app/storecredit",
       title: "Cashback",
