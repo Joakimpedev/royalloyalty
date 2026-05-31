@@ -119,6 +119,8 @@ export async function issueReferralCode(params: {
   memberId: string;
   admin?: { graphql: GraphqlClient };
 }): Promise<{ code: string }> {
+  const settings = await getReferralSettings(params.shopId);
+
   const existing = await prisma.referral.findFirst({
     where: {
       shopId: params.shopId,
@@ -128,9 +130,21 @@ export async function issueReferralCode(params: {
     },
     orderBy: { createdAt: "asc" },
   });
-  if (existing) return { code: existing.code };
 
-  const settings = await getReferralSettings(params.shopId);
+  // If we already have a row but it predates the ROYAL- prefix format,
+  // regenerate it. Old rows can't be matched by the orders webhook and
+  // were never minted as Shopify discounts.
+  if (existing && !/^ROYAL-/i.test(existing.code)) {
+    await prisma.referral.delete({ where: { id: existing.id } });
+  } else if (existing) {
+    // Self-heal: always attempt the mint on every issue. Shopify rejects
+    // duplicates with a userError we recognise and swallow, so this is
+    // safe to run on every link request.
+    if (settings.enabled) {
+      await tryMint(params, existing.code, settings);
+    }
+    return { code: existing.code };
+  }
 
   // Retry on the unique(code) constraint.
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -145,32 +159,7 @@ export async function issueReferralCode(params: {
         },
       });
       if (settings.enabled) {
-        try {
-          if (params.admin) {
-            await mintShopifyReferralDiscount(
-              params.admin.graphql,
-              code,
-              settings,
-            );
-          } else {
-            const shop = await prisma.shop.findUnique({
-              where: { id: params.shopId },
-              select: { shopDomain: true },
-            });
-            if (shop) {
-              const { withFreshToken } = await import("./token.server");
-              await withFreshToken(shop.shopDomain, async (admin) =>
-                mintShopifyReferralDiscount(admin.graphql, code, settings),
-              );
-            }
-          }
-        } catch (e) {
-          // Mint failure leaves the Referral row in place; the link is
-          // still copyable but Shopify won't apply a discount until the
-          // mint succeeds on a later call.
-          // eslint-disable-next-line no-console
-          console.warn("[referrals] mintShopifyReferralDiscount failed", e);
-        }
+        await tryMint(params, code, settings);
       }
       return { code: row.code };
     } catch {
@@ -178,6 +167,42 @@ export async function issueReferralCode(params: {
     }
   }
   throw new Error("Could not allocate a unique referral code.");
+}
+
+async function tryMint(
+  params: { shopId: string; admin?: { graphql: GraphqlClient } },
+  code: string,
+  settings: ReferralSettings,
+): Promise<void> {
+  try {
+    if (params.admin) {
+      await mintShopifyReferralDiscount(params.admin.graphql, code, settings);
+    } else {
+      const shop = await prisma.shop.findUnique({
+        where: { id: params.shopId },
+        select: { shopDomain: true },
+      });
+      if (!shop) return;
+      const { withFreshToken } = await import("./token.server");
+      await withFreshToken(shop.shopDomain, async (admin) =>
+        mintShopifyReferralDiscount(admin.graphql, code, settings),
+      );
+    }
+    // eslint-disable-next-line no-console
+    console.log(`[referrals] mint ok shop=${params.shopId} code=${code}`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/already exists|has already been taken/i.test(msg)) {
+      // Duplicate is the happy path on every subsequent issue call.
+      // eslint-disable-next-line no-console
+      console.log(`[referrals] mint dup ok shop=${params.shopId} code=${code}`);
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[referrals] mint FAILED shop=${params.shopId} code=${code} reason=${msg}`,
+    );
+  }
 }
 
 /**
