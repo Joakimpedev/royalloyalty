@@ -363,21 +363,42 @@
 
   /* If a royal_ref cookie is present AND the current visitor is signed in,
    * post the code to the claim endpoint. Server records the attribution,
-   * issues the welcome store credit, and we drop the cookie on success.
-   *
-   * Called from inside the loadBalance flow because that's the moment we
-   * know whether the visitor is signed in. */
+   * awards both sides points, and we drop the cookie on success. */
   function maybeClaimReferral(cfg, d) {
-    if (_claimAttempted) return;
-    if (!cfg.loggedIn) return;
+    function log(msg, extra) {
+      try {
+        console.log("[RoyalLoyalty] claim-referral: " + msg, extra || "");
+      } catch (e) {}
+      if (window.__royalDiag) {
+        var arr = window.__royalDiag.claimSteps || [];
+        arr.push({ at: Date.now(), msg: msg, extra: extra || null });
+        window.__royalDiag.claimSteps = arr;
+      }
+    }
+
+    if (_claimAttempted) { log("skip: already attempted this page load"); return; }
+    if (!cfg.loggedIn) { log("skip: not logged in"); return; }
     var code = readRefCookie();
-    if (!code) return;
+    if (!code) { log("skip: no royal_ref cookie"); return; }
     _claimAttempted = true;
+
+    if (window.__royalDiag) {
+      window.__royalDiag.claimStatus = "posting…";
+      window.__royalDiag.claimCode = code;
+    }
+    log("posting to /loyalty/claim-referral", { code: code });
+
     api(cfg.proxy, "/loyalty/claim-referral", {
       method: "POST",
       body: JSON.stringify({ code: code }),
     })
       .then(function (res) {
+        log("server responded", res);
+        if (window.__royalDiag) {
+          window.__royalDiag.claimStatus =
+            "ok=" + (res && res.ok) + " status=" + (res && res.status);
+          window.__royalDiag.claimResult = res;
+        }
         var terminal =
           res &&
           (res.ok === true ||
@@ -385,13 +406,21 @@
             res.status === "existing_customer" ||
             res.status === "self_referral");
         if (terminal) {
+          log("clearing cookie + removing banner");
           clearRefCookie();
           var ex = document.getElementById("royal-refer-banner");
           if (ex) ex.parentNode.removeChild(ex);
+        } else {
+          log("non-terminal status — keeping cookie for retry");
         }
       })
-      .catch(function () {
-        /* leave the cookie around for the next page load to retry */
+      .catch(function (err) {
+        var diag = (err && err.royalDiag) || { note: String(err) };
+        log("network/fetch failed", diag);
+        if (window.__royalDiag) {
+          window.__royalDiag.claimStatus = "FAILED — " + (diag.status || diag.note);
+          window.__royalDiag.claimResult = diag;
+        }
       });
   }
 

@@ -172,20 +172,36 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     }
     if (sub === "loyalty/claim-referral") {
       // Storefront detected `royal_ref` cookie + a logged-in customer and
-      // is asking us to record the attribution + issue the welcome store
-      // credit. App Proxy already supplied the customerId via query string.
+      // is asking us to record the attribution + award both sides points.
+      // App Proxy already supplied the customerId via the signed query
+      // string.
+      const log = (msg: string, extra?: unknown) => {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[referral-claim] shop=${shopDomain} customer=${customerId ?? "?"} ${msg}`,
+          extra ?? "",
+        );
+      };
+
       if (!customerId) {
-        return jsonCors({ ok: false, error: "no_customer" }, 401);
+        log("reject: no logged_in_customer_id from App Proxy");
+        return jsonCors({ ok: false, status: "no_customer", error: "no_customer" }, 401);
       }
       const code = typeof body.code === "string" ? body.code.trim() : "";
-      if (!code) return jsonCors({ ok: false, error: "no_code" }, 400);
+      if (!code) {
+        log("reject: empty code in body");
+        return jsonCors({ ok: false, status: "no_code", error: "no_code" }, 400);
+      }
+      log("incoming", { code });
 
-      // We need the customer's email and the shop currency; pull them now.
       const shop = await prisma.shop.findUnique({
         where: { shopDomain },
         select: { id: true, currencyCode: true },
       });
-      if (!shop) return jsonCors({ ok: false, error: "shop_not_found" }, 404);
+      if (!shop) {
+        log("reject: shop not found in DB");
+        return jsonCors({ ok: false, error: "shop_not_found" }, 404);
+      }
 
       const { claimReferral } = await import("../lib/referrals.server");
       const result = await withFreshToken(shopDomain, async (admin) => {
@@ -208,17 +224,19 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           customerEmail = j?.data?.customer?.email ?? null;
           customerName = j?.data?.customer?.displayName ?? null;
           numberOfOrders = Number(j?.data?.customer?.numberOfOrders ?? 0);
-        } catch {
-          /* leave defaults; the gate below still rejects on the safe side */
+          log("customer lookup ok", { numberOfOrders, hasEmail: !!customerEmail });
+        } catch (e) {
+          log("customer lookup FAILED", String(e));
         }
         if (numberOfOrders > 0) {
+          log("reject: existing customer", { numberOfOrders });
           return {
             ok: false as const,
             status: "existing_customer" as const,
             error: "Welcome bonus is only available for new customers.",
           };
         }
-        return claimReferral({
+        const cr = await claimReferral({
           shopId: shop.id,
           shopifyCustomerId: String(customerId),
           customerEmail,
@@ -226,10 +244,14 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           code,
           graphql: admin.graphql,
         });
+        log("claimReferral returned", cr);
+        return cr;
       });
       if (!result) {
+        log("reject: withFreshToken returned null (no offline session?)");
         return jsonCors({
           ok: false,
+          status: "no_admin_token",
           error: "Could not reach Shopify right now.",
         });
       }
