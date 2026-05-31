@@ -170,15 +170,20 @@
   (function () {
     function mark(stage) {
       try {
+        // Also stash on a dedicated window field that loyalty.js never
+        // touches, so even if __royalDiag is replaced we can recover the
+        // last reached stage.
+        window.__royalLauncherStage = stage;
         window.__royalDiag = window.__royalDiag || {};
         window.__royalDiag.launcherStage = stage;
       } catch (e) {}
     }
     function fail(stage, e) {
       try {
+        var msg = (e && e.message) ? e.message : String(e);
+        window.__royalLauncherStage = "FAILED at " + stage + " (" + msg + ")";
         window.__royalDiag = window.__royalDiag || {};
         window.__royalDiag.errors = window.__royalDiag.errors || [];
-        var msg = (e && e.message) ? e.message : String(e);
         window.__royalDiag.errors.push("launcher@" + stage + ": " + msg);
         window.__royalDiag.launcherStage = "FAILED at " + stage + " (" + msg + ")";
       } catch (e2) {}

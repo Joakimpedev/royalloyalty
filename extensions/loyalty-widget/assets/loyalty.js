@@ -24,17 +24,30 @@
   // Always-on visible diagnostic. Survives even if the launcher block isn't
   // on the page or if /loyalty/balance never resolves — so we can tell the
   // difference between "block missing" and "block silent".
-  // Track interesting failures so the overlay can surface them.
-  var __royalDiag = {
-    startedAt: Date.now(),
-    loyaltyJsLoaded: true,
-    royalLoyaltyDefined: false,
-    payloadStatus: "(waiting…)",
-    payloadBranding: null,
-    lastFetchUrl: null,
-    lastFetchStatus: null,
-    errors: [],
-  };
+  //
+  // CRITICAL: merge into any existing window.__royalDiag instead of replacing
+  // it. The launcher.liquid inline script writes to window.__royalDiag before
+  // loyalty.js loads (because the launcher script is inline, loyalty.js is
+  // deferred). A naive overwrite here erases the launcher's stage markers
+  // and we'd never see them in the panel.
+  var preExisting =
+    (typeof window !== "undefined" && window.__royalDiag) || {};
+  var __royalDiag = Object.assign(
+    {
+      startedAt: Date.now(),
+      loyaltyJsLoaded: true,
+      royalLoyaltyDefined: false,
+      payloadStatus: "(waiting…)",
+      payloadBranding: null,
+      lastFetchUrl: null,
+      lastFetchStatus: null,
+      errors: [],
+    },
+    preExisting,
+  );
+  // Make sure errors is still an array even if preExisting had a different
+  // type for it.
+  if (!Array.isArray(__royalDiag.errors)) __royalDiag.errors = [];
   try {
     window.addEventListener("error", function (e) {
       try {
@@ -148,7 +161,10 @@
           "launcher block in DOM:    " + (root ? "yes" : "NO"),
           "launcher load() called:   " +
             (__royalDiag.payloadStartedAt ? "yes" : "NO (init never reached load())"),
-          "launcher stage:           " + (__royalDiag.launcherStage || "(none)"),
+          "launcher stage:           " +
+            (__royalDiag.launcherStage ||
+              window.__royalLauncherStage ||
+              "(none)"),
           "inline-script canary:     " +
             (typeof window.__royalCanary === "number"
               ? "yes (n=" + window.__royalCanary + ")"
