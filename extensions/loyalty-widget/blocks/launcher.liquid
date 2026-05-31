@@ -319,8 +319,6 @@
         var pointsName = b.pointsName || 'points';
         var bal = d.balance || 0;
         var tier = d.currentTier && d.currentTier.name ? d.currentTier.name : '';
-        var tierMult = d.currentTier && d.currentTier.earnMultiplier
-          ? d.currentTier.earnMultiplier : null;
         var tierClassSlug = tierClass(tier);
 
         var html =
@@ -331,7 +329,6 @@
               ? '<div class="royal-status-card__tier royal-tier-pill royal-tier-pill--' + tierClassSlug + '">' +
                   '<span class="royal-tier-pill__crown" aria-hidden="true">&#9819;</span>' +
                   escapeHtml(tier) +
-                  (tierMult ? '<span class="royal-tier-pill__mult">' + tierMult + '&times;</span>' : '') +
                 '</div>'
               : '') +
           '</div>';
