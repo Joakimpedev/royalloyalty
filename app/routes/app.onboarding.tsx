@@ -1,56 +1,96 @@
-// Royal Loyalty — AI onboarding (Phase 3 #2-#8).
+// Royal Loyalty — onboarding wizard.
 //
-// First-load surface: the merchant lands on a PREVIEW of their own configured
-// program (generated from aggregate store data via ai.server), never a blank
-// setup. Every AI default is an editable card; one "Activate program" action
-// persists Tier/EarnRule/Reward rows, sets Shop.programActivatedAt (TTV) and
-// Shop.aiConfigSnapshot. Post-activation: a dismissible, collapsible checklist
-// with store-context deep links.
+// 4 stepped screens with a progress bar across the top:
+//   1. Welcome + earn rate + signup bonus
+//   2. First reward
+//   3. Branding (program name, points name, palette, primary/secondary colors)
+//   4. Activate — explainer + button to open the theme editor
 //
-// This is a form-bearing surface → contextual save bar (ui-save-bar) + React
-// Router useBlocker() to block breadcrumb/<a> nav with unsaved edits.
+// On Activate we persist Tier/EarnRule/Reward rows, stamp Shop.programActivatedAt
+// (TTV), and store the merchant's branding choice into Shop.aiConfigSnapshot.branding
+// so /app/branding picks it up. After activation, the loader returns
+// activated: true and we redirect through /app/program → /app?welcomed=1.
+//
+// No AI: every default value comes from app/lib/defaults.ts, currency-scaled
+// from a USD baseline using a static FX anchor table. Merchant can edit any
+// number on any step.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useBlocker, useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import {
-  generateProgram,
-  type ProposedProgram,
-} from "../lib/ai.server";
+import { getDefaultsForCurrency, type ProgramDefaults } from "../lib/defaults";
 import { recordActivation } from "../lib/ttv.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
 import { AppLink, useAppNavigate } from "../lib/app-navigate";
-import { useMoney, useShopMoney } from "../lib/use-money";
 
 // ---------------------------------------------------------------------------
-// Loader — generate (or reuse persisted) program preview
+// Shape merchant fills in across the wizard
+// ---------------------------------------------------------------------------
+
+interface WizardState {
+  // Step 1
+  unitsPerPoint: number;
+  signupPoints: number;
+  // Step 2
+  firstRewardPoints: number;
+  firstRewardValue: number;
+  // Step 3
+  programName: string;
+  pointsName: string;
+  primaryColor: string;
+  secondaryColor: string;
+}
+
+function defaultsToWizard(d: ProgramDefaults): WizardState {
+  return {
+    unitsPerPoint: d.unitsPerPoint,
+    signupPoints: d.signupPoints,
+    firstRewardPoints: d.firstRewardPoints,
+    firstRewardValue: d.firstRewardValue,
+    programName: "Loyalty Rewards",
+    pointsName: "Points",
+    primaryColor: "#7B2D8E",
+    secondaryColor: "#F4E9B8",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Loader
 // ---------------------------------------------------------------------------
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
   const shop = await prisma.shop.upsert({
     where: { shopDomain: session.shop },
     update: {},
     create: { shopDomain: session.shop },
-    select: { id: true, programActivatedAt: true, aiConfigSnapshot: true },
+    select: {
+      id: true,
+      currencyCode: true,
+      programActivatedAt: true,
+      aiConfigSnapshot: true,
+    },
   });
 
-  // Already activated → show the post-activation checklist with the snapshot.
-  if (shop.programActivatedAt && shop.aiConfigSnapshot) {
+  if (shop.programActivatedAt) {
     return {
       activated: true,
       shopDomain: session.shop,
-      program: shop.aiConfigSnapshot as unknown as ProposedProgram,
-    };
+      snapshot: (shop.aiConfigSnapshot as Record<string, unknown>) ?? {},
+    } as const;
   }
 
-  const { program } = await generateProgram(admin);
-  return { activated: false, shopDomain: session.shop, program };
+  const defaults = getDefaultsForCurrency(shop.currencyCode ?? "USD");
+  return {
+    activated: false,
+    shopDomain: session.shop,
+    defaults,
+  } as const;
 };
 
 // ---------------------------------------------------------------------------
@@ -64,24 +104,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain: session.shop },
-    select: { id: true, programActivatedAt: true },
+    select: { id: true, currencyCode: true, programActivatedAt: true, aiConfigSnapshot: true },
   });
   if (!shop) return { ok: false, error: "Shop not found" };
 
   if (intent === "dismiss-checklist") {
-    // Persist checklist dismissal in the aiConfigSnapshot meta (DB, not local).
-    const current = await prisma.shop.findUnique({
-      where: { id: shop.id },
-      select: { aiConfigSnapshot: true },
-    });
-    const snap = (current?.aiConfigSnapshot as Record<string, unknown>) ?? {};
+    const base =
+      (shop.aiConfigSnapshot as Record<string, unknown>) ?? {};
     await prisma.shop.update({
       where: { id: shop.id },
       data: {
-        aiConfigSnapshot: {
-          ...snap,
-          _checklistDismissed: true,
-        } as object,
+        aiConfigSnapshot: { ...base, _checklistDismissed: true } as object,
       },
     });
     return { ok: true, dismissed: true };
@@ -91,69 +124,142 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (shop.programActivatedAt) {
       return { ok: false, error: "Program already activated" };
     }
-    const payload = form.get("program");
+    const payload = form.get("wizard");
     if (typeof payload !== "string") {
-      return { ok: false, error: "Missing program payload" };
+      return { ok: false, error: "Missing wizard payload" };
     }
-    let program: ProposedProgram;
+    let w: WizardState;
     try {
-      program = JSON.parse(payload);
+      w = JSON.parse(payload);
     } catch {
-      return { ok: false, error: "Invalid program payload" };
+      return { ok: false, error: "Invalid wizard payload" };
     }
 
-    // Persist everything atomically; TTV stamp is idempotent inside the txn.
+    const defaults = getDefaultsForCurrency(shop.currencyCode ?? "USD");
+
+    // Earn-per-currency-unit. Stored as points-per-dollar; we encode the
+    // "1 point per N currency units" by setting points = 1 / unitsPerPoint
+    // semantically. The existing earn rule schema is "points awarded for
+    // this action, per dollar if perDollar=true", so for the purchase rule
+    // we set points = 1 and let the merchant tune unitsPerPoint via the
+    // /app/program page later. Bonus actions are flat points (perDollar=false).
+    const earnPointsPerUnit = w.unitsPerPoint > 0 ? 1 / w.unitsPerPoint : 1;
+
     await prisma.$transaction(async (tx) => {
       await tx.tier.deleteMany({ where: { shopId: shop.id } });
       await tx.earnRule.deleteMany({ where: { shopId: shop.id } });
       await tx.reward.deleteMany({ where: { shopId: shop.id } });
 
       await tx.tier.createMany({
-        data: program.tiers.map((t, i) => ({
-          shopId: shop.id,
-          name: t.name,
-          thresholdType: t.thresholdType,
-          threshold: t.threshold,
-          earnMultiplier: t.earnMultiplier,
-          perks: t.perks as object,
-          sortOrder: i,
-        })),
+        data: [
+          {
+            shopId: shop.id,
+            name: "Bronze",
+            thresholdType: "points",
+            threshold: 0,
+            earnMultiplier: 1,
+            perks: [] as object,
+            sortOrder: 0,
+          },
+          {
+            shopId: shop.id,
+            name: "Silver",
+            thresholdType: "points",
+            threshold: defaults.silverThresholdPoints,
+            earnMultiplier: defaults.silverEarnMultiplier,
+            perks: [] as object,
+            sortOrder: 1,
+          },
+          {
+            shopId: shop.id,
+            name: "Gold",
+            thresholdType: "points",
+            threshold: defaults.goldThresholdPoints,
+            earnMultiplier: defaults.goldEarnMultiplier,
+            perks: [] as object,
+            sortOrder: 2,
+          },
+        ],
       });
+
       await tx.earnRule.createMany({
-        data: program.earnRules.map((r) => ({
-          shopId: shop.id,
-          action: r.action,
-          points: r.points,
-          perDollar: r.perDollar,
-          enabled: r.enabled,
-          config: { label: r.label } as object,
-        })),
+        data: [
+          {
+            shopId: shop.id,
+            action: "purchase",
+            points: earnPointsPerUnit,
+            perDollar: true,
+            enabled: true,
+            config: { label: "Place an order" } as object,
+          },
+          {
+            shopId: shop.id,
+            action: "signup",
+            points: w.signupPoints,
+            perDollar: false,
+            enabled: true,
+            config: { label: "Create an account" } as object,
+          },
+          {
+            shopId: shop.id,
+            action: "birthday",
+            points: defaults.birthdayPoints,
+            perDollar: false,
+            enabled: true,
+            config: { label: "Celebrate a birthday" } as object,
+          },
+          {
+            shopId: shop.id,
+            action: "review",
+            points: defaults.reviewPoints,
+            perDollar: false,
+            enabled: false,
+            config: { label: "Leave a product review" } as object,
+          },
+          {
+            shopId: shop.id,
+            action: "social",
+            points: defaults.socialFollowPoints,
+            perDollar: false,
+            enabled: false,
+            config: { label: "Follow on social" } as object,
+          },
+          {
+            shopId: shop.id,
+            action: "newsletter",
+            points: defaults.newsletterPoints,
+            perDollar: false,
+            enabled: false,
+            config: { label: "Subscribe to newsletter" } as object,
+          },
+        ],
       });
-      await tx.reward.createMany({
-        data: program.rewards.map((rw) => ({
+
+      await tx.reward.create({
+        data: {
           shopId: shop.id,
-          type: rw.type,
-          pointsCost: rw.pointsCost,
-          value: rw.value,
+          type: "amount_off",
+          pointsCost: w.firstRewardPoints,
+          value: w.firstRewardValue,
           enabled: true,
-        })),
+        },
       });
-      // Persist the AI snapshot AND project the onboarding branding selection
-      // into the BrandingConfig shape the /app/branding page reads, so the
-      // merchant's palette pick survives the onboarding → branding hop.
+
+      const base =
+        (shop.aiConfigSnapshot as Record<string, unknown>) ?? {};
       const brandingConfig = {
         widget: {
-          position: program.branding.launcherPosition ?? "bottom-right",
-          primaryColor: program.branding.primaryColor,
-          secondaryColor: program.branding.secondaryColor,
+          position: "bottom-right",
+          primaryColor: w.primaryColor,
+          secondaryColor: w.secondaryColor,
           icon: "crown",
-          launcherText: program.branding.pointsName,
-          title: program.branding.programName,
+          launcherText: w.pointsName,
+          title: w.programName,
         },
         page: {
-          heroTitle: `Earn ${program.branding.pointsName}. Get rewards.`,
+          heroTitle: `Earn ${w.pointsName}. Get rewards.`,
           heroSubtitle: "Join the program and earn on every order.",
-          themeColor: program.branding.primaryColor,
+          themeColor: w.primaryColor,
           logoUrl: "",
           showEarn: true,
           showRewards: true,
@@ -161,38 +267,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
         product: {
           enabled: true,
-          accentColor: program.branding.primaryColor,
-          heading: `Earn {points} ${program.branding.pointsName} with this purchase`,
-          subtext: `You have {balance} ${program.branding.pointsName}. Earn {more} more with this order!`,
+          accentColor: w.primaryColor,
+          heading: `Earn {points} ${w.pointsName} with this purchase`,
+          subtext: `You have {balance} ${w.pointsName}. Earn {more} more with this order!`,
         },
         cart: {
           enabled: true,
-          accentColor: program.branding.primaryColor,
-          heading: `Use your ${program.branding.pointsName}`,
+          accentColor: w.primaryColor,
+          heading: `Use your ${w.pointsName}`,
           showEarnLine: true,
         },
       };
+
       await tx.shop.update({
         where: { id: shop.id },
         data: {
           aiConfigSnapshot: {
-            ...(program as unknown as Record<string, unknown>),
+            ...base,
             branding: brandingConfig,
           } as object,
         },
       });
-      // Time-to-value: idempotent install→activate stamp.
+
       await recordActivation(tx, shop.id);
     });
 
-    // Post-onboarding redirect chain: Program → Branding → Home (?welcomed=1).
-    //
-    // ⚠ IFRAME AUTH: do NOT use `return redirect(...)`. A server-side redirect
-    // from an action in the embedded admin causes the follow-up request to
-    // sometimes land without the session token, logging the merchant out. We
-    // return the destination as data and let the component navigate
-    // client-side via useAppNavigate, which preserves the iframe session.
-    return { ok: true, activated: true, redirectTo: "/app/program?onboarding=1" };
+    // Iframe auth: don't server-redirect. Client navigates via useAppNavigate.
+    return {
+      ok: true,
+      activated: true,
+      redirectTo: "/app/program?onboarding=1",
+    };
   }
 
   return { ok: false, error: "Unknown intent" };
@@ -214,9 +319,6 @@ const CHECKLIST = [
     key: "pos",
     title: "Enable Point of Sale",
     desc: "Let customers earn and redeem in your physical store.",
-    // shopify: URL — App Bridge intercepts and navigates the parent admin
-    // frame while keeping our iframe (and session) alive. NEVER replace this
-    // with https://admin.shopify.com/... + target="_top" — that breaks auth.
     href: "shopify:admin/apps",
     cta: "Open Shopify POS",
   },
@@ -229,6 +331,8 @@ const CHECKLIST = [
   },
 ];
 
+const STEPS = ["Welcome", "First reward", "Branding", "Activate"] as const;
+
 export default function Onboarding() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
@@ -237,33 +341,27 @@ export default function Onboarding() {
     return <PostActivationChecklist />;
   }
 
-  return <ProgramPreview initial={data.program} fetcher={fetcher} />;
+  return <Wizard defaults={data.defaults} fetcher={fetcher} />;
 }
 
-function ProgramPreview({
-  initial,
+function Wizard({
+  defaults,
   fetcher,
 }: {
-  initial: ProposedProgram;
+  defaults: ProgramDefaults;
   fetcher: ReturnType<typeof useFetcher<typeof action>>;
 }) {
-  const [program, setProgram] = useState<ProposedProgram>(initial);
+  const [step, setStep] = useState(0);
+  const [state, setState] = useState<WizardState>(() => defaultsToWizard(defaults));
   const [dirty, setDirty] = useState(false);
   const appNav = useAppNavigate();
-  const money = useMoney();
-  const { currencyCode } = useShopMoney();
-  const saveBarRef = useRef<HTMLElement | null>(null);
 
   const isSaving =
     fetcher.state !== "idle" && fetcher.formData?.get("intent") === "activate";
-  // Action returns { ok: true, activated: true, redirectTo } — once we see
-  // that, we navigate client-side via App Bridge-aware useAppNavigate.
   const activated =
     isSaving ||
     fetcher.state === "loading" ||
-    (fetcher.data &&
-      "activated" in fetcher.data &&
-      fetcher.data.activated === true);
+    (fetcher.data && "activated" in fetcher.data && fetcher.data.activated === true);
 
   useEffect(() => {
     const d = fetcher.data as
@@ -274,11 +372,7 @@ function ProgramPreview({
     }
   }, [fetcher.data, appNav]);
 
-  // Block in-app nav (breadcrumb / <a>) while there are unsaved edits.
-  const blocker = useBlocker(
-    () => dirty && !activated,
-  );
-
+  const blocker = useBlocker(() => dirty && !activated);
   useEffect(() => {
     if (blocker.state === "blocked") {
       const ok = window.confirm(
@@ -289,7 +383,6 @@ function ProgramPreview({
     }
   }, [blocker]);
 
-  // Native beforeunload guard (browser close / hard nav).
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => {
       if (dirty && !activated) {
@@ -301,370 +394,442 @@ function ProgramPreview({
     return () => window.removeEventListener("beforeunload", h);
   }, [dirty, activated]);
 
-  const mutate = (fn: (p: ProposedProgram) => ProposedProgram) => {
-    setProgram((p) => fn(structuredClone(p)));
+  const mut = <K extends keyof WizardState>(key: K, value: WizardState[K]) => {
+    setState((s) => ({ ...s, [key]: value }));
     setDirty(true);
   };
 
   const activate = () => {
     fetcher.submit(
-      { intent: "activate", program: JSON.stringify(program) },
+      { intent: "activate", wizard: JSON.stringify(state) },
       { method: "POST" },
     );
   };
 
-  const discard = () => {
-    setProgram(structuredClone(initial));
-    setDirty(false);
-  };
-
-  useEffect(() => {
-    if (activated) setDirty(false);
-  }, [activated]);
-
-  const isFallback = program.source === "fallback-template";
+  const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  const back = () => setStep((s) => Math.max(s - 1, 0));
 
   return (
     <s-page heading="Set up your loyalty program">
-      {/* Contextual save bar — required on every form surface incl. this preview */}
-      <ui-save-bar id="onboarding-save-bar" open={dirty ? true : undefined}>
-        <button
-          slot="save"
-          onClick={activate}
-          {...(isSaving ? { loading: "" } : {})}
-        >
-          Activate program
-        </button>
-        <button slot="discard" onClick={discard}>
-          Discard changes
-        </button>
-      </ui-save-bar>
+      <ProgressBar step={step} />
 
-      <s-button
-        slot="primary-action"
-        onClick={activate}
-        {...(isSaving ? { loading: true } : {})}
-      >
-        Activate program
-      </s-button>
+      {step === 0 && (
+        <StepWelcome
+          state={state}
+          mut={mut}
+          currencyCode={defaults.currencyCode}
+        />
+      )}
+      {step === 1 && (
+        <StepReward
+          state={state}
+          mut={mut}
+          currencyCode={defaults.currencyCode}
+        />
+      )}
+      {step === 2 && <StepBranding state={state} mut={mut} />}
+      {step === 3 && (
+        <StepActivate
+          state={state}
+          onActivate={activate}
+          isSaving={!!isSaving}
+          error={
+            fetcher.data && "ok" in fetcher.data && fetcher.data.ok === false
+              ? fetcher.data.error ?? "Activation failed"
+              : null
+          }
+        />
+      )}
 
-      <s-section
-        heading={
-          isFallback
-            ? "Recommended starter program (template)"
-            : "Your AI-generated program"
-        }
-      >
-        <s-banner tone={isFallback ? "info" : "success"}>
-          <s-paragraph>
-            {isFallback
-              ? "Industry-agnostic best-practice template"
-              : "Built from your own store's catalog, order volume and theme"}
-            . {program.rationale}
-          </s-paragraph>
-        </s-banner>
-        {fetcher.data?.ok === false && (
-          <s-banner tone="critical">
-            <s-paragraph>{fetcher.data.error}</s-paragraph>
-          </s-banner>
-        )}
-        <s-paragraph>
-          Everything below is editable. Adjust anything, then click
-          <s-text> Activate program</s-text> — that one action makes it live.
-        </s-paragraph>
-      </s-section>
-
-      {/* Branding card */}
-      <s-section heading="Branding">
-        <s-stack direction="block" gap="base">
-          <s-text-field
-            label="Program name"
-            value={program.branding.programName}
-            onInput={(e: any) =>
-              mutate((p) => {
-                p.branding.programName = e.target.value;
-                return p;
-              })
-            }
-          />
-          <s-text-field
-            label="Points name"
-            value={program.branding.pointsName}
-            onInput={(e: any) =>
-              mutate((p) => {
-                p.branding.pointsName = e.target.value;
-                return p;
-              })
-            }
-          />
-          <s-text fontWeight="bold">Palette</s-text>
-          <s-paragraph>
-            Pick a starting palette that fits your brand. You can fine-tune the
-            exact colors below or later from the Branding page.
-          </s-paragraph>
-          <BrandingPalette
-            primary={program.branding.primaryColor}
-            secondary={program.branding.secondaryColor}
-            onSelect={(preset) =>
-              mutate((p) => {
-                p.branding.primaryColor = preset.primary;
-                p.branding.secondaryColor = preset.secondary;
-                return p;
-              })
-            }
-          />
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 1fr) auto",
-              gap: 24,
-              alignItems: "start",
-            }}
-          >
-            <s-stack direction="block" gap="base">
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 13, color: "#202223" }}>
-                  Primary color
-                </span>
-                <ColorPicker
-                  value={program.branding.primaryColor}
-                  label="Primary color"
-                  onChange={(v) =>
-                    mutate((p) => {
-                      p.branding.primaryColor = v;
-                      return p;
-                    })
-                  }
-                />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 13, color: "#202223" }}>
-                  Secondary color
-                </span>
-                <ColorPicker
-                  value={program.branding.secondaryColor}
-                  label="Secondary color"
-                  onChange={(v) =>
-                    mutate((p) => {
-                      p.branding.secondaryColor = v;
-                      return p;
-                    })
-                  }
-                />
-              </div>
-            </s-stack>
-            <div style={{ position: "sticky", top: 16 }}>
-              <s-text tone="subdued">Live preview</s-text>
-              <div style={{ marginTop: 8 }}>
-                <WidgetPreview
-                  config={{
-                    primaryColor: program.branding.primaryColor,
-                    secondaryColor: program.branding.secondaryColor,
-                    title: program.branding.programName,
-                    subtitle:
-                      "Earn points on every order — redeem for rewards.",
-                    launcherText: program.branding.pointsName,
-                    showEarn: true,
-                    showRewards: true,
-                    showReferral: true,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </s-stack>
-      </s-section>
-
-      {/* Earn rules */}
-      <s-section heading="How customers earn">
-        <s-stack direction="block" gap="base">
-          {program.earnRules.map((rule, i) => (
-            <s-box
-              key={rule.action}
-              padding="base"
-              borderWidth="base"
-              borderRadius="base"
-            >
-              <s-stack direction="inline" gap="base">
-                <s-text>{rule.label}</s-text>
-                <s-number-field
-                  label={`Points (${rule.action})`}
-                  value={String(rule.points)}
-                  onInput={(e: any) =>
-                    mutate((p) => {
-                      p.earnRules[i].points = Math.max(
-                        0,
-                        Math.round(Number(e.target.value) || 0),
-                      );
-                      return p;
-                    })
-                  }
-                />
-                <s-switch
-                  label="Enabled"
-                  {...(rule.enabled ? { checked: true } : {})}
-                  onChange={(e: any) =>
-                    mutate((p) => {
-                      p.earnRules[i].enabled = !!e.target.checked;
-                      return p;
-                    })
-                  }
-                />
-              </s-stack>
-            </s-box>
-          ))}
-        </s-stack>
-      </s-section>
-
-      {/* VIP tiers */}
-      <s-section heading="VIP tiers">
-        <s-stack direction="block" gap="base">
-          {program.tiers.map((tier, i) => (
-            <s-box
-              key={i}
-              padding="base"
-              borderWidth="base"
-              borderRadius="base"
-            >
-              <s-stack direction="inline" gap="base">
-                <s-text-field
-                  label="Tier name"
-                  value={tier.name}
-                  onInput={(e: any) =>
-                    mutate((p) => {
-                      p.tiers[i].name = e.target.value;
-                      return p;
-                    })
-                  }
-                />
-                <s-number-field
-                  label="Threshold (points)"
-                  value={String(tier.threshold)}
-                  {...(i === 0 ? { disabled: true } : {})}
-                  onInput={(e: any) =>
-                    mutate((p) => {
-                      p.tiers[i].threshold = Math.max(
-                        0,
-                        Math.round(Number(e.target.value) || 0),
-                      );
-                      return p;
-                    })
-                  }
-                />
-                <s-number-field
-                  label="Earn multiplier"
-                  value={String(tier.earnMultiplier)}
-                  onInput={(e: any) =>
-                    mutate((p) => {
-                      p.tiers[i].earnMultiplier = Math.max(
-                        1,
-                        Number(e.target.value) || 1,
-                      );
-                      return p;
-                    })
-                  }
-                />
-              </s-stack>
-            </s-box>
-          ))}
-        </s-stack>
-      </s-section>
-
-      {/* Rewards */}
-      <s-section heading="Reward catalog">
-        <s-stack direction="block" gap="base">
-          {program.rewards.map((rw, i) => (
-            <s-box
-              key={i}
-              padding="base"
-              borderWidth="base"
-              borderRadius="base"
-            >
-              <s-stack direction="inline" gap="base">
-                <s-text>{rw.label}</s-text>
-                <s-number-field
-                  label="Points cost"
-                  value={String(rw.pointsCost)}
-                  onInput={(e: any) =>
-                    mutate((p) => {
-                      p.rewards[i].pointsCost = Math.max(
-                        1,
-                        Math.round(Number(e.target.value) || 1),
-                      );
-                      return p;
-                    })
-                  }
-                />
-                {rw.value !== null && (
-                  <s-number-field
-                    label={
-                      rw.type === "percent_off"
-                        ? "Value (% off)"
-                        : `Value (${currencyCode})`
-                    }
-                    value={String(rw.value)}
-                    onInput={(e: any) =>
-                      mutate((p) => {
-                        p.rewards[i].value = Number(e.target.value) || 0;
-                        return p;
-                      })
-                    }
-                  />
-                )}
-              </s-stack>
-            </s-box>
-          ))}
-        </s-stack>
-      </s-section>
-
-      {/* Default emails (progressive disclosure: collapsed details) */}
-      <s-section heading="Default emails">
-        {program.emails.map((em, i) => (
-          <details key={em.event} style={{ marginBottom: "0.5rem" }}>
-            <summary>{em.event.replace(/_/g, " ")}</summary>
-            <s-stack direction="block" gap="base">
-              <s-text-field
-                label="Subject"
-                value={em.subject}
-                onInput={(e: any) =>
-                  mutate((p) => {
-                    p.emails[i].subject = e.target.value;
-                    return p;
-                  })
-                }
-              />
-              <s-text-area
-                label="Body"
-                value={em.body}
-                onInput={(e: any) =>
-                  mutate((p) => {
-                    p.emails[i].body = e.target.value;
-                    return p;
-                  })
-                }
-              />
-            </s-stack>
-          </details>
-        ))}
-      </s-section>
-
-      <s-section heading="Import existing members?">
-        <s-paragraph>
-          Switching from another loyalty app? Import your members and point
-          balances first.
-        </s-paragraph>
-        <AppLink href="/app/import">Import from a CSV</AppLink>
-      </s-section>
+      <WizardNav
+        step={step}
+        onBack={back}
+        onNext={next}
+        onActivate={activate}
+        isSaving={!!isSaving}
+      />
     </s-page>
   );
 }
+
+function ProgressBar({ step }: { step: number }) {
+  const pct = ((step + 1) / STEPS.length) * 100;
+  return (
+    <div style={{ margin: "0 0 16px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: 12,
+          color: "#6d7175",
+          marginBottom: 6,
+        }}
+      >
+        <span>
+          Step {step + 1} of {STEPS.length} — {STEPS[step]}
+        </span>
+      </div>
+      <div
+        style={{
+          height: 4,
+          background: "#e1e3e5",
+          borderRadius: 999,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: "#202223",
+            transition: "width 200ms ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function WizardNav({
+  step,
+  onBack,
+  onNext,
+  onActivate,
+  isSaving,
+}: {
+  step: number;
+  onBack: () => void;
+  onNext: () => void;
+  onActivate: () => void;
+  isSaving: boolean;
+}) {
+  const isLast = step === STEPS.length - 1;
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        marginTop: 24,
+      }}
+    >
+      <s-button
+        variant="tertiary"
+        onClick={onBack}
+        {...(step === 0 ? { disabled: true } : {})}
+      >
+        Back
+      </s-button>
+      {isLast ? (
+        <s-button
+          variant="primary"
+          onClick={onActivate}
+          {...(isSaving ? { loading: true } : {})}
+        >
+          Activate program
+        </s-button>
+      ) : (
+        <s-button variant="primary" onClick={onNext}>
+          Next
+        </s-button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 1 — Welcome + earn rate + signup
+// ---------------------------------------------------------------------------
+
+function StepWelcome({
+  state,
+  mut,
+  currencyCode,
+}: {
+  state: WizardState;
+  mut: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  currencyCode: string;
+}) {
+  return (
+    <s-section heading="Welcome to Royal Loyalty">
+      <s-paragraph>
+        Reward your customers for every purchase. We've pre-filled sensible
+        defaults — tweak anything, or keep them and click through.
+      </s-paragraph>
+
+      <s-stack direction="block" gap="base">
+        <s-box padding="base" borderWidth="base" borderRadius="base">
+          <s-stack direction="block" gap="base">
+            <s-text fontWeight="bold">How customers earn on every order</s-text>
+            <s-stack direction="inline" gap="base">
+              <s-number-field
+                label={`Spend (${currencyCode}) to earn 1 point`}
+                value={String(state.unitsPerPoint)}
+                onInput={(e: any) =>
+                  mut(
+                    "unitsPerPoint",
+                    Math.max(1, Number(e.target.value) || 1),
+                  )
+                }
+              />
+            </s-stack>
+            <s-text tone="subdued">
+              Industry standard: ~5% effective cashback when paired with the
+              first reward on the next step.
+            </s-text>
+          </s-stack>
+        </s-box>
+
+        <s-box padding="base" borderWidth="base" borderRadius="base">
+          <s-stack direction="block" gap="base">
+            <s-text fontWeight="bold">Signup bonus</s-text>
+            <s-number-field
+              label="Points awarded when a customer creates an account"
+              value={String(state.signupPoints)}
+              onInput={(e: any) =>
+                mut(
+                  "signupPoints",
+                  Math.max(0, Math.round(Number(e.target.value) || 0)),
+                )
+              }
+            />
+            <s-text tone="subdued">
+              A signup bonus equal to your first reward gives customers a
+              taste of the program right away.
+            </s-text>
+          </s-stack>
+        </s-box>
+      </s-stack>
+    </s-section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 2 — First reward
+// ---------------------------------------------------------------------------
+
+function StepReward({
+  state,
+  mut,
+  currencyCode,
+}: {
+  state: WizardState;
+  mut: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  currencyCode: string;
+}) {
+  return (
+    <s-section heading="Pick a first reward">
+      <s-paragraph>
+        This is the cheapest reward customers can redeem. You can add more
+        rewards later from your Program page.
+      </s-paragraph>
+
+      <s-box padding="base" borderWidth="base" borderRadius="base">
+        <s-stack direction="block" gap="base">
+          <s-text fontWeight="bold">Amount off</s-text>
+          <s-stack direction="inline" gap="base">
+            <s-number-field
+              label="Points cost"
+              value={String(state.firstRewardPoints)}
+              onInput={(e: any) =>
+                mut(
+                  "firstRewardPoints",
+                  Math.max(1, Math.round(Number(e.target.value) || 1)),
+                )
+              }
+            />
+            <s-number-field
+              label={`Discount value (${currencyCode})`}
+              value={String(state.firstRewardValue)}
+              onInput={(e: any) =>
+                mut(
+                  "firstRewardValue",
+                  Math.max(1, Number(e.target.value) || 1),
+                )
+              }
+            />
+          </s-stack>
+          <s-text tone="subdued">
+            With the earn rate from step 1, this is roughly a 5% effective
+            cashback when redeemed.
+          </s-text>
+        </s-stack>
+      </s-box>
+    </s-section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 3 — Branding
+// ---------------------------------------------------------------------------
+
+function StepBranding({
+  state,
+  mut,
+}: {
+  state: WizardState;
+  mut: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+}) {
+  return (
+    <s-section heading="Make it yours">
+      <s-paragraph>
+        These are the basics shoppers will see. You can fine-tune every detail
+        later on the Branding page.
+      </s-paragraph>
+
+      <s-stack direction="block" gap="base">
+        <s-text-field
+          label="Program name"
+          value={state.programName}
+          onInput={(e: any) => mut("programName", e.target.value)}
+        />
+        <s-text-field
+          label="Points name (e.g. Crowns, Coins, Stars)"
+          value={state.pointsName}
+          onInput={(e: any) => mut("pointsName", e.target.value)}
+        />
+
+        <s-text fontWeight="bold">Palette</s-text>
+        <s-paragraph>
+          Pick a starting palette that fits your brand, or fine-tune the
+          colors below.
+        </s-paragraph>
+        <BrandingPalette
+          primary={state.primaryColor}
+          secondary={state.secondaryColor}
+          onSelect={(preset) => {
+            mut("primaryColor", preset.primary);
+            mut("secondaryColor", preset.secondary);
+          }}
+        />
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            gap: 24,
+            alignItems: "start",
+          }}
+        >
+          <s-stack direction="block" gap="base">
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 13, color: "#202223" }}>
+                Primary color
+              </span>
+              <ColorPicker
+                value={state.primaryColor}
+                label="Primary color"
+                onChange={(v) => mut("primaryColor", v)}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 13, color: "#202223" }}>
+                Secondary color
+              </span>
+              <ColorPicker
+                value={state.secondaryColor}
+                label="Secondary color"
+                onChange={(v) => mut("secondaryColor", v)}
+              />
+            </div>
+          </s-stack>
+          <div style={{ position: "sticky", top: 16 }}>
+            <s-text tone="subdued">Live preview</s-text>
+            <div style={{ marginTop: 8 }}>
+              <WidgetPreview
+                config={{
+                  primaryColor: state.primaryColor,
+                  secondaryColor: state.secondaryColor,
+                  title: state.programName,
+                  subtitle:
+                    "Earn points on every order — redeem for rewards.",
+                  launcherText: state.pointsName,
+                  showEarn: true,
+                  showRewards: true,
+                  showReferral: true,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </s-stack>
+    </s-section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 4 — Activate
+// ---------------------------------------------------------------------------
+
+function StepActivate({
+  state,
+  onActivate,
+  isSaving,
+  error,
+}: {
+  state: WizardState;
+  onActivate: () => void;
+  isSaving: boolean;
+  error: string | null;
+}) {
+  return (
+    <s-section heading="One step left — activate">
+      <s-paragraph>
+        Clicking <s-text fontWeight="bold">Activate program</s-text> creates
+        your earn rules, rewards and tiers, and turns the loyalty program on
+        for your store.
+      </s-paragraph>
+
+      <s-box padding="base" borderWidth="base" borderRadius="base">
+        <s-stack direction="block" gap="base">
+          <s-text fontWeight="bold">After activation</s-text>
+          <s-paragraph>
+            Your program will be created with the defaults you set. To make
+            the loyalty widget visible on your storefront, enable the Royal
+            Loyalty theme app embed:
+          </s-paragraph>
+          <AppLink href="shopify:admin/themes/current/editor?context=apps">
+            Open theme editor
+          </AppLink>
+          <s-text tone="subdued">
+            In the theme editor, switch on "Royal Loyalty" under App embeds
+            and click Save.
+          </s-text>
+        </s-stack>
+      </s-box>
+
+      <s-box padding="base" borderWidth="base" borderRadius="base">
+        <s-stack direction="block" gap="base">
+          <s-text fontWeight="bold">Summary</s-text>
+          <s-paragraph>
+            <s-text fontWeight="bold">{state.programName}</s-text> — customers
+            earn 1 {state.pointsName.toLowerCase()} per {state.unitsPerPoint}{" "}
+            spent, get {state.signupPoints} {state.pointsName.toLowerCase()}{" "}
+            for signing up, and can redeem {state.firstRewardPoints}{" "}
+            {state.pointsName.toLowerCase()} for {state.firstRewardValue} off.
+          </s-paragraph>
+        </s-stack>
+      </s-box>
+
+      {error && (
+        <s-banner tone="critical">
+          <s-paragraph>{error}</s-paragraph>
+        </s-banner>
+      )}
+    </s-section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Post-activation checklist (kept from the previous flow)
+// ---------------------------------------------------------------------------
 
 function PostActivationChecklist() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const meta =
-    ((data.program as unknown as Record<string, unknown>)
-      ?._checklistDismissed as boolean) ?? false;
+    data.activated && data.snapshot
+      ? ((data.snapshot._checklistDismissed as boolean) ?? false)
+      : false;
 
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState(meta);
@@ -693,13 +858,8 @@ function PostActivationChecklist() {
       <s-section heading="Setup checklist">
         {collapsed ? (
           <s-stack direction="inline" gap="base">
-            <s-text>
-              Checklist {allDone ? "complete" : "hidden"}.
-            </s-text>
-            <s-button
-              variant="tertiary"
-              onClick={() => setCollapsed(false)}
-            >
+            <s-text>Checklist {allDone ? "complete" : "hidden"}.</s-text>
+            <s-button variant="tertiary" onClick={() => setCollapsed(false)}>
               Show checklist
             </s-button>
           </s-stack>
@@ -724,9 +884,6 @@ function PostActivationChecklist() {
                     }
                   />
                   <s-text>{c.desc}</s-text>
-                  {/* Routed via AppLink (useAppNavigate) so the iframe stays
-                      alive — bare <s-link href=> in body content does a
-                      full-page reload and destroys the embedded session. */}
                   <AppLink href={c.href}>{c.cta}</AppLink>
                 </s-stack>
               </s-box>
@@ -745,3 +902,4 @@ function PostActivationChecklist() {
     </s-page>
   );
 }
+

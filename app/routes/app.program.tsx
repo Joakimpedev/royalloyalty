@@ -105,9 +105,9 @@ export default function ProgramPage() {
   const nav = useNavigation();
   const submit = useSubmit();
   const [searchParams] = useSearchParams();
-  // Onboarding redirect-chain marker (Essent pattern): when the wizard activates
-  // a program it sends the merchant here with ?onboarding=1 so this page shows a
-  // "Step 1 of 2" banner and a Continue CTA into /app/branding.
+  // Onboarding redirect-chain marker: the wizard sends the merchant here with
+  // ?onboarding=1 right after activation. This page shows a confirmation
+  // banner and a Continue CTA that takes them home (?welcomed=1).
   const inOnboardingChain = searchParams.get("onboarding") === "1";
 
   const rules = earnRules;
@@ -121,19 +121,20 @@ export default function ProgramPage() {
       {inOnboardingChain && (
         <s-button
           slot="primary-action"
-          onClick={() => appNav("/app/branding?onboarding=1")}
+          onClick={() => appNav("/app?welcomed=1")}
           variant="primary"
         >
-          Continue to Branding
+          Continue to dashboard
         </s-button>
       )}
 
       {inOnboardingChain && (
         <s-section>
-          <s-banner tone="info" heading="Step 1 of 2 — Review your earn rules">
+          <s-banner tone="success" heading="Your program is live">
             <s-paragraph>
-              Your program is activated. Confirm the points each action awards,
-              then continue to Branding to pick your widget look.
+              Customers can now earn and redeem points on your store. Review the
+              earn rules below if you want to tweak them — or continue to your
+              dashboard.
             </s-paragraph>
           </s-banner>
         </s-section>
