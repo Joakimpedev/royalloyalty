@@ -485,7 +485,7 @@
           lines.push("loadBalance() calls:        " + window.__royalLoadBalanceCalls.length);
           for (var lbi = 0; lbi < Math.min(window.__royalLoadBalanceCalls.length, 4); lbi++) {
             var call = window.__royalLoadBalanceCalls[lbi];
-            lines.push("  #" + (lbi + 1) + " at +" + (call.sinceFirstMs / 1000).toFixed(2) + "s");
+            lines.push("  #" + (lbi + 1) + " at +" + (call.sinceFirstMs / 1000).toFixed(2) + "s  [" + (call.path || "?") + "]");
             for (var fi = 0; fi < Math.min(call.stack.length, 3); fi++) {
               lines.push("     ↳ " + call.stack[fi]);
             }
@@ -1070,6 +1070,11 @@
       var frames = stack.split("\n").slice(1, 5).map(function (s) {
         return s.trim().replace(/^at\s+/, "");
       });
+      var pathTag = _balanceCached && (Date.now() - _balanceCachedAt < BALANCE_CACHE_MS)
+        ? "CACHE_HIT"
+        : _balanceInFlight
+          ? "SUBSCRIBED"
+          : "FETCH";
       window.__royalLoadBalanceCalls.push({
         at: startedAt,
         sinceFirstMs:
@@ -1077,7 +1082,7 @@
             ? startedAt - window.__royalLoadBalanceCalls[0].at
             : 0,
         stack: frames,
-        coalesced: !!_balanceInFlight,
+        path: pathTag,
       });
     } catch (e) {}
 

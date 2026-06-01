@@ -341,12 +341,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Sync the storefront branding metafields so the Liquid launcher block
     // renders the merchant's new colors / program name / points name on
-    // first paint. Without this, /loyalty/balance returns new branding but
-    // the SSR has already painted the previous metafield values, causing a
-    // visible flash. Non-fatal: a metafield write failure shouldn't block
-    // onboarding completion (we'll just keep the flash until the next sync).
+    // first paint. Non-fatal: a write failure doesn't block onboarding
+    // completion (we'll just keep the SSR/JS branding mismatch until the
+    // next sync). Errors are logged for debug.
     try {
-      await writeBrandingMetafields(admin, {
+      const r = await writeBrandingMetafields(admin, {
         primaryColor: w.primaryColor,
         secondaryColor: w.secondaryColor,
         launcherPosition: "bottom-right",
@@ -354,8 +353,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         panelTitle: w.programName,
         panelSubtitle: "Earn points on every order — redeem for rewards.",
       });
-    } catch {
-      /* non-fatal */
+      if (!r.ok) {
+        console.warn(
+          "[onboarding] writeBrandingMetafields failed",
+          r.setErrors,
+          r.threw,
+          r.shopIdError,
+        );
+      }
+    } catch (err) {
+      console.warn("[onboarding] writeBrandingMetafields threw", err);
     }
 
     // Iframe auth: don't server-redirect. Client navigates via useAppNavigate.
