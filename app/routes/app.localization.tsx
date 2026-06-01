@@ -53,7 +53,9 @@ async function requireShop(shopDomain: string) {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
-  const paid = shop.plan !== "FREE";
+  // Localization editing is available on all plans (including FREE). The
+  // `paid` boolean stays for UI compatibility but is forced true.
+  const paid = true;
   const config = readLocalization(shop.aiConfigSnapshot);
   return { config, paid };
 };
@@ -65,10 +67,11 @@ export const action = async ({
 }: ActionFunctionArgs): Promise<ActionResult> => {
   const { session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
-  const paid = shop.plan !== "FREE";
-  if (!paid) {
-    return { ok: false, message: "Localization editing requires a paid plan." };
-  }
+  // Localization editing is available on all plans (including FREE). The
+  // `paid` boolean stays for UI compatibility but is forced true. The
+  // previous "requires a paid plan" rejection was removed when we dropped
+  // feature gating.
+  const paid = true;
   const form = await request.formData();
   let next: LocalizationConfig;
   try {

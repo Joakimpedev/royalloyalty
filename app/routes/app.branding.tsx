@@ -331,7 +331,10 @@ async function requireShop(shopDomain: string) {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
-  const paid = shop.plan !== "FREE";
+  // All plans (including FREE) get the full branding editor — no features
+  // are gated behind paid tiers. Kept the `paid` variable so the existing
+  // Gated/LockedHint render paths don't need to be touched.
+  const paid = true;
   const embed = await checkAppEmbedEnabled(admin, {
     shop: session.shop,
     accessToken: session.accessToken,
@@ -356,7 +359,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = await requireShop(session.shop);
-  const paid = shop.plan !== "FREE";
+  // All plans (including FREE) get the full branding editor — no features
+  // are gated behind paid tiers. Kept the `paid` variable so the existing
+  // Gated/LockedHint render paths don't need to be touched.
+  const paid = true;
   const form = await request.formData();
   const incoming = JSON.parse(
     String(form.get("branding") ?? "{}"),

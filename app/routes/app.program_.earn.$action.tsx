@@ -223,7 +223,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   // trusted to resolve the parent route ID across flatRoutes setups. Reading
   // it in this loader and returning it on `money` removes the dependency.
   const money = await loadShopMoneyContext(admin, session.shop);
-  const paid = shop.plan !== "FREE";
+  // Earn-rule title / description / product line / cart line are no
+  // longer gated behind a paid plan — every merchant gets full editing.
+  const paid = true;
 
   const defaultProductLine =
     action === "purchase" ? defaults?.productLine ?? "" : "";
@@ -269,7 +271,9 @@ export const action = async ({
   const a = String(params.action ?? "");
   if (!isActionName(a)) throw new Response("Unknown action", { status: 404 });
 
-  const paid = shop.plan !== "FREE";
+  // Earn-rule title / description / product line / cart line are no
+  // longer gated behind a paid plan — every merchant gets full editing.
+  const paid = true;
   const form = await request.formData();
   const points = Number.parseInt(String(form.get("points")), 10);
   if (!Number.isFinite(points) || points < 0) {
