@@ -203,37 +203,13 @@ export default function ProgramPage() {
         </s-section>
       )}
 
-      {programActivated && inOnboardingChain && (
-        <s-button
-          slot="primary-action"
-          onClick={() => appNav("/app?welcomed=1")}
-          variant="primary"
-        >
-          Continue to dashboard
-        </s-button>
-      )}
-
-      {programActivated && inOnboardingChain && (
-        <s-section>
-          <s-banner tone="success" heading="Your program is live">
-            <s-paragraph>
-              Customers can now earn and redeem points on your store. Review the
-              earn rules below if you want to tweak them — or continue to your
-              dashboard.
-            </s-paragraph>
-          </s-banner>
-        </s-section>
-      )}
-
-      {!inOnboardingChain && (
-        <s-section heading="Program areas">
-          <s-paragraph>
-            Earn rules live on this page. Use the cards below to jump to the
-            other parts of your program.
-          </s-paragraph>
-          <ProgramCatalog />
-        </s-section>
-      )}
+      <s-section heading="Program areas">
+        <s-paragraph>
+          Earn rules live on this page. Use the cards below to jump to the
+          other parts of your program.
+        </s-paragraph>
+        <ProgramCatalog />
+      </s-section>
 
       {actionData && !actionData.ok && (
         <s-section>
@@ -353,12 +329,6 @@ function ProgramCatalog() {
       title: "Cashback",
       description:
         "Return a percentage of every order as native Shopify store credit.",
-    },
-    {
-      href: "/app/suggestions",
-      title: "AI suggestions",
-      description:
-        "Recommendations Royal generates from your program data — apply or ignore.",
     },
   ];
   return (
