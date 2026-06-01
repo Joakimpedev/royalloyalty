@@ -234,10 +234,12 @@
           { once: true }
         );
         // Safety net: still poll once at +200ms in case the event fired
-        // before this listener attached (race). One extra check is cheap.
+        // before this listener attached (race). Bail if init already ran —
+        // running twice causes duplicate click handlers + duplicate
+        // /loyalty/balance fetches.
         setTimeout(function () {
           try {
-            if (window.RoyalLoyalty && window.__royalInitCalls < 2) {
+            if (window.RoyalLoyalty && (window.__royalInitCalls || 0) === 0) {
               mark("safety-net check, RL ready");
               runInit();
             }
