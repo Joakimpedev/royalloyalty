@@ -1048,6 +1048,17 @@
   /* Fetch the full loyalty payload (balance + earn rules + rewards +
    * referral link + activity + branding). Anonymous visitors get the
    * shop-wide bits (earn rules, rewards, branding) but no balance/tier. */
+  // Module-level cache so the launcher, loyalty-page block, and
+  // customer-account block share ONE /loyalty/balance fetch instead of
+  // firing 3 concurrent identical requests. Shopify's App Proxy serializes
+  // (or stream-limits) parallel identical requests for the same
+  // shop+customer, which is why all 3 stall when fired together while a
+  // standalone direct fetch returns in ~1.2s.
+  var _balanceInFlight = null;   // Promise resolved with the payload
+  var _balanceCached = null;     // Last successful payload
+  var _balanceCachedAt = 0;
+  var BALANCE_CACHE_MS = 5000;   // Reuse within 5s for any subsequent caller
+
   function loadBalance(cfg, onData, onError) {
     var startedAt = Date.now();
     // Record every loadBalance invocation with a stack trace so the diag
@@ -1056,7 +1067,6 @@
       window.__royalLoadBalanceCalls = window.__royalLoadBalanceCalls || [];
       var stack = "";
       try { stack = new Error().stack || ""; } catch (e) {}
-      // Trim to first 4 frames so the diag stays readable.
       var frames = stack.split("\n").slice(1, 5).map(function (s) {
         return s.trim().replace(/^at\s+/, "");
       });
@@ -1067,8 +1077,29 @@
             ? startedAt - window.__royalLoadBalanceCalls[0].at
             : 0,
         stack: frames,
+        coalesced: !!_balanceInFlight,
       });
     } catch (e) {}
+
+    // Fresh-enough cached payload? Hand it to the caller without a fetch.
+    if (
+      _balanceCached &&
+      Date.now() - _balanceCachedAt < BALANCE_CACHE_MS &&
+      typeof onData === "function"
+    ) {
+      try { onData(_balanceCached); } catch (e) {}
+      return;
+    }
+
+    // Fetch already in flight from a sibling block? Subscribe to it.
+    if (_balanceInFlight) {
+      _balanceInFlight.then(
+        function (d) { if (typeof onData === "function") try { onData(d); } catch (e) {} },
+        function (err) { if (typeof onError === "function") try { onError(err); } catch (e) {} },
+      );
+      return;
+    }
+
     if (window.__royalDiag) {
       window.__royalDiag.lastFetchUrl = (cfg.proxy || "").replace(/\/$/, "") + "/loyalty/balance";
       window.__royalDiag.payloadStatus = "fetching…";
@@ -1115,7 +1146,20 @@
     }, 10000);
     var fetchOpts = { method: "GET" };
     if (ac) fetchOpts.signal = ac.signal;
-    api(cfg.proxy, "/loyalty/balance", fetchOpts)
+    // Wrap the api() call in a shared promise so other callers that arrive
+    // while we're in flight can subscribe via the _balanceInFlight branch
+    // above instead of firing their own /loyalty/balance.
+    _balanceInFlight = api(cfg.proxy, "/loyalty/balance", fetchOpts);
+    _balanceInFlight
+      .then(function (d) {
+        _balanceCached = d;
+        _balanceCachedAt = Date.now();
+      })
+      .catch(function () {})
+      .then(function () {
+        _balanceInFlight = null;
+      });
+    _balanceInFlight
       .then(function (d) {
         clearTimeout(timeoutId);
         try { clearInterval(watchdog); } catch (e) {}
