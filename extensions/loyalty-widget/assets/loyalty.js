@@ -213,6 +213,78 @@
         credentials: "omit",
         headers: { Accept: "application/json" },
       });
+
+      // probe C: use the launcher's actual api() helper (post-fix). If A
+      // works but C hangs, the issue is *inside* api() — closure, header
+      // merge, options mutation. If both work, the launcher's loadBalance
+      // is doing something different from a direct api() call.
+      var slotC = (__royalProbes.c = { state: "fetching…", startedAt: Date.now() });
+      try {
+        api(cfg.proxy, "/loyalty/balance" + customerQs, { method: "GET" })
+          .then(function (d) {
+            slotC.elapsedMs = Date.now() - slotC.startedAt;
+            slotC.bodyLen = JSON.stringify(d).length;
+            slotC.state = "ok";
+          })
+          .catch(function (err) {
+            slotC.elapsedMs = Date.now() - slotC.startedAt;
+            slotC.state =
+              "FAILED — " +
+              (err && err.message ? err.message : "?") +
+              (err && err.royalDiag
+                ? " (status=" + (err.royalDiag.status || "?") + ")"
+                : "");
+          });
+        // Also capture what api() actually sets on the options object by
+        // patching window.fetch temporarily and recording the first call
+        // matching our URL. Restore immediately on the same tick.
+        if (!window.__royalFetchSpy) {
+          var nativeFetch = window.fetch;
+          window.__royalFetchSpy = [];
+          window.fetch = function () {
+            try {
+              var u = arguments[0];
+              var o = arguments[1] || {};
+              if (typeof u === "string" && u.indexOf("/loyalty/balance") >= 0) {
+                var hdrs = {};
+                try {
+                  if (o.headers && o.headers.constructor === Object) {
+                    hdrs = o.headers;
+                  } else if (o.headers && typeof o.headers.forEach === "function") {
+                    o.headers.forEach(function (v, k) { hdrs[k] = v; });
+                  }
+                } catch (e) {}
+                window.__royalFetchSpy.push({
+                  at: Date.now(),
+                  method: o.method || "GET",
+                  credentials: o.credentials || "(default)",
+                  hasBody: o.body != null,
+                  hasSignal: !!o.signal,
+                  headers: hdrs,
+                  cache: o.cache || "(default)",
+                  mode: o.mode || "(default)",
+                });
+              }
+            } catch (e) {}
+            return nativeFetch.apply(this, arguments);
+          };
+        }
+      } catch (e) {
+        slotC.state = "EXC — " + (e && e.message ? e.message : "?");
+      }
+
+      // setInterval sentinel — fires every 1s, records each tick's
+      // timestamp. If ticks happen at ~10s intervals instead of ~1s, this
+      // tab is heavily throttled and that's why the launcher's watchdog
+      // never aborts.
+      if (!window.__royalSentinelTicks) {
+        window.__royalSentinelTicks = [];
+        var sentStart = Date.now();
+        var sent = setInterval(function () {
+          window.__royalSentinelTicks.push(Date.now() - sentStart);
+          if (window.__royalSentinelTicks.length >= 20) clearInterval(sent);
+        }, 1000);
+      }
     }
 
     var refresh = function () {
@@ -401,6 +473,51 @@
         }
         fmtProbe("a", __royalProbes.a);
         fmtProbe("b", __royalProbes.b);
+        if (__royalProbes.c) {
+          var c = __royalProbes.c;
+          var elapsed = c.elapsedMs != null ? c.elapsedMs + "ms" : "in flight";
+          var extra = c.bodyLen != null ? " bodyLen=" + c.bodyLen : "";
+          lines.push("probe c (via api() helper):  " + c.state + "  " + elapsed + extra);
+        }
+
+        // Fetch spy — what api() actually sent for each /loyalty/balance call
+        if (window.__royalFetchSpy && window.__royalFetchSpy.length) {
+          lines.push("fetch spy (first " + Math.min(window.__royalFetchSpy.length, 4) + " /loyalty/balance calls):");
+          for (var si = 0; si < Math.min(window.__royalFetchSpy.length, 4); si++) {
+            var sp = window.__royalFetchSpy[si];
+            var hdrStr = "";
+            try { hdrStr = JSON.stringify(sp.headers); } catch (e) { hdrStr = "(unserialisable)"; }
+            lines.push(
+              "  #" + (si + 1) + " " + sp.method +
+              " creds=" + sp.credentials +
+              " hasBody=" + sp.hasBody +
+              " signal=" + sp.hasSignal +
+              " mode=" + sp.mode +
+              " cache=" + sp.cache,
+            );
+            lines.push("     headers=" + hdrStr);
+          }
+        } else {
+          lines.push("fetch spy:                  (no /loyalty/balance calls captured yet)");
+        }
+
+        // setInterval throttle sentinel
+        if (window.__royalSentinelTicks) {
+          var ticks = window.__royalSentinelTicks;
+          if (ticks.length === 0) {
+            lines.push("setInterval sentinel:     (no ticks yet)");
+          } else {
+            var summary = ticks.slice(0, 10).map(function (t) {
+              return (t / 1000).toFixed(1) + "s";
+            }).join(", ");
+            var avgGap = ticks.length > 1
+              ? ((ticks[ticks.length - 1] - ticks[0]) / (ticks.length - 1) / 1000).toFixed(2)
+              : "n/a";
+            lines.push(
+              "setInterval sentinel:     " + ticks.length + " ticks, avg gap=" + avgGap + "s  [" + summary + (ticks.length > 10 ? ", …" : "") + "]"
+            );
+          }
+        }
 
         // Resource Timing for the launcher's OWN balance fetch — tells us
         // DNS, TCP, TLS, request-sent, TTFB, response-end. If TTFB is huge,
