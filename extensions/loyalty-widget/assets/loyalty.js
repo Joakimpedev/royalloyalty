@@ -134,6 +134,87 @@
     };
     mount();
 
+    // ---- Deep network probe ----------------------------------------------
+    // Fires once per page load against the same URL the launcher hangs on,
+    // so the diag box can answer "is it the server, the browser, or the
+    // fetch options?" without making the user open DevTools.
+    //
+    // We run TWO parallel probes against the SAME URL:
+    //   probe A: credentials: "same-origin" (what the launcher does)
+    //   probe B: credentials: "omit"        (rules out a cookie / CORS bug)
+    // Plus we capture Resource-Timing entries for the launcher's own fetch
+    // when it eventually completes, so we can see DNS / TCP / TTFB / total.
+    var __royalProbes = {
+      started: false,
+      a: { state: "not started" },
+      b: { state: "not started" },
+    };
+    window.__royalProbes = __royalProbes;
+    function runDeepProbe() {
+      if (__royalProbes.started) return;
+      __royalProbes.started = true;
+      var cfgEl = document.getElementById("royal-launcher-root");
+      var cfg = {};
+      try {
+        cfg = JSON.parse(cfgEl ? cfgEl.getAttribute("data-royal-config") || "{}" : "{}");
+      } catch (e) {}
+      var proxy = (cfg.proxy || "").replace(/\/$/, "");
+      if (!proxy) {
+        __royalProbes.a.state = "skip (no cfg.proxy)";
+        __royalProbes.b.state = "skip (no cfg.proxy)";
+        return;
+      }
+      var customerQs =
+        cfg.customerId != null
+          ? "?logged_in_customer_id=" + encodeURIComponent(cfg.customerId)
+          : "";
+      var url = proxy + "/loyalty/balance" + customerQs;
+      __royalProbes.url = url;
+      function probe(label, opts) {
+        var slot = __royalProbes[label];
+        slot.state = "fetching…";
+        slot.startedAt = Date.now();
+        var ac =
+          typeof AbortController !== "undefined" ? new AbortController() : null;
+        if (ac) opts.signal = ac.signal;
+        var killer = setTimeout(function () {
+          if (slot.state !== "fetching…") return;
+          try { if (ac) ac.abort(); } catch (e) {}
+          slot.state = "ABORTED after 15s";
+          slot.elapsedMs = Date.now() - slot.startedAt;
+        }, 15000);
+        fetch(url, opts)
+          .then(function (r) {
+            clearTimeout(killer);
+            slot.status = r.status;
+            slot.contentType = r.headers.get("content-type") || "";
+            return r.text().then(function (body) {
+              slot.elapsedMs = Date.now() - slot.startedAt;
+              slot.bodyLen = body.length;
+              slot.bodySnippet = body.slice(0, 120).replace(/\s+/g, " ");
+              slot.state = "ok";
+            });
+          })
+          .catch(function (err) {
+            clearTimeout(killer);
+            if (slot.state !== "ABORTED after 15s") {
+              slot.elapsedMs = Date.now() - slot.startedAt;
+              slot.state = "FAILED — " + (err && err.message ? err.message : "?");
+            }
+          });
+      }
+      probe("a", {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      probe("b", {
+        method: "GET",
+        credentials: "omit",
+        headers: { Accept: "application/json" },
+      });
+    }
+
     var refresh = function () {
       try {
         var elapsed = ((Date.now() - __royalDiag.startedAt) / 1000).toFixed(1);
@@ -300,6 +381,114 @@
             lines.push("  - " + __royalDiag.errors[i]);
           }
         }
+
+        // ---- Deep network probe (fires once, polled into diag) ----
+        runDeepProbe();
+        lines.push("--- deep probe ---");
+        if (__royalProbes.url) {
+          lines.push("probe url:                " + __royalProbes.url);
+        }
+        function fmtProbe(label, slot) {
+          var pieces = [slot.state];
+          if (slot.elapsedMs != null) pieces.push(slot.elapsedMs + "ms");
+          if (slot.status != null) pieces.push("status=" + slot.status);
+          if (slot.contentType) pieces.push("ct=" + slot.contentType);
+          if (slot.bodyLen != null) pieces.push("bodyLen=" + slot.bodyLen);
+          lines.push("probe " + label + " (" + (label === "a" ? "same-origin" : "omit") + "):  " + pieces.join("  "));
+          if (slot.bodySnippet) {
+            lines.push("  body[:120]: " + slot.bodySnippet);
+          }
+        }
+        fmtProbe("a", __royalProbes.a);
+        fmtProbe("b", __royalProbes.b);
+
+        // Resource Timing for the launcher's OWN balance fetch — tells us
+        // DNS, TCP, TLS, request-sent, TTFB, response-end. If TTFB is huge,
+        // the server is the bottleneck; if connectEnd is huge, network.
+        try {
+          if (__royalDiag.lastFetchUrl && performance && performance.getEntriesByName) {
+            var entries = performance.getEntriesByName(__royalDiag.lastFetchUrl, "resource");
+            if (entries && entries.length) {
+              var lastE = entries[entries.length - 1];
+              lines.push(
+                "resTiming (launcher fetch):"
+              );
+              lines.push("  startTime:      " + lastE.startTime.toFixed(1) + "ms");
+              lines.push("  duration:       " + lastE.duration.toFixed(1) + "ms");
+              lines.push("  dns:            " + (lastE.domainLookupEnd - lastE.domainLookupStart).toFixed(1) + "ms");
+              lines.push("  tcp:            " + (lastE.connectEnd - lastE.connectStart).toFixed(1) + "ms");
+              lines.push("  tls:            " + (lastE.secureConnectionStart > 0 ? (lastE.connectEnd - lastE.secureConnectionStart).toFixed(1) : "n/a") + "ms");
+              lines.push("  requestStart:   " + lastE.requestStart.toFixed(1) + "ms");
+              lines.push("  responseStart:  " + lastE.responseStart.toFixed(1) + "ms (TTFB from start)");
+              lines.push("  responseEnd:    " + lastE.responseEnd.toFixed(1) + "ms");
+              lines.push("  transferSize:   " + (lastE.transferSize || 0) + "  encoded:" + (lastE.encodedBodySize || 0) + "  decoded:" + (lastE.decodedBodySize || 0));
+              lines.push("  initiatorType:  " + lastE.initiatorType);
+              lines.push("  nextHopProtocol:" + (lastE.nextHopProtocol || "(unknown)"));
+            } else {
+              lines.push("resTiming (launcher fetch): (no entry — request hasn't completed)");
+            }
+          }
+        } catch (e) {
+          lines.push("resTiming (launcher fetch): (read failed " + e.message + ")");
+        }
+
+        // Service workers controlling THIS page can intercept fetch.
+        try {
+          if (navigator.serviceWorker) {
+            var ctrl = navigator.serviceWorker.controller;
+            lines.push(
+              "serviceWorker.controller: " +
+                (ctrl
+                  ? "yes — scriptURL=" + ctrl.scriptURL + " state=" + ctrl.state
+                  : "none")
+            );
+            // List all registrations (async — best-effort, populated on next refresh).
+            if (!window.__royalSWRegs && navigator.serviceWorker.getRegistrations) {
+              window.__royalSWRegs = "loading…";
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                window.__royalSWRegs = regs.map(function (r) {
+                  return (r.active ? r.active.scriptURL : "(no active)") + " scope=" + r.scope;
+                });
+              }).catch(function (e) {
+                window.__royalSWRegs = "FAILED " + e.message;
+              });
+            }
+            if (window.__royalSWRegs) {
+              lines.push(
+                "serviceWorker.registrations: " +
+                  (Array.isArray(window.__royalSWRegs)
+                    ? (window.__royalSWRegs.length === 0
+                        ? "(none)"
+                        : "\n  - " + window.__royalSWRegs.join("\n  - "))
+                    : window.__royalSWRegs)
+              );
+            }
+          } else {
+            lines.push("serviceWorker:            (not supported)");
+          }
+        } catch (e) {
+          lines.push("serviceWorker:            (read failed " + e.message + ")");
+        }
+
+        // Network info.
+        try {
+          var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+          if (conn) {
+            lines.push(
+              "navigator.connection:     type=" + (conn.effectiveType || "?") +
+                " rtt=" + (conn.rtt != null ? conn.rtt + "ms" : "?") +
+                " downlink=" + (conn.downlink != null ? conn.downlink + "Mbps" : "?") +
+                " saveData=" + !!conn.saveData
+            );
+          }
+        } catch (e) {}
+
+        // Userland fetch identity — has something monkey-patched fetch?
+        try {
+          var fStr = String(window.fetch);
+          lines.push("fetch impl:               " + (fStr.indexOf("[native code]") >= 0 ? "native" : "PATCHED — " + fStr.slice(0, 80)));
+        } catch (e) {}
+
         earlyText.textContent = lines.join("\n");
       } catch (e) { /* non-fatal */ }
     };
