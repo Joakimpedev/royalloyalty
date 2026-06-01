@@ -33,7 +33,8 @@ import { AppLink, useAppNavigate } from "../lib/app-navigate";
 
 interface WizardState {
   // Step 1
-  unitsPerPoint: number;
+  earnPoints: number;
+  earnPerCurrency: number;
   signupPoints: number;
   // Step 2
   firstRewardPoints: number;
@@ -47,7 +48,8 @@ interface WizardState {
 
 function defaultsToWizard(d: ProgramDefaults): WizardState {
   return {
-    unitsPerPoint: d.unitsPerPoint,
+    earnPoints: d.earnPoints,
+    earnPerCurrency: d.earnPerCurrency,
     signupPoints: d.signupPoints,
     firstRewardPoints: d.firstRewardPoints,
     firstRewardValue: d.firstRewardValue,
@@ -137,13 +139,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const defaults = getDefaultsForCurrency(shop.currencyCode ?? "USD");
 
-    // Earn-per-currency-unit. Stored as points-per-dollar; we encode the
-    // "1 point per N currency units" by setting points = 1 / unitsPerPoint
-    // semantically. The existing earn rule schema is "points awarded for
-    // this action, per dollar if perDollar=true", so for the purchase rule
-    // we set points = 1 and let the merchant tune unitsPerPoint via the
-    // /app/program page later. Bonus actions are flat points (perDollar=false).
-    const earnPointsPerUnit = w.unitsPerPoint > 0 ? 1 / w.unitsPerPoint : 1;
+    // Earn rule stored as points-per-currency-unit. The wizard collects two
+    // numbers — "X points / per Y currency" — and persists their ratio.
+    const earnPointsPerUnit =
+      w.earnPerCurrency > 0 ? w.earnPoints / w.earnPerCurrency : 1;
 
     await prisma.$transaction(async (tx) => {
       await tx.tier.deleteMany({ where: { shopId: shop.id } });
@@ -410,44 +409,46 @@ function Wizard({
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   return (
-    <s-page heading="Set up your loyalty program">
+    <s-page>
       <ProgressBar step={step} />
 
-      {step === 0 && (
-        <StepWelcome
-          state={state}
-          mut={mut}
-          currencyCode={defaults.currencyCode}
-        />
-      )}
-      {step === 1 && (
-        <StepReward
-          state={state}
-          mut={mut}
-          currencyCode={defaults.currencyCode}
-        />
-      )}
-      {step === 2 && <StepBranding state={state} mut={mut} />}
-      {step === 3 && (
-        <StepActivate
-          state={state}
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "24px 16px 16px" }}>
+        {step === 0 && (
+          <StepWelcome
+            state={state}
+            mut={mut}
+            currencyCode={defaults.currencyCode}
+          />
+        )}
+        {step === 1 && (
+          <StepReward
+            state={state}
+            mut={mut}
+            currencyCode={defaults.currencyCode}
+          />
+        )}
+        {step === 2 && <StepBranding state={state} mut={mut} />}
+        {step === 3 && (
+          <StepActivate
+            state={state}
+            currencyCode={defaults.currencyCode}
+            isSaving={!!isSaving}
+            error={
+              fetcher.data && "ok" in fetcher.data && fetcher.data.ok === false
+                ? fetcher.data.error ?? "Activation failed"
+                : null
+            }
+          />
+        )}
+
+        <WizardNav
+          step={step}
+          onBack={back}
+          onNext={next}
           onActivate={activate}
           isSaving={!!isSaving}
-          error={
-            fetcher.data && "ok" in fetcher.data && fetcher.data.ok === false
-              ? fetcher.data.error ?? "Activation failed"
-              : null
-          }
         />
-      )}
-
-      <WizardNav
-        step={step}
-        onBack={back}
-        onNext={next}
-        onActivate={activate}
-        isSaving={!!isSaving}
-      />
+      </div>
     </s-page>
   );
 }
@@ -455,24 +456,32 @@ function Wizard({
 function ProgressBar({ step }: { step: number }) {
   const pct = ((step + 1) / STEPS.length) * 100;
   return (
-    <div style={{ margin: "0 0 16px" }}>
+    <div
+      style={{
+        padding: "12px 16px 14px",
+        borderBottom: "1px solid #e3e5e7",
+        background: "#fff",
+      }}
+    >
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           fontSize: 12,
-          color: "#6d7175",
-          marginBottom: 6,
+          fontWeight: 500,
+          color: "#5c5f62",
+          marginBottom: 8,
         }}
       >
         <span>
-          Step {step + 1} of {STEPS.length} — {STEPS[step]}
+          Step {step + 1} of {STEPS.length}
         </span>
+        <span>{STEPS[step]}</span>
       </div>
       <div
         style={{
           height: 4,
-          background: "#e1e3e5",
+          background: "#e3e5e7",
           borderRadius: 999,
           overflow: "hidden",
         }}
@@ -481,8 +490,8 @@ function ProgressBar({ step }: { step: number }) {
           style={{
             width: `${pct}%`,
             height: "100%",
-            background: "#202223",
-            transition: "width 200ms ease",
+            background: "#1a1c1f",
+            transition: "width 240ms ease",
           }}
         />
       </div>
@@ -504,37 +513,270 @@ function WizardNav({
   isSaving: boolean;
 }) {
   const isLast = step === STEPS.length - 1;
+  const navBtn = (
+    label: string,
+    onClick: () => void,
+    variant: "primary" | "ghost",
+    disabled = false,
+    loading = false,
+  ) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      style={{
+        appearance: "none",
+        border: variant === "primary" ? "none" : "1px solid #c9cccf",
+        background: variant === "primary" ? "#1a1c1f" : "#fff",
+        color: variant === "primary" ? "#fff" : "#1a1c1f",
+        fontFamily: "inherit",
+        fontSize: 14,
+        fontWeight: 600,
+        padding: "9px 18px",
+        borderRadius: 8,
+        cursor: disabled || loading ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {loading ? "Activating…" : label}
+    </button>
+  );
   return (
     <div
       style={{
         display: "flex",
         justifyContent: "space-between",
-        marginTop: 24,
+        marginTop: 32,
       }}
     >
-      <s-button
-        variant="tertiary"
-        onClick={onBack}
-        {...(step === 0 ? { disabled: true } : {})}
+      {navBtn("Back", onBack, "ghost", step === 0)}
+      {isLast
+        ? navBtn("Activate program", onActivate, "primary", false, isSaving)
+        : navBtn("Next", onNext, "primary")}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Visual primitives — kept in this file so each step reads top-to-bottom.
+// ---------------------------------------------------------------------------
+
+function StepTitle({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div style={{ textAlign: "center", margin: "8px 0 28px" }}>
+      <h1
+        style={{
+          fontSize: 28,
+          lineHeight: 1.2,
+          fontWeight: 700,
+          color: "#1a1c1f",
+          margin: "0 0 8px",
+        }}
       >
-        Back
-      </s-button>
-      {isLast ? (
-        <s-button
-          variant="primary"
-          onClick={onActivate}
-          {...(isSaving ? { loading: true } : {})}
+        {title}
+      </h1>
+      {subtitle && (
+        <p
+          style={{
+            fontSize: 14,
+            color: "#6d7175",
+            margin: 0,
+          }}
         >
-          Activate program
-        </s-button>
-      ) : (
-        <s-button variant="primary" onClick={onNext}>
-          Next
-        </s-button>
+          {subtitle}
+        </p>
       )}
     </div>
   );
 }
+
+function Card({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid #e3e5e7",
+        borderRadius: 12,
+        padding: "20px 22px",
+        marginBottom: 16,
+        boxShadow: "0 1px 0 rgba(22, 29, 37, 0.04)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 14,
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: "#f1f2f3",
+            color: "#5c5f62",
+          }}
+        >
+          {icon}
+        </span>
+        <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1c1f" }}>
+          {title}
+        </span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: 13,
+        color: "#5c5f62",
+        marginBottom: 6,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Compact numeric input with an in-field suffix (e.g. "points" or a currency
+ *  code). Width is fixed so two of these sit side-by-side without taking the
+ *  whole card width. */
+function SuffixNumber({
+  value,
+  onChange,
+  suffix,
+  min = 1,
+  step = 1,
+  width = 160,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  suffix: string;
+  min?: number;
+  step?: number;
+  width?: number;
+}) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "stretch",
+        width,
+        border: "1px solid #c9cccf",
+        borderRadius: 8,
+        background: "#fff",
+        overflow: "hidden",
+      }}
+    >
+      <input
+        type="number"
+        min={min}
+        step={step}
+        value={value}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) onChange(Math.max(min, n));
+        }}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          border: "none",
+          outline: "none",
+          padding: "8px 8px 8px 12px",
+          fontSize: 14,
+          fontFamily: "inherit",
+          color: "#1a1c1f",
+          background: "transparent",
+        }}
+      />
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "0 12px",
+          background: "#fafbfb",
+          borderLeft: "1px solid #e3e5e7",
+          fontSize: 13,
+          color: "#5c5f62",
+        }}
+      >
+        {suffix}
+      </span>
+    </div>
+  );
+}
+
+// Inline SVG icon set — Polaris-style stroke, 18px, currentColor.
+const ICONS: Record<string, React.ReactNode> = {
+  bag: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 7h12l-1 13H7L6 7Z" />
+      <path d="M9 7V5a3 3 0 0 1 6 0v2" />
+    </svg>
+  ),
+  userPlus: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10" cy="8" r="4" />
+      <path d="M3 21a7 7 0 0 1 14 0" />
+      <path d="M19 8v6M16 11h6" />
+    </svg>
+  ),
+  gift: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="8" width="18" height="4" rx="1" />
+      <path d="M5 12v9h14v-9M12 8v13" />
+      <path d="M12 8c-3 0-4-1.5-4-3a2 2 0 0 1 4 0v3ZM12 8c3 0 4-1.5 4-3a2 2 0 0 0-4 0v3Z" />
+    </svg>
+  ),
+  palette: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4 9 9 0 0 0-9-8Z" />
+      <circle cx="7.5" cy="10.5" r="1.2" />
+      <circle cx="11" cy="7" r="1.2" />
+      <circle cx="15.5" cy="8.5" r="1.2" />
+    </svg>
+  ),
+  type: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7V5h16v2M12 5v14M9 19h6" />
+    </svg>
+  ),
+  rocket: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 4c4 0 6 2 6 6-3 0-5 1-7 3l-4 4-3-3 4-4c2-2 3-4 4-6Z" />
+      <path d="M9 15l-3-3M6 18l-2 2M9 18l-2 2M6 15l-2 2" />
+    </svg>
+  ),
+  store: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 9l1-4h14l1 4M4 9v11h16V9M4 9h16" />
+      <path d="M9 20v-6h6v6" />
+    </svg>
+  ),
+};
 
 // ---------------------------------------------------------------------------
 // Step 1 — Welcome + earn rate + signup
@@ -550,56 +792,54 @@ function StepWelcome({
   currencyCode: string;
 }) {
   return (
-    <s-section heading="Welcome to Royal Loyalty">
-      <s-paragraph>
-        Reward your customers for every purchase. We've pre-filled sensible
-        defaults — tweak anything, or keep them and click through.
-      </s-paragraph>
+    <>
+      <StepTitle
+        title="Welcome to Royal Loyalty"
+        subtitle="Reward your customers for every purchase."
+      />
 
-      <s-stack direction="block" gap="base">
-        <s-box padding="base" borderWidth="base" borderRadius="base">
-          <s-stack direction="block" gap="base">
-            <s-text fontWeight="bold">How customers earn on every order</s-text>
-            <s-stack direction="inline" gap="base">
-              <s-number-field
-                label={`Spend (${currencyCode}) to earn 1 point`}
-                value={String(state.unitsPerPoint)}
-                onInput={(e: any) =>
-                  mut(
-                    "unitsPerPoint",
-                    Math.max(1, Number(e.target.value) || 1),
-                  )
-                }
-              />
-            </s-stack>
-            <s-text tone="subdued">
-              Industry standard: ~5% effective cashback when paired with the
-              first reward on the next step.
-            </s-text>
-          </s-stack>
-        </s-box>
-
-        <s-box padding="base" borderWidth="base" borderRadius="base">
-          <s-stack direction="block" gap="base">
-            <s-text fontWeight="bold">Signup bonus</s-text>
-            <s-number-field
-              label="Points awarded when a customer creates an account"
-              value={String(state.signupPoints)}
-              onInput={(e: any) =>
-                mut(
-                  "signupPoints",
-                  Math.max(0, Math.round(Number(e.target.value) || 0)),
-                )
-              }
+      <Card icon={ICONS.bag} title="Earn on every order">
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "flex-end",
+            gap: 16,
+          }}
+        >
+          <div>
+            <FieldLabel>Customer earns</FieldLabel>
+            <SuffixNumber
+              value={state.earnPoints}
+              onChange={(v) => mut("earnPoints", Math.max(1, Math.round(v)))}
+              suffix="points"
             />
-            <s-text tone="subdued">
-              A signup bonus equal to your first reward gives customers a
-              taste of the program right away.
-            </s-text>
-          </s-stack>
-        </s-box>
-      </s-stack>
-    </s-section>
+          </div>
+          <div>
+            <FieldLabel>For every</FieldLabel>
+            <SuffixNumber
+              value={state.earnPerCurrency}
+              onChange={(v) =>
+                mut("earnPerCurrency", Math.max(1, Math.round(v)))
+              }
+              suffix={currencyCode}
+            />
+          </div>
+        </div>
+      </Card>
+
+      <Card icon={ICONS.userPlus} title="Signup bonus">
+        <div>
+          <FieldLabel>New customers receive</FieldLabel>
+          <SuffixNumber
+            value={state.signupPoints}
+            onChange={(v) => mut("signupPoints", Math.max(0, Math.round(v)))}
+            suffix="points"
+            min={0}
+          />
+        </div>
+      </Card>
+    </>
   );
 }
 
@@ -617,44 +857,45 @@ function StepReward({
   currencyCode: string;
 }) {
   return (
-    <s-section heading="Pick a first reward">
-      <s-paragraph>
-        This is the cheapest reward customers can redeem. You can add more
-        rewards later from your Program page.
-      </s-paragraph>
+    <>
+      <StepTitle
+        title="Pick a first reward"
+        subtitle="The cheapest reward customers can redeem."
+      />
 
-      <s-box padding="base" borderWidth="base" borderRadius="base">
-        <s-stack direction="block" gap="base">
-          <s-text fontWeight="bold">Amount off</s-text>
-          <s-stack direction="inline" gap="base">
-            <s-number-field
-              label="Points cost"
-              value={String(state.firstRewardPoints)}
-              onInput={(e: any) =>
-                mut(
-                  "firstRewardPoints",
-                  Math.max(1, Math.round(Number(e.target.value) || 1)),
-                )
+      <Card icon={ICONS.gift} title="Amount off">
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "flex-end",
+            gap: 16,
+          }}
+        >
+          <div>
+            <FieldLabel>Spend</FieldLabel>
+            <SuffixNumber
+              value={state.firstRewardPoints}
+              onChange={(v) =>
+                mut("firstRewardPoints", Math.max(1, Math.round(v)))
               }
+              suffix="points"
             />
-            <s-number-field
-              label={`Discount value (${currencyCode})`}
-              value={String(state.firstRewardValue)}
-              onInput={(e: any) =>
-                mut(
-                  "firstRewardValue",
-                  Math.max(1, Number(e.target.value) || 1),
-                )
+          </div>
+          <div>
+            <FieldLabel>Get</FieldLabel>
+            <SuffixNumber
+              value={state.firstRewardValue}
+              onChange={(v) =>
+                mut("firstRewardValue", Math.max(1, Math.round(v)))
               }
+              suffix={`${currencyCode} off`}
+              width={180}
             />
-          </s-stack>
-          <s-text tone="subdued">
-            With the earn rate from step 1, this is roughly a 5% effective
-            cashback when redeemed.
-          </s-text>
-        </s-stack>
-      </s-box>
-    </s-section>
+          </div>
+        </div>
+      </Card>
+    </>
   );
 }
 
@@ -670,29 +911,57 @@ function StepBranding({
   mut: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
 }) {
   return (
-    <s-section heading="Make it yours">
-      <s-paragraph>
-        These are the basics shoppers will see. You can fine-tune every detail
-        later on the Branding page.
-      </s-paragraph>
+    <>
+      <StepTitle
+        title="Make it yours"
+        subtitle="Customize what shoppers see on the storefront."
+      />
 
-      <s-stack direction="block" gap="base">
-        <s-text-field
-          label="Program name"
-          value={state.programName}
-          onInput={(e: any) => mut("programName", e.target.value)}
-        />
-        <s-text-field
-          label="Points name (e.g. Crowns, Coins, Stars)"
-          value={state.pointsName}
-          onInput={(e: any) => mut("pointsName", e.target.value)}
-        />
+      <Card icon={ICONS.type} title="Naming">
+        <div style={{ display: "grid", gap: 14 }}>
+          <div>
+            <FieldLabel>Program name</FieldLabel>
+            <input
+              type="text"
+              value={state.programName}
+              onChange={(e) => mut("programName", e.target.value)}
+              style={{
+                width: "100%",
+                maxWidth: 360,
+                border: "1px solid #c9cccf",
+                borderRadius: 8,
+                padding: "8px 12px",
+                fontSize: 14,
+                fontFamily: "inherit",
+                color: "#1a1c1f",
+                background: "#fff",
+              }}
+            />
+          </div>
+          <div>
+            <FieldLabel>Points name (e.g. Crowns, Coins, Stars)</FieldLabel>
+            <input
+              type="text"
+              value={state.pointsName}
+              onChange={(e) => mut("pointsName", e.target.value)}
+              style={{
+                width: "100%",
+                maxWidth: 240,
+                border: "1px solid #c9cccf",
+                borderRadius: 8,
+                padding: "8px 12px",
+                fontSize: 14,
+                fontFamily: "inherit",
+                color: "#1a1c1f",
+                background: "#fff",
+              }}
+            />
+          </div>
+        </div>
+      </Card>
 
-        <s-text fontWeight="bold">Palette</s-text>
-        <s-paragraph>
-          Pick a starting palette that fits your brand, or fine-tune the
-          colors below.
-        </s-paragraph>
+      <Card icon={ICONS.palette} title="Colors">
+        <FieldLabel>Pick a starting palette</FieldLabel>
         <BrandingPalette
           primary={state.primaryColor}
           secondary={state.secondaryColor}
@@ -708,51 +977,45 @@ function StepBranding({
             gridTemplateColumns: "minmax(0, 1fr) auto",
             gap: 24,
             alignItems: "start",
+            marginTop: 16,
           }}
         >
-          <s-stack direction="block" gap="base">
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 13, color: "#202223" }}>
-                Primary color
-              </span>
+          <div style={{ display: "grid", gap: 14 }}>
+            <div>
+              <FieldLabel>Primary color</FieldLabel>
               <ColorPicker
                 value={state.primaryColor}
                 label="Primary color"
                 onChange={(v) => mut("primaryColor", v)}
               />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 13, color: "#202223" }}>
-                Secondary color
-              </span>
+            <div>
+              <FieldLabel>Secondary color</FieldLabel>
               <ColorPicker
                 value={state.secondaryColor}
                 label="Secondary color"
                 onChange={(v) => mut("secondaryColor", v)}
               />
             </div>
-          </s-stack>
+          </div>
           <div style={{ position: "sticky", top: 16 }}>
-            <s-text tone="subdued">Live preview</s-text>
-            <div style={{ marginTop: 8 }}>
-              <WidgetPreview
-                config={{
-                  primaryColor: state.primaryColor,
-                  secondaryColor: state.secondaryColor,
-                  title: state.programName,
-                  subtitle:
-                    "Earn points on every order — redeem for rewards.",
-                  launcherText: state.pointsName,
-                  showEarn: true,
-                  showRewards: true,
-                  showReferral: true,
-                }}
-              />
-            </div>
+            <FieldLabel>Live preview</FieldLabel>
+            <WidgetPreview
+              config={{
+                primaryColor: state.primaryColor,
+                secondaryColor: state.secondaryColor,
+                title: state.programName,
+                subtitle: "Earn points on every order — redeem for rewards.",
+                launcherText: state.pointsName,
+                showEarn: true,
+                showRewards: true,
+                showReferral: true,
+              }}
+            />
           </div>
         </div>
-      </s-stack>
-    </s-section>
+      </Card>
+    </>
   );
 }
 
@@ -762,60 +1025,100 @@ function StepBranding({
 
 function StepActivate({
   state,
-  onActivate,
+  currencyCode,
   isSaving,
   error,
 }: {
   state: WizardState;
-  onActivate: () => void;
+  currencyCode: string;
   isSaving: boolean;
   error: string | null;
 }) {
+  const pn = state.pointsName.toLowerCase();
   return (
-    <s-section heading="One step left — activate">
-      <s-paragraph>
-        Clicking <s-text fontWeight="bold">Activate program</s-text> creates
-        your earn rules, rewards and tiers, and turns the loyalty program on
-        for your store.
-      </s-paragraph>
+    <>
+      <StepTitle
+        title="Activate your program"
+        subtitle="One click and it's live on your store."
+      />
 
-      <s-box padding="base" borderWidth="base" borderRadius="base">
-        <s-stack direction="block" gap="base">
-          <s-text fontWeight="bold">After activation</s-text>
-          <s-paragraph>
-            Your program will be created with the defaults you set. To make
-            the loyalty widget visible on your storefront, enable the Royal
-            Loyalty theme app embed:
-          </s-paragraph>
-          <AppLink href="shopify:admin/themes/current/editor?context=apps">
-            Open theme editor
-          </AppLink>
-          <s-text tone="subdued">
-            In the theme editor, switch on "Royal Loyalty" under App embeds
-            and click Save.
-          </s-text>
-        </s-stack>
-      </s-box>
+      <Card icon={ICONS.rocket} title="What you're activating">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "120px 1fr",
+            rowGap: 10,
+            columnGap: 16,
+            fontSize: 14,
+            color: "#1a1c1f",
+          }}
+        >
+          <div style={{ color: "#6d7175" }}>Program name</div>
+          <div style={{ fontWeight: 600 }}>{state.programName}</div>
 
-      <s-box padding="base" borderWidth="base" borderRadius="base">
-        <s-stack direction="block" gap="base">
-          <s-text fontWeight="bold">Summary</s-text>
-          <s-paragraph>
-            <s-text fontWeight="bold">{state.programName}</s-text> — customers
-            earn 1 {state.pointsName.toLowerCase()} per {state.unitsPerPoint}{" "}
-            spent, get {state.signupPoints} {state.pointsName.toLowerCase()}{" "}
-            for signing up, and can redeem {state.firstRewardPoints}{" "}
-            {state.pointsName.toLowerCase()} for {state.firstRewardValue} off.
-          </s-paragraph>
-        </s-stack>
-      </s-box>
+          <div style={{ color: "#6d7175" }}>Earn rate</div>
+          <div>
+            {state.earnPoints} {pn} per {state.earnPerCurrency} {currencyCode}
+          </div>
 
-      {error && (
-        <s-banner tone="critical">
-          <s-paragraph>{error}</s-paragraph>
-        </s-banner>
+          <div style={{ color: "#6d7175" }}>Signup bonus</div>
+          <div>
+            {state.signupPoints} {pn}
+          </div>
+
+          <div style={{ color: "#6d7175" }}>First reward</div>
+          <div>
+            {state.firstRewardPoints} {pn} → {state.firstRewardValue}{" "}
+            {currencyCode} off
+          </div>
+        </div>
+      </Card>
+
+      <Card icon={ICONS.store} title="Show it on your storefront">
+        <p
+          style={{
+            margin: "0 0 12px",
+            fontSize: 14,
+            color: "#1a1c1f",
+            lineHeight: 1.5,
+          }}
+        >
+          After activating, open the theme editor and turn on the Royal
+          Loyalty app embed, then click Save.
+        </p>
+        <AppLink href="shopify:admin/themes/current/editor?context=apps">
+          Open theme editor
+        </AppLink>
+      </Card>
+
+      {isSaving && (
+        <p
+          style={{
+            fontSize: 13,
+            color: "#5c5f62",
+            textAlign: "center",
+            margin: "8px 0 0",
+          }}
+        >
+          Activating…
+        </p>
       )}
-    </s-section>
+      {error && (
+        <div
+          style={{
+            background: "#fde7e9",
+            border: "1px solid #f3c4c9",
+            color: "#a51b29",
+            padding: "10px 14px",
+            borderRadius: 8,
+            marginTop: 12,
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </>
   );
 }
 

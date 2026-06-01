@@ -22,9 +22,11 @@
 export interface MoneyDefaults {
   /** ISO currency code (e.g. "USD", "NOK", "JPY"). */
   currencyCode: string;
-  /** How many currency units a customer must spend to earn 1 point.
-   *  USD baseline is 1 ($1 per point). Scaled per currency. */
-  unitsPerPoint: number;
+  /** Points awarded per `earnPerCurrency` spent. Baseline = 1. */
+  earnPoints: number;
+  /** Currency amount that earns `earnPoints` points.
+   *  USD baseline is 1 ($1 per 1 point). Scaled per currency. */
+  earnPerCurrency: number;
   /** Currency-amount discount on the first (cheapest) reward.
    *  USD baseline is 5 ($5 off). Scaled per currency. */
   firstRewardValue: number;
@@ -108,7 +110,8 @@ const FX: Record<string, number> = {
 // ---------------------------------------------------------------------------
 
 const USD_BASELINE = {
-  unitsPerPoint: 1, // 1 pt per $1 spent
+  earnPoints: 1, // 1 pt awarded
+  earnPerCurrency: 1, // per $1 spent
   firstRewardValue: 5, // $5 off at the first reward
   firstRewardPoints: 100, // → 5% effective cashback
   signupPoints: 100, // = one free first reward on join
@@ -166,8 +169,9 @@ export function convertAndRound(usdValue: number, currencyCode: string): number 
 export function getDefaultsForCurrency(currencyCode: string): ProgramDefaults {
   return {
     currencyCode: currencyCode.toUpperCase(),
-    unitsPerPoint: convertAndRound(
-      USD_BASELINE.unitsPerPoint,
+    earnPoints: USD_BASELINE.earnPoints,
+    earnPerCurrency: convertAndRound(
+      USD_BASELINE.earnPerCurrency,
       currencyCode,
     ),
     firstRewardValue: convertAndRound(
