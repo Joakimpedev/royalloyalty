@@ -155,14 +155,40 @@ export default function LocalizationPage() {
 
   const onLocaleChange = useCallback(
     (next: LocaleCode) => {
-      if (next === defaultLocale) return;
-      // Wipe overrides — the new locale is the new baseline. (Saved
-      // overrides for the previous locale are still in the DB until the
-      // merchant hits Save; clicking Discard restores everything.)
+      // Picking a language is a HARD RESET: wipe any overrides in form
+      // state AND immediately commit to the DB. This matches the
+      // merchant's intuition that "picking a language" means "give me
+      // this language's defaults, fresh." Re-picking the same locale is
+      // intentionally not short-circuited — it doubles as a "reset to
+      // defaults for this language" gesture. Merchant edits are still
+      // possible after the pick; they re-apply on top of the wiped
+      // baseline and persist on the next Save.
+      //
+      // Safety: if there are unsaved edits in this session, confirm
+      // before clobbering them.
+      const hasUnsaved =
+        next !== config.defaultLocale ||
+        JSON.stringify(overrides) !== JSON.stringify(config.overrides);
+      if (
+        hasUnsaved &&
+        Object.keys(overrides).length > 0 &&
+        typeof window !== "undefined"
+      ) {
+        const ok = window.confirm(
+          "Picking a language resets all customizations for that language to the baked defaults. Continue?",
+        );
+        if (!ok) return;
+      }
       setDefaultLocale(next);
       setOverrides({});
+      const fd = new FormData();
+      fd.set(
+        "config",
+        JSON.stringify({ defaultLocale: next, overrides: {} }),
+      );
+      submit(fd, { method: "POST" });
     },
-    [defaultLocale],
+    [config, overrides, submit],
   );
 
   const save = useCallback(() => {
@@ -230,8 +256,10 @@ export default function LocalizationPage() {
           <s-paragraph>
             {/* @ts-expect-error */}
             <s-text tone="subdued">
-              Pick a language to set the baseline copy. Edit any field below
-              to customize. Per-rule copy (Place an order, Sign up, etc.)
+              Pick a language to set the baseline copy. Picking a language
+              resets every field below to that language's defaults — your
+              customizations don't carry over. Edit any field after picking
+              to customize it. Per-rule copy (Place an order, Sign up, etc.)
               lives on{" "}
               {/* @ts-expect-error - s-link */}
               <s-link href="/app/program">Program</s-link>.
