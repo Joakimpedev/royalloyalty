@@ -31,6 +31,7 @@ import {
   DEFAULT_LOCALE,
   type LocaleCode,
 } from "../lib/localization-locales";
+import { getDefault } from "../lib/localization-defaults";
 
 // ---------------------------------------------------------------------------
 // Shape merchant fills in across the wizard
@@ -59,12 +60,28 @@ function defaultsToWizard(d: ProgramDefaults): WizardState {
     signupPoints: d.signupPoints,
     firstRewardPoints: d.firstRewardPoints,
     firstRewardValue: d.firstRewardValue,
-    programName: "Loyalty Rewards",
-    pointsName: "Points",
-    primaryColor: "#7B2D8E",
-    secondaryColor: "#F4E9B8",
+    programName: localizedProgramName(DEFAULT_LOCALE),
+    pointsName: localizedPointsName(DEFAULT_LOCALE),
+    primaryColor: "#2C2A29",
+    secondaryColor: "#F0EBE3",
     defaultLocale: DEFAULT_LOCALE,
   };
+}
+
+/** Localized default for the program-name field. Falls back to "Loyalty
+ *  Rewards" if the locale's bundle is missing the key. */
+function localizedProgramName(locale: LocaleCode): string {
+  const t = getDefault(locale, "launcher.title");
+  return t && t.trim() ? t : "Loyalty Rewards";
+}
+
+/** Localized default for the points-name field. Derived from the
+ *  account.pointsSuffix string (" points" → "Points"). */
+function localizedPointsName(locale: LocaleCode): string {
+  const raw = getDefault(locale, "account.pointsSuffix");
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return "Points";
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +385,11 @@ function Wizard({
   const [step, setStep] = useState(0);
   const [state, setState] = useState<WizardState>(() => defaultsToWizard(defaults));
   const [dirty, setDirty] = useState(false);
+  // When the merchant types in the name fields we stop auto-overwriting them
+  // on language change. Until then, switching language updates both fields
+  // to the new locale's baked default.
+  const [programNameTouched, setProgramNameTouched] = useState(false);
+  const [pointsNameTouched, setPointsNameTouched] = useState(false);
   const appNav = useAppNavigate();
 
   const isSaving =
@@ -409,7 +431,29 @@ function Wizard({
   }, [dirty, activated]);
 
   const mut = <K extends keyof WizardState>(key: K, value: WizardState[K]) => {
-    setState((s) => ({ ...s, [key]: value }));
+    setState((s) => {
+      const next = { ...s, [key]: value };
+      // Picking a new language re-seeds the name fields if the merchant
+      // hasn't customized them yet — so the live preview's localized labels
+      // and the typed-in name stay in sync.
+      if (key === "defaultLocale") {
+        const locale = value as LocaleCode;
+        if (!programNameTouched) next.programName = localizedProgramName(locale);
+        if (!pointsNameTouched) next.pointsName = localizedPointsName(locale);
+      }
+      return next;
+    });
+    setDirty(true);
+  };
+
+  const setProgramName = (v: string) => {
+    setProgramNameTouched(true);
+    setState((s) => ({ ...s, programName: v }));
+    setDirty(true);
+  };
+  const setPointsName = (v: string) => {
+    setPointsNameTouched(true);
+    setState((s) => ({ ...s, pointsName: v }));
     setDirty(true);
   };
 
@@ -435,7 +479,7 @@ function Wizard({
           transition: "max-width 200ms ease",
         }}
       >
-        {step === 0 && <StepIntro primaryColor={state.primaryColor} />}
+        {step === 0 && <StepIntro />}
         {step === 1 && (
           <StepWelcome
             state={state}
@@ -450,7 +494,14 @@ function Wizard({
             currencyCode={defaults.currencyCode}
           />
         )}
-        {step === 3 && <StepBranding state={state} mut={mut} />}
+        {step === 3 && (
+          <StepBranding
+            state={state}
+            mut={mut}
+            setProgramName={setProgramName}
+            setPointsName={setPointsName}
+          />
+        )}
         {step === 4 && (
           <StepActivate
             state={state}
@@ -476,14 +527,29 @@ function Wizard({
   );
 }
 
+// Royal brand palette — pulled from research/listing-mockups (hero.html).
+// Navy gradient for darks, gold for accents on light cards, cream as
+// off-white. We use these on the WIZARD CHROME (progress bar +
+// illustration) so the merchant immediately reads "Royal Loyalty brand",
+// while the live preview keeps using the merchant's chosen storefront
+// colors.
+const ROYAL = {
+  navyDarker: "#08081A",
+  navyDeep: "#0B1228",
+  navy: "#131B36",
+  navyMid: "#1B2547",
+  gold: "#F2B821",
+  goldSoft: "#FFD86B",
+  cream: "#F7F2E6",
+} as const;
+
 function ProgressBar({ step }: { step: number }) {
   const pct = ((step + 1) / STEPS.length) * 100;
   return (
     <div
       style={{
-        padding: "12px 16px 14px",
-        borderBottom: "1px solid #e3e5e7",
-        background: "#fff",
+        padding: "12px 20px 14px",
+        background: `linear-gradient(135deg, ${ROYAL.navyDarker} 0%, ${ROYAL.navyDeep} 60%, ${ROYAL.navy} 100%)`,
       }}
     >
       <div
@@ -492,11 +558,12 @@ function ProgressBar({ step }: { step: number }) {
           justifyContent: "space-between",
           fontSize: 12,
           fontWeight: 500,
-          color: "#5c5f62",
+          color: ROYAL.cream,
           marginBottom: 8,
+          letterSpacing: 0.2,
         }}
       >
-        <span>
+        <span style={{ opacity: 0.7 }}>
           Step {step + 1} of {STEPS.length}
         </span>
         <span>{STEPS[step]}</span>
@@ -504,7 +571,7 @@ function ProgressBar({ step }: { step: number }) {
       <div
         style={{
           height: 4,
-          background: "#e3e5e7",
+          background: "rgba(255,255,255,0.12)",
           borderRadius: 999,
           overflow: "hidden",
         }}
@@ -513,7 +580,7 @@ function ProgressBar({ step }: { step: number }) {
           style={{
             width: `${pct}%`,
             height: "100%",
-            background: "#1a1c1f",
+            background: "#ffffff",
             transition: "width 240ms ease",
           }}
         />
@@ -828,7 +895,7 @@ const ICONS: Record<string, React.ReactNode> = {
 // Step 0 — Intro / welcome (no inputs, bullets + illustration side panel)
 // ---------------------------------------------------------------------------
 
-function StepIntro({ primaryColor }: { primaryColor: string }) {
+function StepIntro() {
   return (
     <div
       style={{
@@ -882,7 +949,7 @@ function StepIntro({ primaryColor }: { primaryColor: string }) {
         </div>
       </div>
 
-      <Illustration color={primaryColor} />
+      <Illustration />
     </div>
   );
 }
@@ -939,10 +1006,10 @@ function IntroBullet({
 }
 
 /** Pure-HTML/CSS illustration panel (no SVG). 2:3 vertical aspect.
- *  Renders three abstract floating "moments" of the loyalty loop — order,
- *  points earned, reward unlocked — over a soft gradient tinted by the
- *  merchant's chosen primary color. */
-function Illustration({ color }: { color: string }) {
+ *  Royal-branded: dark-navy gradient background, gold sparkles + accents,
+ *  cream cards. Independent of the merchant's storefront palette. */
+function Illustration() {
+  const color = ROYAL.gold; // accents inside the dark panel
   return (
     <div
       aria-hidden="true"
@@ -951,13 +1018,15 @@ function Illustration({ color }: { color: string }) {
         aspectRatio: "2 / 3",
         width: "100%",
         borderRadius: 16,
-        background: `linear-gradient(165deg, ${color}1f 0%, #fafbfb 60%, #ffffff 100%)`,
-        border: "1px solid #e3e5e7",
+        background: `
+          radial-gradient(ellipse 200px 280px at 70% 30%, rgba(242,184,33,0.18), transparent 70%),
+          linear-gradient(160deg, ${ROYAL.navyDarker} 0%, ${ROYAL.navyDeep} 55%, ${ROYAL.navy} 100%)
+        `,
         overflow: "hidden",
-        boxShadow: "0 1px 0 rgba(22, 29, 37, 0.04)",
+        boxShadow: "0 4px 16px rgba(8, 8, 26, 0.25)",
       }}
     >
-      {/* Floating "sparkles" — multi-shadow dots */}
+      {/* Floating "sparkles" — multi-shadow dots in gold */}
       <div
         style={{
           position: "absolute",
@@ -967,16 +1036,16 @@ function Illustration({ color }: { color: string }) {
           height: 4,
           borderRadius: "50%",
           background: color,
-          opacity: 0.55,
+          opacity: 0.85,
           boxShadow: `
-            120px 14px 0 -1px ${color}aa,
-            180px 80px 0 -1px ${color}77,
-            40px 130px 0 -1px ${color}77,
-            210px 170px 0 -1px ${color}aa,
-            70px 220px 0 -1px ${color}77,
-            220px 280px 0 -1px ${color}aa,
-            30px 320px 0 -1px ${color}77,
-            140px 360px 0 -1px ${color}77
+            120px 14px 0 -1px ${color}cc,
+            180px 80px 0 -1px ${color}99,
+            40px 130px 0 -1px ${color}99,
+            210px 170px 0 -1px ${color}cc,
+            70px 220px 0 -1px ${color}99,
+            220px 280px 0 -1px ${color}cc,
+            30px 320px 0 -1px ${color}99,
+            140px 360px 0 -1px ${color}99
           `,
         }}
       />
@@ -1035,19 +1104,19 @@ function Illustration({ color }: { color: string }) {
         </div>
       </div>
 
-      {/* Card 2 — middle: +points pill */}
+      {/* Card 2 — middle: +points pill (gold on navy for legibility) */}
       <div
         style={{
           position: "absolute",
           top: "44%",
           right: 28,
-          background: color,
-          color: "#fff",
+          background: ROYAL.gold,
+          color: ROYAL.navyDarker,
           borderRadius: 999,
           padding: "8px 14px",
           fontSize: 12,
-          fontWeight: 600,
-          boxShadow: `0 8px 20px ${color}55`,
+          fontWeight: 700,
+          boxShadow: `0 8px 20px rgba(242, 184, 33, 0.35)`,
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
@@ -1067,16 +1136,14 @@ function Illustration({ color }: { color: string }) {
           right: 32,
           background: "#fff",
           borderRadius: 10,
-          boxShadow: "0 6px 18px rgba(22, 29, 37, 0.10)",
+          boxShadow: "0 6px 18px rgba(8, 8, 26, 0.35)",
           padding: 12,
         }}
       >
-        <div
-          style={{ display: "flex", alignItems: "center", gap: 10 }}
-        >
-          <GiftShape color={color} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <GiftShape />
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#1a1c1f" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: ROYAL.navy }}>
               Reward unlocked
             </div>
             <div style={{ fontSize: 11, color: "#6d7175", marginTop: 2 }}>
@@ -1106,8 +1173,8 @@ function CoinShape() {
   );
 }
 
-/** Pure-CSS gift box: tinted square with a cross-ribbon overlay. */
-function GiftShape({ color }: { color: string }) {
+/** Pure-CSS gift box: navy box body with gold ribbon overlay (Royal brand). */
+function GiftShape() {
   return (
     <span
       style={{
@@ -1116,7 +1183,7 @@ function GiftShape({ color }: { color: string }) {
         width: 32,
         height: 32,
         borderRadius: 6,
-        background: `${color}1f`,
+        background: ROYAL.navy,
         flexShrink: 0,
       }}
     >
@@ -1128,8 +1195,7 @@ function GiftShape({ color }: { color: string }) {
           right: 0,
           top: 6,
           height: 4,
-          background: color,
-          opacity: 0.85,
+          background: ROYAL.gold,
         }}
       />
       {/* ribbon vertical */}
@@ -1141,8 +1207,7 @@ function GiftShape({ color }: { color: string }) {
           left: "50%",
           width: 3,
           marginLeft: -1.5,
-          background: color,
-          opacity: 0.85,
+          background: ROYAL.gold,
         }}
       />
     </span>
@@ -1166,7 +1231,7 @@ function StepWelcome({
     <>
       <StepTitle
         title="Set how customers earn"
-        subtitle="One point on every order, plus a bonus for joining."
+        subtitle="You can add more later."
       />
 
       <Card icon={ICONS.bag} title="Earn on every order">
@@ -1231,7 +1296,7 @@ function StepReward({
     <>
       <StepTitle
         title="Pick a first reward"
-        subtitle="The cheapest reward customers can redeem."
+        subtitle="You can add more later."
       />
 
       <Card icon={ICONS.gift} title="Amount off">
@@ -1277,9 +1342,13 @@ function StepReward({
 function StepBranding({
   state,
   mut,
+  setProgramName,
+  setPointsName,
 }: {
   state: WizardState;
   mut: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void;
+  setProgramName: (v: string) => void;
+  setPointsName: (v: string) => void;
 }) {
   return (
     <>
@@ -1312,7 +1381,7 @@ function StepBranding({
                 <input
                   type="text"
                   value={state.programName}
-                  onChange={(e) => mut("programName", e.target.value)}
+                  onChange={(e) => setProgramName(e.target.value)}
                   style={{
                     width: "100%",
                     maxWidth: 360,
@@ -1333,7 +1402,7 @@ function StepBranding({
                 <input
                   type="text"
                   value={state.pointsName}
-                  onChange={(e) => mut("pointsName", e.target.value)}
+                  onChange={(e) => setPointsName(e.target.value)}
                   style={{
                     width: "100%",
                     maxWidth: 240,
