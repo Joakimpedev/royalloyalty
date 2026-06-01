@@ -292,15 +292,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // locale's baked defaults (page.heroTitle, cart.heading, etc.). If
       // we filled them with English templates the storefront would render
       // those overrides verbatim and the locale picker would do nothing.
+      // Branding storage now only carries colors / positions / toggles —
+      // copy fields are stored in localization.overrides (the unified
+      // store). The wizard's programName goes to launcher.title, points
+      // name to launcher.text; pointsName ALSO stays on
+      // branding.pointsName because server-side rule-template
+      // substitution reads it from there to interpolate "Earn 50 Poeng…".
       const brandingConfig = {
         widget: {
           position: "bottom-right",
           primaryColor: w.primaryColor,
           secondaryColor: w.secondaryColor,
           icon: "crown",
-          launcherText: w.pointsName,
-          title: w.programName,
+          launcherText: "",
+          title: "",
         },
+        // Flat field used by server-side substitution (storefront-payload
+        // reads `flat.pointsName` to fill {{points}} contexts).
+        pointsName: w.pointsName,
         page: {
           heroTitle: "",
           heroSubtitle: "",
@@ -324,8 +333,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       };
 
+      // Wizard's program name + points name go into localization.overrides
+      // so both admin pages (Branding + Localization) and the storefront
+      // all read the same value.
       const existingLocalization =
         (base.localization as Record<string, unknown> | undefined) ?? {};
+      const existingOverrides =
+        (existingLocalization.overrides as Record<string, string>) ?? {};
+      const mergedOverrides = {
+        ...existingOverrides,
+        "launcher.title": w.programName,
+        "launcher.text": w.pointsName,
+      };
       await tx.shop.update({
         where: { id: shop.id },
         data: {
@@ -335,8 +354,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             localization: {
               ...existingLocalization,
               defaultLocale: w.defaultLocale,
-              overrides:
-                (existingLocalization.overrides as object | undefined) ?? {},
+              overrides: mergedOverrides,
             },
             _onboardingFinishedAt: new Date().toISOString(),
           } as object,
