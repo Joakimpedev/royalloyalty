@@ -427,7 +427,14 @@ function Wizard({
     <s-page>
       <ProgressBar step={step} />
 
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "24px 16px 16px" }}>
+      <div
+        style={{
+          maxWidth: step === 2 ? 1040 : 640,
+          margin: "0 auto",
+          padding: "24px 16px 16px",
+          transition: "max-width 200ms ease",
+        }}
+      >
         {step === 0 && (
           <StepWelcome
             state={state}
@@ -960,8 +967,8 @@ function StepBranding({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) 280px",
-          gap: 24,
+          gridTemplateColumns: "minmax(0, 1fr) 340px",
+          gap: 32,
           alignItems: "start",
         }}
       >
