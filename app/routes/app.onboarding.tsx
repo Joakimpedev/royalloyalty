@@ -345,7 +345,7 @@ const CHECKLIST = [
   },
 ];
 
-const STEPS = ["Welcome", "First reward", "Branding", "Activate"] as const;
+const STEPS = ["Welcome", "Earn", "First reward", "Branding", "Activate"] as const;
 
 export default function Onboarding() {
   const data = useLoaderData<typeof loader>();
@@ -429,28 +429,29 @@ function Wizard({
 
       <div
         style={{
-          maxWidth: step === 2 ? 1040 : 640,
+          maxWidth: step === 0 || step === 3 ? 1040 : 640,
           margin: "0 auto",
           padding: "24px 16px 16px",
           transition: "max-width 200ms ease",
         }}
       >
-        {step === 0 && (
+        {step === 0 && <StepIntro primaryColor={state.primaryColor} />}
+        {step === 1 && (
           <StepWelcome
             state={state}
             mut={mut}
             currencyCode={defaults.currencyCode}
           />
         )}
-        {step === 1 && (
+        {step === 2 && (
           <StepReward
             state={state}
             mut={mut}
             currencyCode={defaults.currencyCode}
           />
         )}
-        {step === 2 && <StepBranding state={state} mut={mut} />}
-        {step === 3 && (
+        {step === 3 && <StepBranding state={state} mut={mut} />}
+        {step === 4 && (
           <StepActivate
             state={state}
             currencyCode={defaults.currencyCode}
@@ -824,7 +825,332 @@ const ICONS: Record<string, React.ReactNode> = {
 };
 
 // ---------------------------------------------------------------------------
-// Step 1 — Welcome + earn rate + signup
+// Step 0 — Intro / welcome (no inputs, bullets + illustration side panel)
+// ---------------------------------------------------------------------------
+
+function StepIntro({ primaryColor }: { primaryColor: string }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) 300px",
+        gap: 40,
+        alignItems: "center",
+        padding: "16px 0 8px",
+      }}
+    >
+      <div>
+        <h1
+          style={{
+            fontSize: 32,
+            lineHeight: 1.15,
+            fontWeight: 700,
+            color: "#1a1c1f",
+            margin: "0 0 12px",
+          }}
+        >
+          Get more repeat customers
+        </h1>
+        <p
+          style={{
+            fontSize: 15,
+            color: "#6d7175",
+            margin: "0 0 28px",
+            lineHeight: 1.5,
+          }}
+        >
+          Reward shoppers for coming back. Set your program up in a few clicks
+          and switch it on for your storefront.
+        </p>
+
+        <div style={{ display: "grid", gap: 18 }}>
+          <IntroBullet
+            icon={ICONS.bag}
+            title="Reward every purchase"
+            body="Customers earn points on every order. Their balance shows up in the storefront widget."
+          />
+          <IntroBullet
+            icon={ICONS.gift}
+            title="Turn points into discounts"
+            body="Shoppers redeem points for an amount-off reward applied at checkout."
+          />
+          <IntroBullet
+            icon={ICONS.rocket}
+            title="Lift your best customers"
+            body="VIP tiers reward repeat buyers with a higher earn multiplier."
+          />
+        </div>
+      </div>
+
+      <Illustration color={primaryColor} />
+    </div>
+  );
+}
+
+function IntroBullet({
+  icon,
+  title,
+  body,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+      <span
+        style={{
+          flexShrink: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          background: "#f1f2f3",
+          color: "#5c5f62",
+        }}
+      >
+        {icon}
+      </span>
+      <div>
+        <div
+          style={{
+            fontSize: 15,
+            fontWeight: 600,
+            color: "#1a1c1f",
+            marginBottom: 2,
+          }}
+        >
+          {title}
+        </div>
+        <div
+          style={{
+            fontSize: 13,
+            color: "#6d7175",
+            lineHeight: 1.5,
+          }}
+        >
+          {body}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Pure-HTML/CSS illustration panel (no SVG). 2:3 vertical aspect.
+ *  Renders three abstract floating "moments" of the loyalty loop — order,
+ *  points earned, reward unlocked — over a soft gradient tinted by the
+ *  merchant's chosen primary color. */
+function Illustration({ color }: { color: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "relative",
+        aspectRatio: "2 / 3",
+        width: "100%",
+        borderRadius: 16,
+        background: `linear-gradient(165deg, ${color}1f 0%, #fafbfb 60%, #ffffff 100%)`,
+        border: "1px solid #e3e5e7",
+        overflow: "hidden",
+        boxShadow: "0 1px 0 rgba(22, 29, 37, 0.04)",
+      }}
+    >
+      {/* Floating "sparkles" — multi-shadow dots */}
+      <div
+        style={{
+          position: "absolute",
+          top: 24,
+          left: 24,
+          width: 4,
+          height: 4,
+          borderRadius: "50%",
+          background: color,
+          opacity: 0.55,
+          boxShadow: `
+            120px 14px 0 -1px ${color}aa,
+            180px 80px 0 -1px ${color}77,
+            40px 130px 0 -1px ${color}77,
+            210px 170px 0 -1px ${color}aa,
+            70px 220px 0 -1px ${color}77,
+            220px 280px 0 -1px ${color}aa,
+            30px 320px 0 -1px ${color}77,
+            140px 360px 0 -1px ${color}77
+          `,
+        }}
+      />
+
+      {/* Card 1 — top: order placed */}
+      <div
+        style={{
+          position: "absolute",
+          top: 28,
+          left: 18,
+          right: 60,
+          background: "#fff",
+          borderRadius: 10,
+          boxShadow: "0 6px 18px rgba(22, 29, 37, 0.10)",
+          padding: 12,
+        }}
+      >
+        <div style={{ fontSize: 10, color: "#6d7175", letterSpacing: 0.4 }}>
+          ORDER PLACED
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginTop: 8,
+          }}
+        >
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              background: "#f1f2f3",
+            }}
+          />
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                height: 6,
+                width: "70%",
+                background: "#e3e5e7",
+                borderRadius: 3,
+              }}
+            />
+            <div
+              style={{
+                height: 6,
+                width: "45%",
+                background: "#e3e5e7",
+                borderRadius: 3,
+                marginTop: 5,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Card 2 — middle: +points pill */}
+      <div
+        style={{
+          position: "absolute",
+          top: "44%",
+          right: 28,
+          background: color,
+          color: "#fff",
+          borderRadius: 999,
+          padding: "8px 14px",
+          fontSize: 12,
+          fontWeight: 600,
+          boxShadow: `0 8px 20px ${color}55`,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          letterSpacing: 0.2,
+        }}
+      >
+        <CoinShape />
+        +50 points earned
+      </div>
+
+      {/* Card 3 — bottom: reward unlocked */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 26,
+          left: 18,
+          right: 32,
+          background: "#fff",
+          borderRadius: 10,
+          boxShadow: "0 6px 18px rgba(22, 29, 37, 0.10)",
+          padding: 12,
+        }}
+      >
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 10 }}
+        >
+          <GiftShape color={color} />
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#1a1c1f" }}>
+              Reward unlocked
+            </div>
+            <div style={{ fontSize: 11, color: "#6d7175", marginTop: 2 }}>
+              5% off — applied at checkout
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Pure-CSS coin: small white circle with a darker inner ring. */
+function CoinShape() {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 12,
+        height: 12,
+        borderRadius: "50%",
+        background: "#ffffff",
+        border: "2px solid rgba(255,255,255,0.7)",
+        boxShadow: "inset 0 0 0 2px currentColor",
+      }}
+    />
+  );
+}
+
+/** Pure-CSS gift box: tinted square with a cross-ribbon overlay. */
+function GiftShape({ color }: { color: string }) {
+  return (
+    <span
+      style={{
+        position: "relative",
+        display: "inline-block",
+        width: 32,
+        height: 32,
+        borderRadius: 6,
+        background: `${color}1f`,
+        flexShrink: 0,
+      }}
+    >
+      {/* lid */}
+      <span
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: 6,
+          height: 4,
+          background: color,
+          opacity: 0.85,
+        }}
+      />
+      {/* ribbon vertical */}
+      <span
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: "50%",
+          width: 3,
+          marginLeft: -1.5,
+          background: color,
+          opacity: 0.85,
+        }}
+      />
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 1 — earn rate + signup
 // ---------------------------------------------------------------------------
 
 function StepWelcome({
@@ -839,11 +1165,9 @@ function StepWelcome({
   return (
     <>
       <StepTitle
-        title="Welcome to Royal Loyalty"
-        subtitle="Reward your customers for every purchase."
+        title="Set how customers earn"
+        subtitle="One point on every order, plus a bonus for joining."
       />
-
-      <SectionHeading>Set how customers earn points</SectionHeading>
 
       <Card icon={ICONS.bag} title="Earn on every order">
         <div
