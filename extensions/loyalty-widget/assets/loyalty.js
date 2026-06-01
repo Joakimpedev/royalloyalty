@@ -550,8 +550,17 @@
   function api(proxy, path, opts) {
     var url = proxy.replace(/\/$/, "") + path;
     var o = opts || {};
+    // Only attach Content-Type when there's actually a body. Sending
+    // Content-Type on a bodyless GET turns the request into a CORS
+    // non-simple request that requires a preflight OPTIONS — and the
+    // Shopify App Proxy doesn't reliably respond to those, so the fetch
+    // hangs forever waiting for a preflight that never comes back. Accept
+    // is fine to always send (it's in the CORS-safelisted list).
+    var hasBody = o.body != null;
     o.headers = Object.assign(
-      { "Content-Type": "application/json", Accept: "application/json" },
+      hasBody
+        ? { "Content-Type": "application/json", Accept: "application/json" }
+        : { Accept: "application/json" },
       o.headers || {}
     );
     o.credentials = "same-origin";
