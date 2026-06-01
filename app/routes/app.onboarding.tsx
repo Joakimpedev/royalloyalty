@@ -1684,11 +1684,6 @@ function EmbedAnimation() {
           0%, 38%   { left: 3px; }
           42%, 100% { left: 21px; }
         }
-        @keyframes rl-saved {
-          0%, 60%  { opacity: 0; transform: translateY(4px); }
-          70%, 90% { opacity: 1; transform: translateY(0); }
-          100%    { opacity: 0; transform: translateY(0); }
-        }
         .rl-loop { animation-iteration-count: infinite; animation-duration: 4s; animation-timing-function: ease-in-out; }
       `}</style>
       <div
@@ -1807,29 +1802,31 @@ function EmbedAnimation() {
                 animationName: "rl-knob",
               }}
             />
-            {/* Animated cursor pointer */}
+            {/* Animated cursor pointer — classic OS arrow */}
             <div
               className="rl-loop"
               style={{
                 position: "absolute",
-                top: 0,
-                right: -2,
-                width: 20,
-                height: 20,
+                top: 4,
+                right: -6,
+                width: 18,
+                height: 18,
                 animationName: "rl-cursor",
                 pointerEvents: "none",
+                filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.25))",
               }}
             >
-              <div
-                style={{
-                  width: 0,
-                  height: 0,
-                  borderLeft: "10px solid #1a1c1f",
-                  borderTop: "6px solid transparent",
-                  borderBottom: "6px solid transparent",
-                  transform: "rotate(-30deg) translate(2px, 0)",
-                }}
-              />
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="#ffffff"
+                stroke="#1a1c1f"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              >
+                <path d="M5 3 L5 17.5 L9 14 L11.5 19.5 L13.8 18.4 L11.3 13 L17 13 Z" />
+              </svg>
             </div>
           </div>
         </div>
@@ -1883,25 +1880,6 @@ function EmbedAnimation() {
           />
         </div>
 
-        {/* Save toast — fades in mid-animation */}
-        <div
-          className="rl-loop"
-          style={{
-            marginTop: 12,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            background: "#e3f4e1",
-            color: "#0d6c2e",
-            padding: "6px 12px",
-            borderRadius: 999,
-            fontSize: 12,
-            fontWeight: 500,
-            animationName: "rl-saved",
-          }}
-        >
-          <span style={{ fontSize: 11 }}>✓</span> Saved
-        </div>
       </div>
     </>
   );
