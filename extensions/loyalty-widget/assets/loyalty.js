@@ -16,6 +16,18 @@
 (function () {
   "use strict";
 
+  // Each extension block (launcher, loyalty-page, customer-account) ships
+  // its own <script src="loyalty.js" defer> tag. The browser sometimes
+  // executes the file multiple times on the same page, creating multiple
+  // independent IIFE scopes. Each scope had its own _balanceInFlight, so
+  // coalescing didn't work — fix is to dedupe at the IIFE level so only
+  // ONE copy of every helper exists per page load.
+  if (window.__royalLoyaltyIIFE) {
+    try { console.log("[RoyalLoyalty] loyalty.js already initialized — skipping"); } catch (e) {}
+    return;
+  }
+  window.__royalLoyaltyIIFE = true;
+
   // Loud breadcrumb: if you don't see this in the console, loyalty.js never
   // executed on this page (extension not deployed, theme app embed off, or
   // CDN serving an older bundle).
