@@ -25,7 +25,12 @@ import { recordActivation } from "../lib/ttv.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
+import LocalePicker from "../components/LocalePicker";
 import { AppLink, useAppNavigate } from "../lib/app-navigate";
+import {
+  DEFAULT_LOCALE,
+  type LocaleCode,
+} from "../lib/localization-locales";
 
 // ---------------------------------------------------------------------------
 // Shape merchant fills in across the wizard
@@ -44,6 +49,7 @@ interface WizardState {
   pointsName: string;
   primaryColor: string;
   secondaryColor: string;
+  defaultLocale: LocaleCode;
 }
 
 function defaultsToWizard(d: ProgramDefaults): WizardState {
@@ -57,6 +63,7 @@ function defaultsToWizard(d: ProgramDefaults): WizardState {
     pointsName: "Points",
     primaryColor: "#7B2D8E",
     secondaryColor: "#F4E9B8",
+    defaultLocale: DEFAULT_LOCALE,
   };
 }
 
@@ -278,12 +285,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       };
 
+      const existingLocalization =
+        (base.localization as Record<string, unknown> | undefined) ?? {};
       await tx.shop.update({
         where: { id: shop.id },
         data: {
           aiConfigSnapshot: {
             ...base,
             branding: brandingConfig,
+            localization: {
+              ...existingLocalization,
+              defaultLocale: w.defaultLocale,
+              overrides:
+                (existingLocalization.overrides as object | undefined) ?? {},
+            },
           } as object,
         },
       });
@@ -647,6 +662,23 @@ function Card({
   );
 }
 
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: 12,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.4,
+        color: "#6d7175",
+        margin: "0 4px 10px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -776,6 +808,12 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M9 20v-6h6v6" />
     </svg>
   ),
+  globe: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </svg>
+  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -797,6 +835,8 @@ function StepWelcome({
         title="Welcome to Royal Loyalty"
         subtitle="Reward your customers for every purchase."
       />
+
+      <SectionHeading>Set how customers earn points</SectionHeading>
 
       <Card icon={ICONS.bag} title="Earn on every order">
         <div
@@ -917,104 +957,115 @@ function StepBranding({
         subtitle="Customize what shoppers see on the storefront."
       />
 
-      <Card icon={ICONS.type} title="Naming">
-        <div style={{ display: "grid", gap: 14 }}>
-          <div>
-            <FieldLabel>Program name</FieldLabel>
-            <input
-              type="text"
-              value={state.programName}
-              onChange={(e) => mut("programName", e.target.value)}
-              style={{
-                width: "100%",
-                maxWidth: 360,
-                border: "1px solid #c9cccf",
-                borderRadius: 8,
-                padding: "8px 12px",
-                fontSize: 14,
-                fontFamily: "inherit",
-                color: "#1a1c1f",
-                background: "#fff",
-              }}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) 280px",
+          gap: 24,
+          alignItems: "start",
+        }}
+      >
+        <div>
+          <Card icon={ICONS.globe} title="Default language">
+            <FieldLabel>Customers will see strings in this language</FieldLabel>
+            <LocalePicker
+              value={state.defaultLocale}
+              onChange={(v) => mut("defaultLocale", v)}
             />
-          </div>
-          <div>
-            <FieldLabel>Points name (e.g. Crowns, Coins, Stars)</FieldLabel>
-            <input
-              type="text"
-              value={state.pointsName}
-              onChange={(e) => mut("pointsName", e.target.value)}
-              style={{
-                width: "100%",
-                maxWidth: 240,
-                border: "1px solid #c9cccf",
-                borderRadius: 8,
-                padding: "8px 12px",
-                fontSize: 14,
-                fontFamily: "inherit",
-                color: "#1a1c1f",
-                background: "#fff",
-              }}
-            />
-          </div>
-        </div>
-      </Card>
+          </Card>
 
-      <Card icon={ICONS.palette} title="Colors">
-        <FieldLabel>Pick a starting palette</FieldLabel>
-        <BrandingPalette
-          primary={state.primaryColor}
-          secondary={state.secondaryColor}
-          onSelect={(preset) => {
-            mut("primaryColor", preset.primary);
-            mut("secondaryColor", preset.secondary);
-          }}
-        />
+          <Card icon={ICONS.type} title="Naming">
+            <div style={{ display: "grid", gap: 14 }}>
+              <div>
+                <FieldLabel>Program name</FieldLabel>
+                <input
+                  type="text"
+                  value={state.programName}
+                  onChange={(e) => mut("programName", e.target.value)}
+                  style={{
+                    width: "100%",
+                    maxWidth: 360,
+                    border: "1px solid #c9cccf",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    fontSize: 14,
+                    fontFamily: "inherit",
+                    color: "#1a1c1f",
+                    background: "#fff",
+                  }}
+                />
+              </div>
+              <div>
+                <FieldLabel>
+                  Points name (e.g. Crowns, Coins, Stars)
+                </FieldLabel>
+                <input
+                  type="text"
+                  value={state.pointsName}
+                  onChange={(e) => mut("pointsName", e.target.value)}
+                  style={{
+                    width: "100%",
+                    maxWidth: 240,
+                    border: "1px solid #c9cccf",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    fontSize: 14,
+                    fontFamily: "inherit",
+                    color: "#1a1c1f",
+                    background: "#fff",
+                  }}
+                />
+              </div>
+            </div>
+          </Card>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto",
-            gap: 24,
-            alignItems: "start",
-            marginTop: 16,
-          }}
-        >
-          <div style={{ display: "grid", gap: 14 }}>
-            <div>
-              <FieldLabel>Primary color</FieldLabel>
-              <ColorPicker
-                value={state.primaryColor}
-                label="Primary color"
-                onChange={(v) => mut("primaryColor", v)}
-              />
-            </div>
-            <div>
-              <FieldLabel>Secondary color</FieldLabel>
-              <ColorPicker
-                value={state.secondaryColor}
-                label="Secondary color"
-                onChange={(v) => mut("secondaryColor", v)}
-              />
-            </div>
-          </div>
-          <div style={{ position: "sticky", top: 16 }}>
-            <FieldLabel>Live preview</FieldLabel>
-            <WidgetPreview
-              config={{
-                primaryColor: state.primaryColor,
-                secondaryColor: state.secondaryColor,
-                title: state.programName,
-                subtitle: "Earn points on every order — redeem for rewards.",
-                launcherText: state.pointsName,
-                showEarn: true,
-                showRewards: true,
-                showReferral: true,
+          <Card icon={ICONS.palette} title="Colors">
+            <FieldLabel>Pick a starting palette</FieldLabel>
+            <BrandingPalette
+              primary={state.primaryColor}
+              secondary={state.secondaryColor}
+              onSelect={(preset) => {
+                mut("primaryColor", preset.primary);
+                mut("secondaryColor", preset.secondary);
               }}
             />
-          </div>
+            <div style={{ display: "grid", gap: 14, marginTop: 16 }}>
+              <div>
+                <FieldLabel>Primary color</FieldLabel>
+                <ColorPicker
+                  value={state.primaryColor}
+                  label="Primary color"
+                  onChange={(v) => mut("primaryColor", v)}
+                />
+              </div>
+              <div>
+                <FieldLabel>Secondary color</FieldLabel>
+                <ColorPicker
+                  value={state.secondaryColor}
+                  label="Secondary color"
+                  onChange={(v) => mut("secondaryColor", v)}
+                />
+              </div>
+            </div>
+          </Card>
         </div>
-      </Card>
+
+        <div style={{ position: "sticky", top: 16 }}>
+          <FieldLabel>Live preview</FieldLabel>
+          <WidgetPreview
+            config={{
+              primaryColor: state.primaryColor,
+              secondaryColor: state.secondaryColor,
+              title: state.programName,
+              subtitle: "Earn points on every order — redeem for rewards.",
+              launcherText: state.pointsName,
+              showEarn: true,
+              showRewards: true,
+              showReferral: true,
+            }}
+          />
+        </div>
+      </div>
     </>
   );
 }
