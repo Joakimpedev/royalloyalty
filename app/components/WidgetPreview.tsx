@@ -8,6 +8,9 @@
 // reassurance that their color choices are landing correctly, not to be a
 // marketing render.
 
+import { getDefault } from "../lib/localization-defaults";
+import type { LocaleCode } from "../lib/localization-locales";
+
 export type WidgetPreviewConfig = {
   primaryColor: string;
   secondaryColor: string;
@@ -17,6 +20,10 @@ export type WidgetPreviewConfig = {
   showEarn: boolean;
   showRewards: boolean;
   showReferral: boolean;
+  /** When set, the row labels and panel subtitle resolve to this locale's
+   *  baked defaults via getDefault(). Used by the onboarding wizard so the
+   *  preview reflects the merchant's Default-language pick in real time. */
+  locale?: LocaleCode;
 };
 
 export function WidgetPreview({ config }: { config: WidgetPreviewConfig }) {
@@ -29,7 +36,16 @@ export function WidgetPreview({ config }: { config: WidgetPreviewConfig }) {
     showEarn,
     showRewards,
     showReferral,
+    locale,
   } = config;
+  const tr = (key: string, fallback: string) =>
+    locale ? getDefault(locale, key) || fallback : fallback;
+  const earnLabel = tr("launcher.hub.earn", "Earn points");
+  const redeemLabel = tr("launcher.hub.redeem", "Redeem rewards");
+  const referLabel = tr("launcher.hub.refer", "Refer a friend");
+  const resolvedSubtitle = locale
+    ? getDefault(locale, "launcher.subtitle") || subtitle
+    : subtitle;
   return (
     <div
       aria-label="Widget preview"
@@ -54,16 +70,16 @@ export function WidgetPreview({ config }: { config: WidgetPreviewConfig }) {
         }}
       >
         <div style={{ fontWeight: 600, fontSize: 16 }}>{title}</div>
-        {subtitle ? (
+        {resolvedSubtitle ? (
           <div style={{ opacity: 0.85, marginTop: 4, fontSize: 13 }}>
-            {subtitle}
+            {resolvedSubtitle}
           </div>
         ) : null}
       </div>
       <div style={{ padding: 16 }}>
-        {showEarn ? <Row label="Earn points" /> : null}
-        {showRewards ? <Row label="Redeem rewards" /> : null}
-        {showReferral ? <Row label="Refer a friend" /> : null}
+        {showEarn ? <Row label={earnLabel} /> : null}
+        {showRewards ? <Row label={redeemLabel} /> : null}
+        {showReferral ? <Row label={referLabel} /> : null}
       </div>
       <div
         aria-hidden="true"

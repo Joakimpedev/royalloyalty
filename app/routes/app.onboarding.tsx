@@ -1069,6 +1069,7 @@ function StepBranding({
               showEarn: true,
               showRewards: true,
               showReferral: true,
+              locale: state.defaultLocale,
             }}
           />
         </div>
