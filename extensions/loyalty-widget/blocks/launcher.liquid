@@ -62,21 +62,21 @@
     "customerId": {{ customer.id | json }}
   }'
   data-royal-ssr='{
-    "metafieldPrimary":        {{ mf_primary | json }},
-    "metafieldSecondary":      {{ mf_secondary | json }},
-    "metafieldPosition":       {{ mf_position | json }},
-    "metafieldLauncherText":   {{ mf_launcher_text | json }},
-    "metafieldPanelTitle":     {{ mf_panel_title | json }},
-    "metafieldPanelSubtitle":  {{ mf_panel_subtitle | json }},
-    "blockPrimary":            {{ block.settings.primary_color | json }},
-    "blockSecondary":          {{ block.settings.secondary_color | json }},
-    "blockPosition":           {{ block.settings.position | json }},
-    "renderedPrimary":         {{ primary | json }},
-    "renderedSecondary":       {{ secondary | json }},
-    "renderedPosition":        {{ pos | json }},
-    "renderedLauncherText":    {{ launcher_text | json }},
-    "renderedPanelTitle":      {{ panel_title | json }},
-    "renderedPanelSubtitle":   {{ panel_subtitle | json }}
+    "metafieldPrimary":        {{ mf_primary | append: '' | json }},
+    "metafieldSecondary":      {{ mf_secondary | append: '' | json }},
+    "metafieldPosition":       {{ mf_position | append: '' | json }},
+    "metafieldLauncherText":   {{ mf_launcher_text | append: '' | json }},
+    "metafieldPanelTitle":     {{ mf_panel_title | append: '' | json }},
+    "metafieldPanelSubtitle":  {{ mf_panel_subtitle | append: '' | json }},
+    "blockPrimary":            {{ block.settings.primary_color | append: '' | json }},
+    "blockSecondary":          {{ block.settings.secondary_color | append: '' | json }},
+    "blockPosition":           {{ block.settings.position | append: '' | json }},
+    "renderedPrimary":         {{ primary | append: '' | json }},
+    "renderedSecondary":       {{ secondary | append: '' | json }},
+    "renderedPosition":        {{ pos | append: '' | json }},
+    "renderedLauncherText":    {{ launcher_text | append: '' | json }},
+    "renderedPanelTitle":      {{ panel_title | append: '' | json }},
+    "renderedPanelSubtitle":   {{ panel_subtitle | append: '' | json }}
   }'
 >
   <button
