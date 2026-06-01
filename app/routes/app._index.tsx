@@ -7,7 +7,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useFetcher,
   useLoaderData,
@@ -453,10 +453,12 @@ export default function Home() {
         {data.embedEnabled === null && (
           <CopyDiagnosticPill dump={data.embedDump} />
         )}
-        <StatusChip
-          tone={data.programActivated ? "success" : "neutral"}
-          label={data.programActivated ? "Loyalty live" : "Loyalty inactive"}
-        />
+        <DevPanel>
+          <StatusChip
+            tone={data.programActivated ? "success" : "neutral"}
+            label={data.programActivated ? "Loyalty live" : "Loyalty inactive"}
+          />
+        </DevPanel>
       </div>
 
       {/* Plan summary moves to the TOP, right after the chips — Presail
@@ -654,6 +656,127 @@ function StatusChip({
         }}
       />
       {label}
+    </span>
+  );
+}
+
+// Hidden dev panel — wraps a child (the Loyalty chip) and stays visually
+// inert: no cursor change, no hover state, no click feedback. Five clicks
+// within 3 seconds reveal a password input; typing `devmode32` unlocks a
+// dropdown of dev actions. Normal users see only the underlying chip.
+function DevPanel({ children }: { children: React.ReactNode }) {
+  const [revealed, setRevealed] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [pwd, setPwd] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const clicksRef = useRef<number[]>([]);
+  const nav = useAppNavigate();
+
+  const onClick = () => {
+    const now = performance.now();
+    const recent = clicksRef.current.filter((t) => now - t < 3000);
+    recent.push(now);
+    clicksRef.current = recent;
+    if (recent.length >= 5) {
+      clicksRef.current = [];
+      setRevealed(true);
+    }
+  };
+
+  const tryUnlock = (value: string) => {
+    if (value === "devmode32") {
+      setUnlocked(true);
+      setMsg(null);
+    } else {
+      setMsg("nope");
+    }
+  };
+
+  const run = async (action: string) => {
+    if (action === "") return;
+    if (action === "reset-onboarding") {
+      setBusy(true);
+      setMsg(null);
+      try {
+        const res = await fetch("/app/dev/reset-onboarding", {
+          method: "POST",
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+        };
+        if (!res.ok || !data.ok) {
+          setMsg(data.error ?? `reset failed (${res.status})`);
+          setBusy(false);
+          return;
+        }
+        setRevealed(false);
+        setUnlocked(false);
+        setPwd("");
+        nav("/app/onboarding");
+      } catch (err) {
+        setMsg(String(err));
+        setBusy(false);
+      }
+    }
+  };
+
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      {/* Keep the chip's own visuals/cursor untouched. We capture clicks via
+          onClickCapture on a wrapper that adds NO styling of its own. */}
+      <span onClickCapture={onClick} style={{ display: "inline-flex" }}>
+        {children}
+      </span>
+      {revealed && !unlocked && (
+        <input
+          autoFocus
+          type="password"
+          value={pwd}
+          placeholder="…"
+          onChange={(e) => setPwd(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") tryUnlock(pwd);
+            if (e.key === "Escape") {
+              setRevealed(false);
+              setPwd("");
+              setMsg(null);
+            }
+          }}
+          style={{
+            width: 120,
+            padding: "2px 8px",
+            border: "1px solid #c9cccf",
+            borderRadius: 6,
+            fontSize: 12,
+            lineHeight: 1.6,
+            background: "#fff",
+          }}
+        />
+      )}
+      {revealed && unlocked && (
+        <select
+          autoFocus
+          defaultValue=""
+          disabled={busy}
+          onChange={(e) => run(e.target.value)}
+          style={{
+            padding: "2px 8px",
+            border: "1px solid #c9cccf",
+            borderRadius: 6,
+            fontSize: 12,
+            lineHeight: 1.6,
+            background: "#fff",
+          }}
+        >
+          <option value="">{busy ? "working…" : "dev tools"}</option>
+          <option value="reset-onboarding">Restart onboarding</option>
+        </select>
+      )}
+      {msg && (
+        <span style={{ fontSize: 11, color: "#a51b29" }}>{msg}</span>
+      )}
     </span>
   );
 }
