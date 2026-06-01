@@ -23,6 +23,8 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { checkAppEmbedEnabled } from "../lib/theme-embed.server";
 import { writeBrandingMetafields } from "../lib/branding-metafields.server";
+import { readLocalization, writeLocalization } from "../lib/localization";
+import { getDefault } from "../lib/localization-defaults";
 import { BrandingPalette } from "../components/BrandingPalette";
 import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
@@ -307,6 +309,35 @@ const DEFAULTS: BrandingConfig = {
   },
 };
 
+// Maps each copy field on the Branding page to its canonical Localization
+// key. After this wiring, both pages share ONE storage location for these
+// values (aiConfigSnapshot.localization.overrides). Editing on either page
+// reflects on the other — there's no parallel branding-only copy store.
+const COPY_FIELD_MAP = {
+  "widget.title": "launcher.title",
+  "widget.subtitle": "launcher.subtitle",
+  "widget.launcherText": "launcher.text",
+  "page.heroTitle": "page.heroTitle",
+  "page.heroSubtitle": "page.heroSubtitle",
+  "product.heading": "product.heading",
+  "product.subtext": "product.subtext",
+  "cart.heading": "cart.heading",
+} as const;
+
+function getPath(obj: Record<string, any>, path: string): unknown {
+  const [a, b] = path.split(".");
+  return obj?.[a]?.[b];
+}
+function setPath(
+  obj: Record<string, any>,
+  path: string,
+  value: unknown,
+): void {
+  const [a, b] = path.split(".");
+  if (!obj[a]) obj[a] = {};
+  obj[a][b] = value;
+}
+
 function readBranding(snapshot: unknown): BrandingConfig {
   const snap =
     snapshot && typeof snapshot === "object"
@@ -314,12 +345,36 @@ function readBranding(snapshot: unknown): BrandingConfig {
           | Partial<BrandingConfig>
           | undefined)
       : undefined;
-  return {
+  const merged = {
     widget: { ...DEFAULTS.widget, ...(snap?.widget ?? {}) },
     page: { ...DEFAULTS.page, ...(snap?.page ?? {}) },
     product: { ...DEFAULTS.product, ...(snap?.product ?? {}) },
     cart: { ...DEFAULTS.cart, ...(snap?.cart ?? {}) },
-  };
+  } as Record<string, any>;
+  // Layer localization overrides on top of the branding storage for the
+  // mapped copy fields. If the merchant set "page.heroTitle" via the
+  // Localization page, that value wins here too — keeping both admin pages
+  // in sync.
+  const loc = readLocalization(snapshot);
+  for (const [path, key] of Object.entries(COPY_FIELD_MAP)) {
+    const override = loc.overrides[key];
+    if (typeof override === "string" && override.length > 0) {
+      setPath(merged, path, override);
+    } else {
+      // No override → backfill from baked default so the field always
+      // shows the active locale's translation rather than the empty
+      // legacy branding storage.
+      const baked = getDefault(loc.defaultLocale, key);
+      const current = getPath(merged, path);
+      if (
+        baked &&
+        (typeof current !== "string" || current.length === 0)
+      ) {
+        setPath(merged, path, baked);
+      }
+    }
+  }
+  return merged as BrandingConfig;
 }
 
 async function requireShop(shopDomain: string) {
@@ -402,15 +457,47 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     shop.aiConfigSnapshot && typeof shop.aiConfigSnapshot === "object"
       ? (shop.aiConfigSnapshot as Record<string, unknown>)
       : {};
+
+  // Mirror every copy field on the branding form INTO localization.overrides
+  // so the Localization admin page sees the same values. We then zero out
+  // the legacy branding storage for those fields so there's exactly ONE
+  // source of truth (localization.overrides). Storefront still renders
+  // correctly: the launcher's `b.heroTitle || t("page.heroTitle")` chain
+  // falls through to t() when the branding storage is empty, which reads
+  // from localization.overrides.
+  const loc = readLocalization(base);
+  const nextOverrides = { ...loc.overrides };
+  const brandingForStorage = JSON.parse(JSON.stringify(next)) as Record<string, any>;
+  for (const [path, key] of Object.entries(COPY_FIELD_MAP)) {
+    const value = getPath(next as Record<string, any>, path);
+    if (typeof value === "string" && value.length > 0) {
+      // Only store as an override when it differs from the baked default for
+      // the current locale — keeps storage minimal and "reset by clearing
+      // the field" works.
+      const baked = getDefault(loc.defaultLocale, key);
+      if (value !== baked) nextOverrides[key] = value;
+      else delete nextOverrides[key];
+    } else {
+      delete nextOverrides[key];
+    }
+    // Always clear the legacy branding copy field so the storefront's
+    // b.heroTitle path falls through to t() / localization.
+    setPath(brandingForStorage, path, "");
+  }
+  const updatedSnapshot = writeLocalization(
+    { ...base, branding: brandingForStorage },
+    { defaultLocale: loc.defaultLocale, overrides: nextOverrides },
+  );
+
   await prisma.shop.update({
     where: { id: shop.id },
-    data: { aiConfigSnapshot: { ...base, branding: next } },
+    data: { aiConfigSnapshot: updatedSnapshot as object },
   });
 
-  // Mirror the widget colors into shop metafields so the storefront Liquid
-  // block renders the saved color on first paint (no JS flash). DB stays the
-  // source of truth — metafield write failures are logged, not thrown, so a
-  // Shopify API hiccup doesn't fail the save the merchant just confirmed.
+  // Mirror the widget colors + the now-canonical copy values into shop
+  // metafields so the storefront Liquid block renders correctly on first
+  // paint. We pass the merged values (incoming copy from this save) so the
+  // metafields stay in lockstep with what the merchant just confirmed.
   const metafieldsResult = await writeBrandingMetafields(admin, {
     primaryColor: next.widget.primaryColor,
     secondaryColor: next.widget.secondaryColor,

@@ -205,6 +205,7 @@ const en: Bundle = {
   "common.linkCopyFailedAuto": "Could not copy automatically.",
   "common.linkCopyFailedManual": "Could not copy. Select and copy manually.",
   "common.ptsSuffix": " pts",
+  "product.heading": "Earn {points} points with this purchase",
 };
 
 const es: Bundle = {

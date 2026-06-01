@@ -1089,6 +1089,14 @@ export const KEY_CATALOG: LocalizationKey[] = [
     label: "Points abbreviation suffix (e.g. '+100 pts')",
     defaultEn: " pts",
   },
+
+  // ── Product card (companion to product.subtext, surfaced on /app/branding)
+  {
+    key: "product.heading",
+    section: "product",
+    label: "Product page heading (e.g. 'Earn 50 points with this purchase')",
+    defaultEn: "Earn {points} points with this purchase",
+  },
 ];
 
 /** Quick map for O(1) key lookups. */
