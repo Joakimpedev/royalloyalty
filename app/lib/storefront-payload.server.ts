@@ -299,23 +299,25 @@ function readBranding(snapshot: unknown): StorefrontBranding {
       widget.secondaryColor ??
       flat.secondaryColor ??
       DEFAULT_BRANDING.secondaryColor,
-    programName:
-      widget.title ?? flat.programName ?? DEFAULT_BRANDING.programName,
+    // The eight copy fields below (programName, launcherText, widgetSubtitle,
+    // heroTitle, heroSubtitle, productHeading, productSubtext, cartHeading)
+    // are now sourced exclusively from localization.overrides via the
+    // launcher's t() chain on the storefront. We deliberately set them to
+    // empty so the launcher's `b.<field> || t(<key>)` pattern falls through
+    // to t() and reads the merged override+baked-default bundle. This keeps
+    // the Branding admin page and Localization admin page from diverging,
+    // and ignores any stale wizard-generated English templates that may
+    // still be persisted in legacy branding storage.
+    programName: "",
     pointsName: flat.pointsName ?? DEFAULT_BRANDING.pointsName,
-    launcherText:
-      widget.launcherText ??
-      flat.pointsName ??
-      DEFAULT_BRANDING.launcherText,
+    launcherText: "",
     launcherPosition:
       (widget.position as "bottom-right" | "bottom-left") ??
       flat.launcherPosition ??
       DEFAULT_BRANDING.launcherPosition,
-    widgetSubtitle:
-      widget.subtitle ??
-      flat.widgetSubtitle ??
-      DEFAULT_BRANDING.widgetSubtitle,
-    heroTitle: page.heroTitle ?? DEFAULT_BRANDING.heroTitle,
-    heroSubtitle: page.heroSubtitle ?? DEFAULT_BRANDING.heroSubtitle,
+    widgetSubtitle: "",
+    heroTitle: "",
+    heroSubtitle: "",
     showEarn: page.showEarn ?? DEFAULT_BRANDING.showEarn,
     showRewards: page.showRewards ?? DEFAULT_BRANDING.showRewards,
     showReferral: page.showReferral ?? DEFAULT_BRANDING.showReferral,
@@ -325,16 +327,14 @@ function readBranding(snapshot: unknown): StorefrontBranding {
       product.accentColor ??
       widget.primaryColor ??
       DEFAULT_BRANDING.productAccent,
-    productHeading:
-      product.heading ?? DEFAULT_BRANDING.productHeading,
-    productSubtext:
-      product.subtext ?? DEFAULT_BRANDING.productSubtext,
+    productHeading: "",
+    productSubtext: "",
     cartEnabled: cart.enabled ?? DEFAULT_BRANDING.cartEnabled,
     cartAccent:
       cart.accentColor ??
       widget.primaryColor ??
       DEFAULT_BRANDING.cartAccent,
-    cartHeading: cart.heading ?? DEFAULT_BRANDING.cartHeading,
+    cartHeading: "",
     cartShowEarnLine:
       cart.showEarnLine ?? DEFAULT_BRANDING.cartShowEarnLine,
   };

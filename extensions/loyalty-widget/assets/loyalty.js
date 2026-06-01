@@ -1446,15 +1446,16 @@
         : 0) - balance
     );
     // Heading source priority:
-    //   1. Purchase earn rule's productLine (new, merchant-edits on the
-    //      "Place an order" page)
-    //   2. Legacy Branding.product.heading
-    //   3. Built-in default
+    //   1. Purchase earn rule's productLine (merchant-edits on the
+    //      "Place an order" rule editor)
+    //   2. Localization override / baked default for product.heading
+    //      (single source of truth shared by the Branding + Localization
+    //      admin pages)
+    //   3. Built-in English fallback
     var purchaseRule = findPurchaseRule(payload);
     var headingTemplate =
       (purchaseRule && purchaseRule.productLine) ||
-      b.productHeading ||
-      "Earn {points} points with this purchase";
+      t("product.heading", "Earn {points} points with this purchase");
     var heading = /\{\{/.test(headingTemplate)
       ? substituteTokens(headingTemplate, {
           points: String(earned),
@@ -1466,7 +1467,11 @@
           balance: balance,
           more: more,
         });
-    var subtext = fillTemplate(b.productSubtext, {
+    var subtextTemplate = t(
+      "product.subtext",
+      "You have {balance} points. Earn {more} more with this order!",
+    );
+    var subtext = fillTemplate(subtextTemplate, {
       points: earned,
       balance: balance,
       more: more,
