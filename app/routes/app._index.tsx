@@ -670,6 +670,8 @@ function DevPanel({ children }: { children: React.ReactNode }) {
   const [pwd, setPwd] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [diag, setDiag] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const clicksRef = useRef<number[]>([]);
   const nav = useAppNavigate();
 
@@ -696,18 +698,48 @@ function DevPanel({ children }: { children: React.ReactNode }) {
   const run = async (action: string) => {
     if (action === "") return;
     if (action === "reset-onboarding") {
+      const url = "/app/dev/reset-onboarding";
       setBusy(true);
       setMsg(null);
+      setDiag(null);
       try {
-        const res = await fetch("/app/dev/reset-onboarding", {
+        const res = await fetch(url, {
           method: "POST",
+          headers: { Accept: "application/json" },
         });
-        const data = (await res.json().catch(() => ({}))) as {
-          ok?: boolean;
-          error?: string;
-        };
+        const bodyText = await res.text();
+        let parsed: unknown = null;
+        try {
+          parsed = JSON.parse(bodyText);
+        } catch {
+          /* keep raw text */
+        }
+        const data = (parsed ?? {}) as { ok?: boolean; error?: string };
         if (!res.ok || !data.ok) {
+          const headers: Record<string, string> = {};
+          res.headers.forEach((v, k) => {
+            headers[k] = v;
+          });
           setMsg(data.error ?? `reset failed (${res.status})`);
+          setDiag(
+            JSON.stringify(
+              {
+                url,
+                method: "POST",
+                finalUrl: res.url,
+                status: res.status,
+                statusText: res.statusText,
+                redirected: res.redirected,
+                contentType: res.headers.get("content-type"),
+                headers,
+                body: parsed ?? bodyText.slice(0, 2000),
+                location:
+                  typeof window !== "undefined" ? window.location.href : null,
+              },
+              null,
+              2,
+            ),
+          );
           setBusy(false);
           return;
         }
@@ -717,9 +749,42 @@ function DevPanel({ children }: { children: React.ReactNode }) {
         nav("/app/onboarding");
       } catch (err) {
         setMsg(String(err));
+        setDiag(
+          JSON.stringify(
+            {
+              url,
+              error: String(err),
+              stack: err instanceof Error ? err.stack : null,
+              location:
+                typeof window !== "undefined" ? window.location.href : null,
+            },
+            null,
+            2,
+          ),
+        );
         setBusy(false);
       }
     }
+  };
+
+  const copyDiag = async () => {
+    if (!diag) return;
+    try {
+      await navigator.clipboard.writeText(diag);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = diag;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (
@@ -775,7 +840,53 @@ function DevPanel({ children }: { children: React.ReactNode }) {
         </select>
       )}
       {msg && (
-        <span style={{ fontSize: 11, color: "#a51b29" }}>{msg}</span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 11,
+            color: "#a51b29",
+          }}
+        >
+          {msg}
+          {diag && (
+            <button
+              type="button"
+              onClick={copyDiag}
+              style={{
+                fontSize: 11,
+                padding: "1px 6px",
+                border: "1px solid #c9cccf",
+                borderRadius: 4,
+                background: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              {copied ? "copied" : "copy diagnostic"}
+            </button>
+          )}
+        </span>
+      )}
+      {diag && (
+        <pre
+          style={{
+            margin: 0,
+            padding: 8,
+            maxWidth: 600,
+            maxHeight: 240,
+            overflow: "auto",
+            fontSize: 11,
+            lineHeight: 1.4,
+            background: "#fafbfb",
+            border: "1px solid #e1e3e5",
+            borderRadius: 6,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {diag}
+        </pre>
       )}
     </span>
   );

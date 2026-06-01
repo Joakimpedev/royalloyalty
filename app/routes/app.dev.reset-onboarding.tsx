@@ -1,27 +1,23 @@
-// Dev-only: wipe onboarding state for the current shop so the next visit
-// to /app/onboarding lands back on the AI-generated preview.
+// Wipes onboarding state for the current shop so the next visit to
+// /app/onboarding lands back on the AI-generated preview.
 //
 // Triggered by the hidden DevPanel on the home page (5-click on the loyalty
-// pill → "devmode32" → "Restart onboarding"). Gated to non-prod or when
-// DEV_TOOLS_ENABLED=1 is set, so a stray gesture in prod is a no-op.
+// pill → "devmode32" → "Restart onboarding"). Reachable in prod too — the
+// gesture + password + Shopify admin auth + per-shop scope are the gate.
 
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Prisma } from "@prisma/client";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
-function devToolsEnabled(): boolean {
-  return (
-    process.env.NODE_ENV !== "production" ||
-    process.env.DEV_TOOLS_ENABLED === "1"
-  );
-}
+// GET → JSON probe so the dev panel can surface a useful diagnostic if
+// something is wrong (auth, routing). The actual reset only runs on POST.
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  return { ok: true, route: "dev.reset-onboarding", shop: session.shop };
+};
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  if (!devToolsEnabled()) {
-    return new Response("Not found", { status: 404 });
-  }
-
   const { session } = await authenticate.admin(request);
 
   const shop = await prisma.shop.findUnique({
