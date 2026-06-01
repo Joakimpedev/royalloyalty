@@ -97,14 +97,61 @@
 
         var act = document.getElementById('royal-acc-activity');
         if (act) {
+          // Map a redeem reward type code to a human-readable phrase. Falls
+          // back to a generic "Redeemed reward" when the type is unknown.
+          function redeemPhrase(meta) {
+            var t = (meta && meta.rewardType) || '';
+            var pts = meta && meta.pointsCost != null ? meta.pointsCost : null;
+            var ptsPart = pts != null ? pts + ' points' : 'points';
+            if (t === 'store_credit') return 'Redeemed ' + ptsPart + ' for store credit';
+            if (t === 'amount_off')   return 'Redeemed ' + ptsPart + ' for a discount';
+            if (t === 'percent_off')  return 'Redeemed ' + ptsPart + ' for a percent-off discount';
+            if (t === 'free_shipping') return 'Redeemed ' + ptsPart + ' for free shipping';
+            if (t === 'free_product') return 'Redeemed ' + ptsPart + ' for a free product';
+            return 'Redeemed ' + ptsPart;
+          }
+          function earnPhrase(meta) {
+            var a = (meta && meta.earnAction) || 'reward';
+            if (a === 'purchase')   return 'Earned points on order';
+            if (a === 'signup')     return 'Earned points for signing up';
+            if (a === 'birthday')   return 'Birthday bonus';
+            if (a === 'review')     return 'Earned points for a review';
+            if (a === 'social')     return 'Earned points for following';
+            if (a === 'newsletter') return 'Earned points for subscribing';
+            if (a === 'anniversary') return 'Anniversary bonus';
+            return 'Earned points';
+          }
+          // Build a customer-facing label from the structured kind+meta
+          // server-side fields. Falls back to the raw reason string only
+          // when no kind is set.
+          function activityLabel(a) {
+            var k = a.kind;
+            var m = a.meta || {};
+            if (k === 'referral_referrer') {
+              return m.refereeEmail
+                ? 'Referred ' + m.refereeEmail
+                : 'Referred a friend';
+            }
+            if (k === 'referral_referee') {
+              return m.referrerEmail
+                ? 'Welcome bonus from ' + m.referrerEmail
+                : 'Welcome referral bonus';
+            }
+            if (k === 'redeem') return redeemPhrase(m);
+            if (k === 'earn') return earnPhrase(m);
+            if (k === 'migration') return 'Balance imported';
+            if (k === 'reversal') return 'Redemption reversed';
+            return a.reason;
+          }
           act.innerHTML = (d.activity && d.activity.length)
             ? d.activity.map(function (a) {
                 var dateStr = (function () {
                   try { return new Date(a.date).toLocaleDateString(); }
                   catch (e) { return a.date; }
                 })();
+                var label = activityLabel(a);
                 return '<div class="royal-account__activity-row">' +
-                  '<div class="royal-account__activity-reason">' + a.reason + '</div>' +
+                  '<div class="royal-account__activity-reason">' + label + '</div>' +
                   '<div class="royal-account__activity-meta">' +
                     '<span class="royal-account__activity-points">' + (a.points > 0 ? '+' : '') + a.points + ' pts</span>' +
                     '<span class="royal-account__activity-date">' + dateStr + '</span>' +

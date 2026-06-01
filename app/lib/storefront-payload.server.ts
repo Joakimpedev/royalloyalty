@@ -98,6 +98,30 @@ export interface StorefrontActivity {
   points: number;
   /** ISO date string. */
   date: string;
+  /** Structured classification used by the storefront to render a
+   *  customer-facing label instead of the raw `reason`. */
+  kind?:
+    | "referral_referrer"
+    | "referral_referee"
+    | "redeem"
+    | "earn"
+    | "migration"
+    | "reversal"
+    | "other";
+  meta?: {
+    /** Email of the friend the customer referred (for kind=referral_referrer). */
+    refereeEmail?: string;
+    /** Email of the person who referred this customer (for kind=referral_referee). */
+    referrerEmail?: string;
+    /** Reward type code, e.g. "store_credit", "amount_off". */
+    rewardType?: string;
+    /** Points cost of the redeemed reward. */
+    pointsCost?: number;
+    /** Currency-amount value of the reward (when known). */
+    rewardValue?: number;
+    /** Earn-rule action key, e.g. "purchase", "signup". */
+    earnAction?: string;
+  };
 }
 
 export interface StorefrontCashback {
@@ -613,7 +637,12 @@ export async function buildStorefrontLoyaltyPayload(params: {
       }),
     ]);
 
-  const currentTier: StorefrontTier | null = member.currentTier
+  // Prefer the persisted Member.currentTier when the reconcile job has set
+  // it, but fall back to deriving from balance + tiers so the storefront
+  // shows a tier badge even before the first reconcile pass (and avoids
+  // showing "no tier" for shops where Member rows pre-date the wizard's
+  // tier seeding).
+  let currentTier: StorefrontTier | null = member.currentTier
     ? {
         id: member.currentTier.id,
         name: member.currentTier.name,
@@ -623,6 +652,89 @@ export async function buildStorefrontLoyaltyPayload(params: {
         sortOrder: member.currentTier.sortOrder,
       }
     : null;
+  if (!currentTier && tiers.length) {
+    const sorted = [...tiers].sort((a, b) => a.threshold - b.threshold);
+    let derived: StorefrontTier | null = null;
+    for (const tier of sorted) {
+      if (balance >= tier.threshold) derived = tier;
+    }
+    currentTier = derived;
+  }
+
+  // Enrich activity rows with a structured `kind` + `meta` so the
+  // storefront can render customer-facing labels instead of the raw
+  // internal `reason` strings (e.g. "Referral reward (referrer)
+  // [referral:cmp8…]" becomes "Referred friend@example.com").
+  const referralIdMatches = activityRows
+    .map((a) => /\[referral:([a-z0-9]+)\]/i.exec(a.reason)?.[1])
+    .filter((s): s is string => !!s);
+  const referralEmailByCode = new Map<
+    string,
+    { referrerEmail?: string; refereeEmail?: string }
+  >();
+  if (referralIdMatches.length) {
+    const referralRows = await prisma.referral.findMany({
+      where: { id: { in: referralIdMatches } },
+      include: { referrer: { select: { email: true } } },
+    });
+    for (const r of referralRows) {
+      referralEmailByCode.set(r.id, {
+        referrerEmail: r.referrer?.email ?? undefined,
+        refereeEmail: r.refereeEmail ?? undefined,
+      });
+    }
+  }
+  const enrichedActivity: StorefrontActivity[] = activityRows.map((a) => {
+    const base: StorefrontActivity = {
+      type: a.type,
+      reason: a.reason,
+      points: a.points,
+      date: a.createdAt.toISOString(),
+    };
+    const refMatch = /\[referral:([a-z0-9]+)\]/i.exec(a.reason);
+    if (refMatch) {
+      const refId = refMatch[1];
+      const emails = referralEmailByCode.get(refId);
+      if (/referrer/i.test(a.reason)) {
+        return {
+          ...base,
+          kind: "referral_referrer",
+          meta: { refereeEmail: emails?.refereeEmail },
+        };
+      }
+      if (/referee/i.test(a.reason)) {
+        return {
+          ...base,
+          kind: "referral_referee",
+          meta: { referrerEmail: emails?.referrerEmail },
+        };
+      }
+    }
+    const redeemMatch = /^Redeemed reward (\S+)\s*\((\d+) pts\)/i.exec(
+      a.reason,
+    );
+    if (redeemMatch) {
+      return {
+        ...base,
+        kind: "redeem",
+        meta: {
+          rewardType: redeemMatch[1],
+          pointsCost: Number(redeemMatch[2]),
+        },
+      };
+    }
+    const earnMatch = /^Action:\s*(\w+)/i.exec(a.reason);
+    if (earnMatch) {
+      return { ...base, kind: "earn", meta: { earnAction: earnMatch[1] } };
+    }
+    if (/^Migrated balance/i.test(a.reason)) {
+      return { ...base, kind: "migration" };
+    }
+    if (/^Reversal:/i.test(a.reason)) {
+      return { ...base, kind: "reversal" };
+    }
+    return { ...base, kind: "other" };
+  });
 
   return {
     balance,
@@ -643,12 +755,7 @@ export async function buildStorefrontLoyaltyPayload(params: {
     cashback,
     storeCreditBalance: sc.balance,
     storeCreditCurrency: sc.currency,
-    activity: activityRows.map((a) => ({
-      type: a.type,
-      reason: a.reason,
-      points: a.points,
-      date: a.createdAt.toISOString(),
-    })),
+    activity: enrichedActivity,
     branding,
     localization: localizationBundle,
     locale: localeInfo,
