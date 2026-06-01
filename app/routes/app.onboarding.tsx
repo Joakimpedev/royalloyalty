@@ -21,6 +21,7 @@ import { useBlocker, useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getDefaultsForCurrency, type ProgramDefaults } from "../lib/defaults";
+import { writeBrandingMetafields } from "../lib/branding-metafields.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
@@ -133,7 +134,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 // ---------------------------------------------------------------------------
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
   const intent = form.get("intent");
 
@@ -337,6 +338,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       });
     });
+
+    // Sync the storefront branding metafields so the Liquid launcher block
+    // renders the merchant's new colors / program name / points name on
+    // first paint. Without this, /loyalty/balance returns new branding but
+    // the SSR has already painted the previous metafield values, causing a
+    // visible flash. Non-fatal: a metafield write failure shouldn't block
+    // onboarding completion (we'll just keep the flash until the next sync).
+    try {
+      await writeBrandingMetafields(admin, {
+        primaryColor: w.primaryColor,
+        secondaryColor: w.secondaryColor,
+        launcherPosition: "bottom-right",
+        launcherText: w.pointsName,
+        panelTitle: w.programName,
+        panelSubtitle: "Earn points on every order — redeem for rewards.",
+      });
+    } catch {
+      /* non-fatal */
+    }
 
     // Iframe auth: don't server-redirect. Client navigates via useAppNavigate.
     // Land on /app/program with ?onboarding=1 so that page shows the big
