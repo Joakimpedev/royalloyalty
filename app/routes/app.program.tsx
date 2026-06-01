@@ -105,10 +105,11 @@ export default function ProgramPage() {
   const nav = useNavigation();
   const submit = useSubmit();
   const [searchParams] = useSearchParams();
-  // Onboarding redirect-chain marker: the wizard sends the merchant here with
-  // ?onboarding=1 right after activation. This page shows a confirmation
-  // banner and a Continue CTA that takes them home (?welcomed=1).
+  // Onboarding redirect-chain marker: the wizard finishes here with
+  // ?onboarding=1. Right now the program isn't live yet — the merchant must
+  // click the featured Activate CTA below to flip programActivatedAt.
   const inOnboardingChain = searchParams.get("onboarding") === "1";
+  const programActivated = redemption.programActivated;
 
   const rules = earnRules;
   const saving = nav.state === "submitting";
@@ -116,9 +117,93 @@ export default function ProgramPage() {
   const appNav = useAppNavigate();
   const money = useMoney();
 
+  const activate = () => {
+    const fd = new FormData();
+    fd.set("_intent", "activate");
+    submit(fd, { method: "POST" });
+  };
+
   return (
     <s-page heading="Program">
-      {inOnboardingChain && (
+      {!programActivated && (
+        <s-section>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 20,
+              padding: "20px 24px",
+              borderRadius: 12,
+              background:
+                "linear-gradient(135deg, #08081A 0%, #0B1228 55%, #131B36 100%)",
+              color: "#F7F2E6",
+              boxShadow: "0 4px 16px rgba(8, 8, 26, 0.25)",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                  color: "#F2B821",
+                  marginBottom: 6,
+                }}
+              >
+                {inOnboardingChain
+                  ? "Last step"
+                  : "Your program isn't live yet"}
+              </div>
+              <div
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  marginBottom: 4,
+                }}
+              >
+                Activate your loyalty program
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  opacity: 0.8,
+                  lineHeight: 1.5,
+                  maxWidth: 520,
+                }}
+              >
+                Customers start earning points and redeeming rewards the
+                moment you switch it on.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={activate}
+              disabled={saving}
+              style={{
+                appearance: "none",
+                border: "none",
+                background: "#F2B821",
+                color: "#08081A",
+                padding: "12px 22px",
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: saving ? "not-allowed" : "pointer",
+                fontFamily: "inherit",
+                flexShrink: 0,
+                boxShadow: "0 4px 12px rgba(242, 184, 33, 0.35)",
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {saving ? "Activating…" : "Activate program"}
+            </button>
+          </div>
+        </s-section>
+      )}
+
+      {programActivated && inOnboardingChain && (
         <s-button
           slot="primary-action"
           onClick={() => appNav("/app?welcomed=1")}
@@ -128,7 +213,7 @@ export default function ProgramPage() {
         </s-button>
       )}
 
-      {inOnboardingChain && (
+      {programActivated && inOnboardingChain && (
         <s-section>
           <s-banner tone="success" heading="Your program is live">
             <s-paragraph>

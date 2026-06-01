@@ -21,7 +21,6 @@ import { useBlocker, useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getDefaultsForCurrency, type ProgramDefaults } from "../lib/defaults";
-import { recordActivation } from "../lib/ttv.server";
 import { BrandingPalette } from "../components/BrandingPalette";
 import ColorPicker from "../components/ColorPicker";
 import { WidgetPreview } from "../components/WidgetPreview";
@@ -103,11 +102,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   });
 
-  if (shop.programActivatedAt) {
+  // "Activated" here means "onboarding wizard has been finished" — NOT
+  // "program is live" (that's the merchant's job on /app/program). We mark
+  // wizard completion with aiConfigSnapshot._onboardingFinishedAt; the
+  // existing programActivatedAt flag still counts so legacy shops that
+  // activated under the previous flow still see the checklist.
+  const snapshot =
+    (shop.aiConfigSnapshot as Record<string, unknown> | null) ?? {};
+  const onboardingFinished =
+    Boolean(snapshot._onboardingFinishedAt) || Boolean(shop.programActivatedAt);
+
+  if (onboardingFinished) {
     return {
       activated: true,
       shopDomain: session.shop,
-      snapshot: (shop.aiConfigSnapshot as Record<string, unknown>) ?? {},
+      snapshot,
     } as const;
   }
 
@@ -147,8 +156,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "activate") {
-    if (shop.programActivatedAt) {
-      return { ok: false, error: "Program already activated" };
+    // "activate" here = finish the onboarding wizard. It does NOT flip the
+    // program live (programActivatedAt) — that's the merchant's deliberate
+    // act on /app/program. We just persist the wizard's picks and mark the
+    // wizard as done.
+    const finishedAt =
+      ((shop.aiConfigSnapshot as Record<string, unknown> | null) ?? {})
+        ._onboardingFinishedAt;
+    if (finishedAt) {
+      return { ok: false, error: "Onboarding already finished" };
     }
     const payload = form.get("wizard");
     if (typeof payload !== "string") {
@@ -316,14 +332,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               overrides:
                 (existingLocalization.overrides as object | undefined) ?? {},
             },
+            _onboardingFinishedAt: new Date().toISOString(),
           } as object,
         },
       });
-
-      await recordActivation(tx, shop.id);
     });
 
     // Iframe auth: don't server-redirect. Client navigates via useAppNavigate.
+    // Land on /app/program with ?onboarding=1 so that page shows the big
+    // "Activate program" CTA banner the merchant will click to flip live.
     return {
       ok: true,
       activated: true,
@@ -504,12 +521,10 @@ function Wizard({
         )}
         {step === 4 && (
           <StepActivate
-            state={state}
-            currencyCode={defaults.currencyCode}
             isSaving={!!isSaving}
             error={
               fetcher.data && "ok" in fetcher.data && fetcher.data.ok === false
-                ? fetcher.data.error ?? "Activation failed"
+                ? fetcher.data.error ?? "Could not save your setup"
                 : null
             }
           />
@@ -628,7 +643,7 @@ function WizardNav({
         opacity: disabled ? 0.5 : 1,
       }}
     >
-      {loading ? "Activating…" : label}
+      {loading ? "Saving…" : label}
     </button>
   );
   return (
@@ -641,7 +656,7 @@ function WizardNav({
     >
       {navBtn("Back", onBack, "ghost", step === 0)}
       {isLast
-        ? navBtn("Activate program", onActivate, "primary", false, isSaving)
+        ? navBtn("Finish setup", onActivate, "primary", false, isSaving)
         : navBtn("Next", onNext, "primary")}
     </div>
   );
@@ -1476,72 +1491,103 @@ function StepBranding({
 // ---------------------------------------------------------------------------
 
 function StepActivate({
-  state,
-  currencyCode,
   isSaving,
   error,
 }: {
-  state: WizardState;
-  currencyCode: string;
   isSaving: boolean;
   error: string | null;
 }) {
-  const pn = state.pointsName.toLowerCase();
+  // Live embed-status probe. Re-fetches on mount, focus, and visibility
+  // change so the merchant can flip the embed on in the theme editor, come
+  // back to this tab, and see the status update without a manual refresh.
+  const [status, setStatus] = useState<"loading" | "off" | "on" | "unknown">(
+    "loading",
+  );
+  useEffect(() => {
+    let cancelled = false;
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch("/app/embed-status", {
+          headers: { Accept: "application/json" },
+        });
+        const data = (await res.json()) as { enabled: boolean | null };
+        if (cancelled) return;
+        setStatus(
+          data.enabled === true
+            ? "on"
+            : data.enabled === false
+              ? "off"
+              : "unknown",
+        );
+      } catch {
+        if (!cancelled) setStatus("unknown");
+      }
+    };
+    fetchStatus();
+    const onFocus = () => fetchStatus();
+    const onVis = () => {
+      if (document.visibilityState === "visible") fetchStatus();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
   return (
     <>
       <StepTitle
-        title="Activate your program"
-        subtitle="One click and it's live on your store."
+        title="Show it on your storefront"
+        subtitle="Switch on the Royal Loyalty embed so customers can see the widget."
       />
 
-      <Card icon={ICONS.rocket} title="What you're activating">
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "120px 1fr",
-            rowGap: 10,
-            columnGap: 16,
-            fontSize: 14,
-            color: "#1a1c1f",
-          }}
-        >
-          <div style={{ color: "#6d7175" }}>Program name</div>
-          <div style={{ fontWeight: 600 }}>{state.programName}</div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) 320px",
+          gap: 32,
+          alignItems: "start",
+        }}
+      >
+        <div>
+          <Card icon={ICONS.store} title="Enable the app embed">
+            <p
+              style={{
+                margin: "0 0 14px",
+                fontSize: 14,
+                color: "#1a1c1f",
+                lineHeight: 1.5,
+              }}
+            >
+              Open the theme editor, find <strong>Loyalty launcher</strong>{" "}
+              under App embeds, switch it on, and click Save.
+            </p>
+            <AppLink href="shopify:admin/themes/current/editor?context=apps">
+              Open theme editor
+            </AppLink>
+          </Card>
 
-          <div style={{ color: "#6d7175" }}>Earn rate</div>
-          <div>
-            {state.earnPoints} {pn} per {state.earnPerCurrency} {currencyCode}
-          </div>
-
-          <div style={{ color: "#6d7175" }}>Signup bonus</div>
-          <div>
-            {state.signupPoints} {pn}
-          </div>
-
-          <div style={{ color: "#6d7175" }}>First reward</div>
-          <div>
-            {state.firstRewardPoints} {pn} → {state.firstRewardValue}{" "}
-            {currencyCode} off
-          </div>
+          <Card icon={ICONS.rocket} title="Embed status">
+            <EmbedStatusPill status={status} />
+            <p
+              style={{
+                margin: "12px 0 0",
+                fontSize: 12,
+                color: "#6d7175",
+                lineHeight: 1.5,
+              }}
+            >
+              We check automatically when you switch back to this tab — no
+              need to refresh.
+            </p>
+          </Card>
         </div>
-      </Card>
 
-      <Card icon={ICONS.store} title="Show it on your storefront">
-        <p
-          style={{
-            margin: "0 0 12px",
-            fontSize: 14,
-            color: "#1a1c1f",
-            lineHeight: 1.5,
-          }}
-        >
-          After activating, open the theme editor and turn on the Royal
-          Loyalty app embed, then click Save.
-        </p>
-        <AppLink href="shopify:admin/themes/current/editor?context=apps">
-          Open theme editor
-        </AppLink>
-      </Card>
+        <EmbedAnimation />
+      </div>
 
       {isSaving && (
         <p
@@ -1549,10 +1595,10 @@ function StepActivate({
             fontSize: 13,
             color: "#5c5f62",
             textAlign: "center",
-            margin: "8px 0 0",
+            margin: "16px 0 0",
           }}
         >
-          Activating…
+          Saving your setup…
         </p>
       )}
       {error && (
@@ -1570,6 +1616,293 @@ function StepActivate({
           {error}
         </div>
       )}
+    </>
+  );
+}
+
+function EmbedStatusPill({
+  status,
+}: {
+  status: "loading" | "off" | "on" | "unknown";
+}) {
+  const config = {
+    loading: { bg: "#f1f2f3", fg: "#5c5f62", dot: "#8c9196", label: "Checking…" },
+    off: { bg: "#f1f2f3", fg: "#5c5f62", dot: "#8c9196", label: "Not enabled yet" },
+    on: { bg: "#e3f4e1", fg: "#0d6c2e", dot: "#0e8a3e", label: "Enabled — you're all set" },
+    unknown: { bg: "#fff4e3", fg: "#8a5d00", dot: "#bf7c00", label: "Couldn't check status" },
+  }[status];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        background: config.bg,
+        color: config.fg,
+        padding: "6px 12px",
+        borderRadius: 999,
+        fontSize: 13,
+        fontWeight: 500,
+      }}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: config.dot,
+          flexShrink: 0,
+        }}
+      />
+      {config.label}
+    </span>
+  );
+}
+
+/** Recreation of Shopify's "App embeds" panel in pure HTML/CSS, with a
+ *  looping click animation that demonstrates flipping the Loyalty launcher
+ *  toggle on. The keyframes are scoped via a unique class so this doesn't
+ *  collide with anything else on the page. */
+function EmbedAnimation() {
+  return (
+    <>
+      <style>{`
+        @keyframes rl-cursor {
+          0%, 18%   { transform: translate(-40px, -12px); opacity: 0; }
+          22%      { transform: translate(0px, 0px); opacity: 1; }
+          38%      { transform: translate(0px, 0px) scale(1); }
+          42%      { transform: translate(0px, 0px) scale(0.85); }
+          50%      { transform: translate(0px, 0px) scale(1); opacity: 1; }
+          70%, 100% { transform: translate(0px, 0px); opacity: 0; }
+        }
+        @keyframes rl-toggle {
+          0%, 38%   { background: #1a1c1f; }
+          42%      { background: ${ROYAL.gold}; }
+          100%     { background: ${ROYAL.gold}; }
+        }
+        @keyframes rl-knob {
+          0%, 38%   { left: 3px; }
+          42%, 100% { left: 21px; }
+        }
+        @keyframes rl-saved {
+          0%, 60%  { opacity: 0; transform: translateY(4px); }
+          70%, 90% { opacity: 1; transform: translateY(0); }
+          100%    { opacity: 0; transform: translateY(0); }
+        }
+        .rl-loop { animation-iteration-count: infinite; animation-duration: 4s; animation-timing-function: ease-in-out; }
+      `}</style>
+      <div
+        aria-hidden="true"
+        style={{
+          position: "sticky",
+          top: 16,
+          width: "100%",
+          background: "#fff",
+          border: "1px solid #e3e5e7",
+          borderRadius: 12,
+          padding: 16,
+          boxShadow: "0 4px 16px rgba(22, 29, 37, 0.08)",
+        }}
+      >
+        {/* Header strip */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            paddingBottom: 12,
+            borderBottom: "1px solid #f1f2f3",
+            marginBottom: 12,
+          }}
+        >
+          <div
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              background: "#edf2ff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#4459d4",
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            +
+          </div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1c1f" }}>
+            App embeds
+          </div>
+        </div>
+
+        {/* Loyalty launcher row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            position: "relative",
+            padding: "8px 0",
+          }}
+        >
+          {/* App icon block (navy + gold, mirrors the real app icon) */}
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: ROYAL.navy,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: ROYAL.gold,
+              fontSize: 18,
+              fontWeight: 700,
+              flexShrink: 0,
+            }}
+          >
+            ♛
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#1a1c1f",
+                lineHeight: 1.3,
+              }}
+            >
+              Loyalty launcher
+            </div>
+            <div style={{ fontSize: 12, color: "#6d7175", marginTop: 1 }}>
+              Royal Loyalty
+            </div>
+          </div>
+
+          {/* Toggle track — animated */}
+          <div
+            className="rl-loop"
+            style={{
+              position: "relative",
+              width: 40,
+              height: 22,
+              borderRadius: 999,
+              background: "#1a1c1f",
+              flexShrink: 0,
+              animationName: "rl-toggle",
+            }}
+          >
+            <div
+              className="rl-loop"
+              style={{
+                position: "absolute",
+                top: 3,
+                left: 3,
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                background: "#fff",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
+                animationName: "rl-knob",
+              }}
+            />
+            {/* Animated cursor pointer */}
+            <div
+              className="rl-loop"
+              style={{
+                position: "absolute",
+                top: 0,
+                right: -2,
+                width: 20,
+                height: 20,
+                animationName: "rl-cursor",
+                pointerEvents: "none",
+              }}
+            >
+              <div
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderLeft: "10px solid #1a1c1f",
+                  borderTop: "6px solid transparent",
+                  borderBottom: "6px solid transparent",
+                  transform: "rotate(-30deg) translate(2px, 0)",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Second row — placeholder, dimmed */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "8px 0 4px",
+            opacity: 0.55,
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: "#f1f2f3",
+              flexShrink: 0,
+            }}
+          />
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                height: 8,
+                width: "60%",
+                borderRadius: 4,
+                background: "#e3e5e7",
+              }}
+            />
+            <div
+              style={{
+                height: 6,
+                width: "35%",
+                borderRadius: 3,
+                background: "#e3e5e7",
+                marginTop: 5,
+              }}
+            />
+          </div>
+          <div
+            style={{
+              width: 40,
+              height: 22,
+              borderRadius: 999,
+              background: "#c9cccf",
+              flexShrink: 0,
+            }}
+          />
+        </div>
+
+        {/* Save toast — fades in mid-animation */}
+        <div
+          className="rl-loop"
+          style={{
+            marginTop: 12,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            background: "#e3f4e1",
+            color: "#0d6c2e",
+            padding: "6px 12px",
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 500,
+            animationName: "rl-saved",
+          }}
+        >
+          <span style={{ fontSize: 11 }}>✓</span> Saved
+        </div>
+      </div>
     </>
   );
 }
