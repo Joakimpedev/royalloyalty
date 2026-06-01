@@ -37,8 +37,32 @@ if (!en) {
   process.exit(2);
 }
 
+// Keys whose en value is conventionally identical across most languages.
+// These shouldn't trip the coverage check even when not explicitly
+// translated. Brand strings + social platform names + tier-metal names
+// (which many languages keep in English).
+const LANGUAGE_NEUTRAL_KEYS = new Set([
+  "social.platform.instagram",
+  "social.platform.tiktok",
+  "social.platform.x",
+  "social.platform.facebook",
+  "social.platform.youtube",
+  "pos.tileTitle",
+  "tier.bronze",
+  "tier.silver",
+  "tier.gold",
+  "tier.platinum",
+  // Unit suffixes that commonly stay as "pts" / " points" across languages.
+  // Per-locale agents who keep them in English are making a legitimate
+  // typography call (abbreviations cross language boundaries).
+  "tier.grid.threshPts",
+  "common.ptsSuffix",
+  "account.pointsSuffix",
+]);
+
 // Token-only / language-neutral values that don't need translation.
-function isLanguageNeutral(v) {
+function isLanguageNeutral(v, key) {
+  if (key && LANGUAGE_NEUTRAL_KEYS.has(key)) return true;
   if (typeof v !== "string") return true;
   const t = v.trim();
   if (t === "") return true;
@@ -63,7 +87,7 @@ for (const name of LOCALES) {
       missing.push(k);
       continue;
     }
-    if (b[k] === enValue && !isLanguageNeutral(enValue)) {
+    if (b[k] === enValue && !isLanguageNeutral(enValue, k)) {
       identical.push(k);
     }
   }
