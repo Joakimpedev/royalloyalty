@@ -1261,13 +1261,15 @@
       card.className = "royal-active-code";
       var labelEl = document.createElement("div");
       labelEl.className = "royal-active-code__label";
+      var ptsSuffixAC = t("common.ptsSuffix", " pts");
       labelEl.innerHTML =
         "<strong>" +
         c.label +
         "</strong>" +
         '<span class="royal-muted"> · ' +
         c.pointsSpent +
-        " pts</span>";
+        escapeHtml(ptsSuffixAC) +
+        "</span>";
       var codeRow = document.createElement("div");
       codeRow.className = "royal-active-code__row";
       var codeBox = document.createElement("code");
@@ -1576,6 +1578,7 @@
           "</div>";
       } else if (affordable.length) {
         list = '<div class="royal-injected__rewards">';
+        var ptsSuffixCart = t("common.ptsSuffix", " pts");
         affordable.forEach(function (r) {
           var label = rewardLabel(r, payload.currencyCode);
           list +=
@@ -1587,7 +1590,8 @@
             "</span>" +
             '<span class="royal-injected__cost">' +
             r.pointsCost +
-            " pts</span>" +
+            escapeHtml(ptsSuffixCart) +
+            "</span>" +
             "</button>";
         });
         list += "</div>";
@@ -1781,6 +1785,15 @@
     });
     var currentId = d.currentTier && d.currentTier.id;
     var balance = d.balance || 0;
+    // Localize a tier's display name when its slug is canonical
+    // (bronze/silver/gold/platinum). Merchant-customized names fall back
+    // to the raw value.
+    function locTierName(rawName) {
+      var slug = String(rawName || "").toLowerCase();
+      var canonical = (slug === "bronze" || slug === "silver" || slug === "gold" || slug === "platinum");
+      return canonical ? t("tier." + slug, rawName) : rawName;
+    }
+    var multSuffix = t("tier.grid.multSuffix", "× earn");
     var html = '<div class="royal-tier-cards">';
     for (var i = 0; i < sorted.length; i++) {
       var ti = sorted[i];
@@ -1788,21 +1801,19 @@
       var classes = "royal-tier-card royal-tier-card--" + tierClass(ti.name);
       if (isCurrent) classes += " royal-tier-card--current";
       var threshLabel = ti.thresholdType === "spend"
-        ? ti.threshold.toLocaleString() + " spent"
-        : ti.threshold.toLocaleString() + " pts";
+        ? tSubstitute(t("tier.grid.threshSpend", "{n} spent"), { n: ti.threshold.toLocaleString() })
+        : tSubstitute(t("tier.grid.threshPts", "{n} pts"), { n: ti.threshold.toLocaleString() });
       html +=
         '<div class="' + classes + '">' +
           '<div class="royal-tier-card__crown" aria-hidden="true">&#9819;</div>' +
-          '<div class="royal-tier-card__name">' + escapeHtml(ti.name) + '</div>' +
+          '<div class="royal-tier-card__name">' + escapeHtml(locTierName(ti.name)) + '</div>' +
           '<div class="royal-tier-card__thresh">' + threshLabel + '</div>' +
-          '<div class="royal-tier-card__mult">' + ti.earnMultiplier + '&times; earn</div>' +
+          '<div class="royal-tier-card__mult">' + ti.earnMultiplier + escapeHtml(multSuffix) + '</div>' +
         '</div>';
     }
     html += '</div>';
     // Progress bar toward the next tier (only when there's somewhere to go).
     if (d.nextTier && d.nextTier.pointsRemaining > 0) {
-      // Anchor the bar between the current tier's threshold and the next.
-      // For not-yet-enrolled customers (no currentTier) we anchor at 0.
       var fromThreshold = d.currentTier ? d.currentTier.threshold : 0;
       var span = Math.max(1, d.nextTier.threshold - fromThreshold);
       var progressed = Math.min(span, Math.max(0, balance - fromThreshold));
@@ -1810,7 +1821,13 @@
       html +=
         '<div class="royal-tier-progress">' +
           '<div class="royal-tier-progress__label">' +
-            d.nextTier.pointsRemaining.toLocaleString() + ' pts to ' + escapeHtml(d.nextTier.name) +
+            escapeHtml(tSubstitute(
+              t("tier.progress.toNext", "{points} pts to {tierName}"),
+              {
+                points: d.nextTier.pointsRemaining.toLocaleString(),
+                tierName: locTierName(d.nextTier.name),
+              },
+            )) +
           '</div>' +
           '<div class="royal-tier-progress__bar">' +
             '<span style="width:' + pct + '%"></span>' +
@@ -1819,7 +1836,7 @@
     } else if (d.currentTier && !d.nextTier) {
       html +=
         '<div class="royal-tier-progress royal-tier-progress--max">' +
-          '<div class="royal-tier-progress__label">Top tier reached</div>' +
+          '<div class="royal-tier-progress__label">' + escapeHtml(t("tier.progress.topReached", "Top tier reached")) + '</div>' +
         '</div>';
     }
     list.innerHTML = html;
@@ -1911,13 +1928,15 @@
             youtube: "YouTube",
           }[p.id] || p.id;
       }
+      var ptsSuffixSocial = t("common.ptsSuffix", " pts");
       line.innerHTML =
         "<strong>" +
         platformName +
         "</strong>" +
         ' <span class="royal-muted">— ' +
         p.points +
-        " pts</span>";
+        escapeHtml(ptsSuffixSocial) +
+        "</span>";
       var handle = document.createElement("div");
       handle.className = "royal-muted";
       handle.style.fontSize = "13px";

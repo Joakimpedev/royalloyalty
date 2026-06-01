@@ -39,6 +39,8 @@ export type LocalizationSection =
   | "statusAndErrors"
   | "tooltips"
   | "ruleDefaults"
+  | "tiers"
+  | "activity"
   | "pos";
 
 export const SECTION_LABELS: Record<LocalizationSection, string> = {
@@ -54,6 +56,8 @@ export const SECTION_LABELS: Record<LocalizationSection, string> = {
   statusAndErrors: "Status & error messages",
   tooltips: "Tooltips & accessibility labels",
   ruleDefaults: "Earn rule defaults",
+  tiers: "Tier names & progress",
+  activity: "Activity feed",
   pos: "Point of Sale",
 };
 
@@ -793,6 +797,297 @@ export const KEY_CATALOG: LocalizationKey[] = [
     section: "pos",
     label: "Lookup hint",
     defaultEn: "Look up a customer to see their points and rewards.",
+  },
+
+  // ── Activity feed (customer-account block) ───────────────
+  // Customer-facing labels rendered for each PointTransaction row. Use
+  // {email} / {points} tokens; the storefront fills them at render time.
+  {
+    key: "activity.referredEmail",
+    section: "activity",
+    label: "Activity — referred a friend (with email)",
+    defaultEn: "Referred {email}",
+  },
+  {
+    key: "activity.referredFriend",
+    section: "activity",
+    label: "Activity — referred a friend (no email)",
+    defaultEn: "Referred a friend",
+  },
+  {
+    key: "activity.welcomeBonusFrom",
+    section: "activity",
+    label: "Activity — welcome bonus (with referrer)",
+    defaultEn: "Welcome bonus from {email}",
+  },
+  {
+    key: "activity.welcomeBonus",
+    section: "activity",
+    label: "Activity — welcome bonus (no referrer)",
+    defaultEn: "Welcome referral bonus",
+  },
+  {
+    key: "activity.redeemStoreCredit",
+    section: "activity",
+    label: "Activity — redeemed for store credit",
+    defaultEn: "Redeemed {points} points for store credit",
+  },
+  {
+    key: "activity.redeemAmountOff",
+    section: "activity",
+    label: "Activity — redeemed for a discount",
+    defaultEn: "Redeemed {points} points for a discount",
+  },
+  {
+    key: "activity.redeemPercentOff",
+    section: "activity",
+    label: "Activity — redeemed for a percent-off discount",
+    defaultEn: "Redeemed {points} points for a percent-off discount",
+  },
+  {
+    key: "activity.redeemFreeShipping",
+    section: "activity",
+    label: "Activity — redeemed for free shipping",
+    defaultEn: "Redeemed {points} points for free shipping",
+  },
+  {
+    key: "activity.redeemFreeProduct",
+    section: "activity",
+    label: "Activity — redeemed for a free product",
+    defaultEn: "Redeemed {points} points for a free product",
+  },
+  {
+    key: "activity.redeemGeneric",
+    section: "activity",
+    label: "Activity — redeemed (generic)",
+    defaultEn: "Redeemed {points} points",
+  },
+  {
+    key: "activity.earnPurchase",
+    section: "activity",
+    label: "Activity — earned on order",
+    defaultEn: "Earned points on order",
+  },
+  {
+    key: "activity.earnSignup",
+    section: "activity",
+    label: "Activity — earned for signing up",
+    defaultEn: "Earned points for signing up",
+  },
+  {
+    key: "activity.earnBirthday",
+    section: "activity",
+    label: "Activity — birthday bonus",
+    defaultEn: "Birthday bonus",
+  },
+  {
+    key: "activity.earnReview",
+    section: "activity",
+    label: "Activity — earned for a review",
+    defaultEn: "Earned points for a review",
+  },
+  {
+    key: "activity.earnSocial",
+    section: "activity",
+    label: "Activity — earned for following",
+    defaultEn: "Earned points for following",
+  },
+  {
+    key: "activity.earnNewsletter",
+    section: "activity",
+    label: "Activity — earned for subscribing",
+    defaultEn: "Earned points for subscribing",
+  },
+  {
+    key: "activity.earnAnniversary",
+    section: "activity",
+    label: "Activity — anniversary bonus",
+    defaultEn: "Anniversary bonus",
+  },
+  {
+    key: "activity.earnGeneric",
+    section: "activity",
+    label: "Activity — earned (generic)",
+    defaultEn: "Earned points",
+  },
+  {
+    key: "activity.balanceImported",
+    section: "activity",
+    label: "Activity — balance imported",
+    defaultEn: "Balance imported",
+  },
+  {
+    key: "activity.redemptionReversed",
+    section: "activity",
+    label: "Activity — redemption reversed",
+    defaultEn: "Redemption reversed",
+  },
+
+  // ── Tier names + grid + progress ───────────────────────────
+  {
+    key: "tier.bronze",
+    section: "tiers",
+    label: "Tier name — Bronze",
+    defaultEn: "Bronze",
+  },
+  {
+    key: "tier.silver",
+    section: "tiers",
+    label: "Tier name — Silver",
+    defaultEn: "Silver",
+  },
+  {
+    key: "tier.gold",
+    section: "tiers",
+    label: "Tier name — Gold",
+    defaultEn: "Gold",
+  },
+  {
+    key: "tier.platinum",
+    section: "tiers",
+    label: "Tier name — Platinum",
+    defaultEn: "Platinum",
+  },
+  {
+    key: "tier.memberSuffix",
+    section: "tiers",
+    label: "Tier badge label (e.g. 'Silver member')",
+    defaultEn: "{tierName} member",
+  },
+  {
+    key: "tier.grid.threshSpend",
+    section: "tiers",
+    label: "Tier grid — spend threshold",
+    defaultEn: "{n} spent",
+  },
+  {
+    key: "tier.grid.threshPts",
+    section: "tiers",
+    label: "Tier grid — points threshold",
+    defaultEn: "{n} pts",
+  },
+  {
+    key: "tier.grid.multSuffix",
+    section: "tiers",
+    label: "Tier grid — multiplier suffix (e.g. '1.25× earn')",
+    defaultEn: "× earn",
+  },
+  {
+    key: "tier.progress.toNext",
+    section: "tiers",
+    label: "Tier grid — progress to next tier",
+    defaultEn: "{points} pts to {tierName}",
+  },
+  {
+    key: "tier.progress.toNextShort",
+    section: "tiers",
+    label: "Launcher status — progress to next tier (short)",
+    defaultEn: "{points} to {tierName}",
+  },
+  {
+    key: "tier.progress.topReached",
+    section: "tiers",
+    label: "Tier grid — top tier reached",
+    defaultEn: "Top tier reached",
+  },
+
+  // ── Loyalty page additions ─────────────────────────────────
+  {
+    key: "page.cashbackTitle",
+    section: "loyaltyPage",
+    label: "Cashback callout title",
+    defaultEn: "Earn {percent}% back as store credit",
+  },
+  {
+    key: "page.cashbackDesc",
+    section: "loyaltyPage",
+    label: "Cashback callout description",
+    defaultEn:
+      "Every order automatically credits your account. Use your store credit at checkout, no code required.",
+  },
+  {
+    key: "page.emptyEarnRules",
+    section: "emptyStates",
+    label: "Loyalty page — no earn rules configured",
+    defaultEn: "Earn rules will appear here soon.",
+  },
+  {
+    key: "page.emptyRewardsList",
+    section: "emptyStates",
+    label: "Loyalty page — empty rewards list",
+    defaultEn: "No rewards available yet. Check back soon.",
+  },
+  {
+    key: "page.morePointsNeeded",
+    section: "rewards",
+    label: "Reward button — more points needed",
+    defaultEn: "{points} more pts",
+  },
+  {
+    key: "page.redeemingStatus",
+    section: "statusAndErrors",
+    label: "Loyalty page redeem in-progress",
+    defaultEn: "Redeeming…",
+  },
+  {
+    key: "page.redeemSuccess",
+    section: "statusAndErrors",
+    label: "Loyalty page redeem success",
+    defaultEn: "Redeemed. Store credit added to your account.",
+  },
+  {
+    key: "page.redeemFailedDefault",
+    section: "statusAndErrors",
+    label: "Loyalty page redeem failed (server)",
+    defaultEn: "Could not redeem right now.",
+  },
+  {
+    key: "page.redeemFailedRetry",
+    section: "statusAndErrors",
+    label: "Loyalty page redeem failed (network)",
+    defaultEn: "Could not redeem. Please try again.",
+  },
+  {
+    key: "page.couldNotLoad",
+    section: "statusAndErrors",
+    label: "Loyalty page — load failed",
+    defaultEn:
+      "We couldn't load your loyalty details right now. Please try again later.",
+  },
+
+  // ── Customer account additions ─────────────────────────────
+  {
+    key: "account.couldNotLoad",
+    section: "statusAndErrors",
+    label: "Customer account — load failed",
+    defaultEn:
+      "We couldn't load your loyalty status right now. Please try again later.",
+  },
+
+  // ── Shared link copy + units ───────────────────────────────
+  {
+    key: "common.linkCopied",
+    section: "statusAndErrors",
+    label: "Referral link copied success",
+    defaultEn: "Link copied.",
+  },
+  {
+    key: "common.linkCopyFailedAuto",
+    section: "statusAndErrors",
+    label: "Link copy failed (clipboard unavailable)",
+    defaultEn: "Could not copy automatically.",
+  },
+  {
+    key: "common.linkCopyFailedManual",
+    section: "statusAndErrors",
+    label: "Link copy failed (manual fallback)",
+    defaultEn: "Could not copy. Select and copy manually.",
+  },
+  {
+    key: "common.ptsSuffix",
+    section: "statusAndErrors",
+    label: "Points abbreviation suffix (e.g. '+100 pts')",
+    defaultEn: " pts",
   },
 ];
 

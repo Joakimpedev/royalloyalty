@@ -416,6 +416,12 @@
         var bal = d.balance || 0;
         var tier = d.currentTier && d.currentTier.name ? d.currentTier.name : '';
         var tierClassSlug = tierClass(tier);
+        // Localize known canonical tier names; custom merchant names pass
+        // through unchanged.
+        var tierSlugLower = tier.toLowerCase();
+        var locTier = tier && (tierSlugLower === 'bronze' || tierSlugLower === 'silver' || tierSlugLower === 'gold' || tierSlugLower === 'platinum')
+          ? R.t('tier.' + tierSlugLower, tier)
+          : tier;
 
         var html =
           '<div class="royal-status-card__balanceWrap">' +
@@ -424,7 +430,7 @@
             (tier
               ? '<div class="royal-status-card__tier royal-tier-pill royal-tier-pill--' + tierClassSlug + '">' +
                   '<span class="royal-tier-pill__crown" aria-hidden="true">&#9819;</span>' +
-                  escapeHtml(tier) +
+                  escapeHtml(locTier) +
                 '</div>'
               : '') +
           '</div>';
@@ -436,10 +442,18 @@
           var span = Math.max(1, d.nextTier.threshold - fromThresh);
           var done = Math.min(span, Math.max(0, bal - fromThresh));
           var pct = Math.min(100, Math.max(0, Math.round((done / span) * 100)));
+          var nextRaw = d.nextTier.name;
+          var nextSlug = String(nextRaw || '').toLowerCase();
+          var locNext = (nextSlug === 'bronze' || nextSlug === 'silver' || nextSlug === 'gold' || nextSlug === 'platinum')
+            ? R.t('tier.' + nextSlug, nextRaw)
+            : nextRaw;
           html +=
             '<div class="royal-status-card__nextTier">' +
               '<div class="royal-status-card__nextMeta">' +
-                d.nextTier.pointsRemaining + ' to ' + escapeHtml(d.nextTier.name) +
+                escapeHtml(R.tSubstitute(
+                  R.t('tier.progress.toNextShort', '{points} to {tierName}'),
+                  { points: d.nextTier.pointsRemaining, tierName: locNext },
+                )) +
               '</div>' +
               '<div class="royal-status-card__bar">' +
                 '<div class="royal-status-card__barFill" style="width:' + pct + '%"></div>' +
@@ -620,9 +634,10 @@
           card.className = 'royal-card';
           var canAfford = d.enrolled && (d.balance || 0) >= rw.pointsCost;
           var label = R.rewardLabel(rw, d.currencyCode);
+          var pointsSuffix = R.t('account.pointsSuffix', ' points');
           card.innerHTML =
             '<div class="royal-card__label">' + escapeHtml(label) + '</div>' +
-            '<div class="royal-muted">' + rw.pointsCost + ' points</div>';
+            '<div class="royal-muted">' + rw.pointsCost + escapeHtml(pointsSuffix) + '</div>';
           var rb = document.createElement('button');
           rb.className = 'royal-btn';
           rb.type = 'button';

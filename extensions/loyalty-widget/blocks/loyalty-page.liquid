@@ -172,7 +172,16 @@
           var tierLine = document.getElementById('royal-page-tier-line');
           if (tierLine && d.currentTier) {
             tierLine.hidden = false;
-            tierLine.textContent = d.currentTier.name + ' member';
+            var rawTierName = d.currentTier.name || '';
+            var tierSlug = rawTierName.toLowerCase();
+            var tierKey = (tierSlug === 'bronze' || tierSlug === 'silver' || tierSlug === 'gold' || tierSlug === 'platinum')
+              ? 'tier.' + tierSlug
+              : null;
+            var locTierName = tierKey ? R.t(tierKey, rawTierName) : rawTierName;
+            tierLine.textContent = R.tSubstitute(
+              R.t('tier.memberSuffix', '{tierName} member'),
+              { tierName: locTierName },
+            );
           }
         }
 
@@ -183,8 +192,15 @@
           if (cbWrap) cbWrap.hidden = false;
           if (cbCard) {
             cbCard.innerHTML =
-              '<strong class="royal-page__cashback-title">Earn ' + d.cashback.percent + '% back as store credit</strong>' +
-              '<div class="royal-page__cashback-desc">Every order automatically credits your account. Use your store credit at checkout, no code required.</div>';
+              '<strong class="royal-page__cashback-title">' +
+                R.tSubstitute(
+                  R.t('page.cashbackTitle', 'Earn {percent}% back as store credit'),
+                  { percent: d.cashback.percent },
+                ) +
+              '</strong>' +
+              '<div class="royal-page__cashback-desc">' +
+                R.t('page.cashbackDesc', 'Every order automatically credits your account. Use your store credit at checkout, no code required.') +
+              '</div>';
           }
         } else if (cbWrap) {
           cbWrap.hidden = true;
@@ -216,31 +232,32 @@
                   (d2 ? '<div class="royal-page__card-desc">' + d2 + '</div>' : '') +
                   '</div>';
               }).join('')
-            : '<p class="royal-page__muted">Earn rules will appear here soon.</p>';
+            : '<p class="royal-page__muted">' + R.t('page.emptyEarnRules', 'Earn rules will appear here soon.') + '</p>';
         }
         function renderRewards(d) {
           var rw = document.getElementById('royal-page-rewards');
           if (!rw) return;
           if (!(d.rewards && d.rewards.length)) {
-            rw.innerHTML = '<p class="royal-page__muted">No rewards available yet. Check back soon.</p>';
+            rw.innerHTML = '<p class="royal-page__muted">' + R.t('page.emptyRewardsList', 'No rewards available yet. Check back soon.') + '</p>';
             return;
           }
           var bal = d.balance || 0;
           var loggedIn = cfg.loggedIn;
+          var ptsSuffix = R.t('common.ptsSuffix', ' pts');
           rw.innerHTML = d.rewards.map(function (x) {
             var canAfford = bal >= x.pointsCost;
             var btnLabel = !loggedIn
-              ? 'Sign in to redeem'
+              ? R.t('reward.signInToRedeemButton', 'Sign in to redeem')
               : canAfford
-                ? 'Redeem'
-                : ((x.pointsCost - bal).toLocaleString() + ' more pts');
+                ? R.t('reward.redeemButton', 'Redeem')
+                : R.tSubstitute(R.t('page.morePointsNeeded', '{points} more pts'), { points: (x.pointsCost - bal).toLocaleString() });
             var btnAttrs = !loggedIn
               ? 'data-href="/account/login"'
               : ('data-reward-id="' + x.id + '"' + (canAfford ? '' : ' disabled'));
             return '<div class="royal-page__reward">' +
               '<div class="royal-page__reward-main">' +
                 '<div class="royal-page__card-label">' + R.rewardLabel(x, d.currencyCode) + '</div>' +
-                '<div class="royal-page__card-cost">' + x.pointsCost + ' pts</div>' +
+                '<div class="royal-page__card-cost">' + x.pointsCost + ptsSuffix + '</div>' +
               '</div>' +
               '<button type="button" class="royal-page__btn royal-page__redeem-btn" ' + btnAttrs + '>' +
                 btnLabel +
@@ -258,26 +275,25 @@
               var rewardId = btn.getAttribute('data-reward-id');
               var origLabel = btn.textContent;
               btn.disabled = true;
-              btn.textContent = 'Redeeming...';
+              btn.textContent = R.t('page.redeemingStatus', 'Redeeming…');
               R.redeem(cfg, rewardId)
                 .then(function (res) {
                   var ok = res && res.result && res.result.ok !== false;
                   if (ok) {
-                    R.setStatus(status, 'success', 'Redeemed. Store credit added to your account.');
-                    // Re-fetch the payload so points + store credit update
+                    R.setStatus(status, 'success', R.t('page.redeemSuccess', 'Redeemed. Store credit added to your account.'));
                     R.loadBalance(cfg, function (d2) {
                       renderBalances(d2);
                       renderRewards(d2);
                     });
                   } else {
-                    var err = (res && res.result && res.result.error) || 'Could not redeem right now.';
+                    var err = (res && res.result && res.result.error) || R.t('page.redeemFailedDefault', 'Could not redeem right now.');
                     R.setStatus(status, 'error', err);
                     btn.disabled = false;
                     btn.textContent = origLabel;
                   }
                 })
                 .catch(function () {
-                  R.setStatus(status, 'error', 'Could not redeem. Please try again.');
+                  R.setStatus(status, 'error', R.t('page.redeemFailedRetry', 'Could not redeem. Please try again.'));
                   btn.disabled = false;
                   btn.textContent = origLabel;
                 });
@@ -308,15 +324,15 @@
           if (copy) copy.addEventListener('click', function () {
             try {
               navigator.clipboard.writeText(d.referralLink);
-              R.setStatus(status, 'success', 'Link copied.');
+              R.setStatus(status, 'success', R.t('common.linkCopied', 'Link copied.'));
             } catch (e) {
-              R.setStatus(status, 'error', 'Could not copy. Select and copy manually.');
+              R.setStatus(status, 'error', R.t('common.linkCopyFailedManual', 'Could not copy. Select and copy manually.'));
             }
           });
         }
       }, function () {
         R.setStatus(status, 'error',
-          "We couldn't load your loyalty details right now. Please try again later.");
+          R.t('page.couldNotLoad', "We couldn't load your loyalty details right now. Please try again later."));
       });
     }
     init();

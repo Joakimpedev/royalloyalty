@@ -151,6 +151,60 @@ const en: Bundle = {
   "pos.errorInsufficient": "Not enough points for that reward.",
   "pos.noRewards": "No rewards available.",
   "pos.lookupHint": "Look up a customer to see their points and rewards.",
+  // ── Activity feed (customer-account block) ───────────────
+  "activity.referredEmail": "Referred {email}",
+  "activity.referredFriend": "Referred a friend",
+  "activity.welcomeBonusFrom": "Welcome bonus from {email}",
+  "activity.welcomeBonus": "Welcome referral bonus",
+  "activity.redeemStoreCredit": "Redeemed {points} points for store credit",
+  "activity.redeemAmountOff": "Redeemed {points} points for a discount",
+  "activity.redeemPercentOff": "Redeemed {points} points for a percent-off discount",
+  "activity.redeemFreeShipping": "Redeemed {points} points for free shipping",
+  "activity.redeemFreeProduct": "Redeemed {points} points for a free product",
+  "activity.redeemGeneric": "Redeemed {points} points",
+  "activity.earnPurchase": "Earned points on order",
+  "activity.earnSignup": "Earned points for signing up",
+  "activity.earnBirthday": "Birthday bonus",
+  "activity.earnReview": "Earned points for a review",
+  "activity.earnSocial": "Earned points for following",
+  "activity.earnNewsletter": "Earned points for subscribing",
+  "activity.earnAnniversary": "Anniversary bonus",
+  "activity.earnGeneric": "Earned points",
+  "activity.balanceImported": "Balance imported",
+  "activity.redemptionReversed": "Redemption reversed",
+  // ── Tier names + grid + progress
+  "tier.bronze": "Bronze",
+  "tier.silver": "Silver",
+  "tier.gold": "Gold",
+  "tier.platinum": "Platinum",
+  "tier.memberSuffix": "{tierName} member",
+  "tier.grid.threshSpend": "{n} spent",
+  "tier.grid.threshPts": "{n} pts",
+  "tier.grid.multSuffix": "× earn",
+  "tier.progress.toNext": "{points} pts to {tierName}",
+  "tier.progress.toNextShort": "{points} to {tierName}",
+  "tier.progress.topReached": "Top tier reached",
+  // ── Loyalty page additions
+  "page.cashbackTitle": "Earn {percent}% back as store credit",
+  "page.cashbackDesc":
+    "Every order automatically credits your account. Use your store credit at checkout, no code required.",
+  "page.emptyEarnRules": "Earn rules will appear here soon.",
+  "page.emptyRewardsList": "No rewards available yet. Check back soon.",
+  "page.morePointsNeeded": "{points} more pts",
+  "page.redeemingStatus": "Redeeming…",
+  "page.redeemSuccess": "Redeemed. Store credit added to your account.",
+  "page.redeemFailedDefault": "Could not redeem right now.",
+  "page.redeemFailedRetry": "Could not redeem. Please try again.",
+  "page.couldNotLoad":
+    "We couldn't load your loyalty details right now. Please try again later.",
+  // ── Customer account additions
+  "account.couldNotLoad":
+    "We couldn't load your loyalty status right now. Please try again later.",
+  // ── Shared link copy + units
+  "common.linkCopied": "Link copied.",
+  "common.linkCopyFailedAuto": "Could not copy automatically.",
+  "common.linkCopyFailedManual": "Could not copy. Select and copy manually.",
+  "common.ptsSuffix": " pts",
 };
 
 const es: Bundle = {

@@ -287,6 +287,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const base =
         (shop.aiConfigSnapshot as Record<string, unknown>) ?? {};
+      // Branding config is intentionally minimal here. Hero / product /
+      // cart copy is LEFT EMPTY so the storefront falls back to the active
+      // locale's baked defaults (page.heroTitle, cart.heading, etc.). If
+      // we filled them with English templates the storefront would render
+      // those overrides verbatim and the locale picker would do nothing.
       const brandingConfig = {
         widget: {
           position: "bottom-right",
@@ -297,8 +302,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           title: w.programName,
         },
         page: {
-          heroTitle: `Earn ${w.pointsName}. Get rewards.`,
-          heroSubtitle: "Join the program and earn on every order.",
+          heroTitle: "",
+          heroSubtitle: "",
           themeColor: w.primaryColor,
           logoUrl: "",
           showEarn: true,
@@ -308,13 +313,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         product: {
           enabled: true,
           accentColor: w.primaryColor,
-          heading: `Earn {points} ${w.pointsName} with this purchase`,
-          subtext: `You have {balance} ${w.pointsName}. Earn {more} more with this order!`,
+          heading: "",
+          subtext: "",
         },
         cart: {
           enabled: true,
           accentColor: w.primaryColor,
-          heading: `Use your ${w.pointsName}`,
+          heading: "",
           showEarnLine: true,
         },
       };
@@ -341,17 +346,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Sync the storefront branding metafields so the Liquid launcher block
     // renders the merchant's new colors / program name / points name on
-    // first paint. Non-fatal: a write failure doesn't block onboarding
-    // completion (we'll just keep the SSR/JS branding mismatch until the
-    // next sync). Errors are logged for debug.
+    // first paint. The panel subtitle is localized to the merchant's
+    // chosen default locale (NOT hardcoded English) so the SSR-rendered
+    // subtitle matches what JS will eventually swap in. Non-fatal: write
+    // errors are logged but don't block onboarding completion.
     try {
+      const { getDefault } = await import("../lib/localization-defaults");
+      const localizedSubtitle =
+        getDefault(w.defaultLocale, "launcher.subtitle") ||
+        "Earn points on every order — redeem for rewards.";
       const r = await writeBrandingMetafields(admin, {
         primaryColor: w.primaryColor,
         secondaryColor: w.secondaryColor,
         launcherPosition: "bottom-right",
         launcherText: w.pointsName,
         panelTitle: w.programName,
-        panelSubtitle: "Earn points on every order — redeem for rewards.",
+        panelSubtitle: localizedSubtitle,
       });
       if (!r.ok) {
         console.warn(

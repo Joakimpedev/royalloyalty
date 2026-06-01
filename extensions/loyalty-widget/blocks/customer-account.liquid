@@ -92,57 +92,73 @@
         var tierEl = document.getElementById('royal-acc-tier');
         if (tierEl && d.currentTier) {
           tierEl.hidden = false;
-          tierEl.textContent = d.currentTier.name + ' member';
+          var rawTierName = d.currentTier.name || '';
+          // Resolve a localized tier name when the slug is one of the known
+          // canonical ones (bronze/silver/gold/platinum). Custom merchant
+          // names fall back to the raw display name.
+          var tierSlug = rawTierName.toLowerCase();
+          var tierKey = (tierSlug === 'bronze' || tierSlug === 'silver' || tierSlug === 'gold' || tierSlug === 'platinum')
+            ? 'tier.' + tierSlug
+            : null;
+          var locTierName = tierKey ? R.t(tierKey, rawTierName) : rawTierName;
+          tierEl.textContent = R.tSubstitute(
+            R.t('tier.memberSuffix', '{tierName} member'),
+            { tierName: locTierName },
+          );
         }
 
         var act = document.getElementById('royal-acc-activity');
         if (act) {
-          // Map a redeem reward type code to a human-readable phrase. Falls
-          // back to a generic "Redeemed reward" when the type is unknown.
+          // Every customer-facing label here goes through R.t() so the
+          // active locale's translation wins. The structured kind+meta
+          // server-side fields tell us WHICH key to pick.
           function redeemPhrase(meta) {
-            var t = (meta && meta.rewardType) || '';
-            var pts = meta && meta.pointsCost != null ? meta.pointsCost : null;
-            var ptsPart = pts != null ? pts + ' points' : 'points';
-            if (t === 'store_credit') return 'Redeemed ' + ptsPart + ' for store credit';
-            if (t === 'amount_off')   return 'Redeemed ' + ptsPart + ' for a discount';
-            if (t === 'percent_off')  return 'Redeemed ' + ptsPart + ' for a percent-off discount';
-            if (t === 'free_shipping') return 'Redeemed ' + ptsPart + ' for free shipping';
-            if (t === 'free_product') return 'Redeemed ' + ptsPart + ' for a free product';
-            return 'Redeemed ' + ptsPart;
+            var type = (meta && meta.rewardType) || '';
+            var pts = meta && meta.pointsCost != null ? meta.pointsCost : 0;
+            var keyMap = {
+              store_credit:  'activity.redeemStoreCredit',
+              amount_off:    'activity.redeemAmountOff',
+              percent_off:   'activity.redeemPercentOff',
+              free_shipping: 'activity.redeemFreeShipping',
+              free_product:  'activity.redeemFreeProduct',
+            };
+            var k = keyMap[type] || 'activity.redeemGeneric';
+            return R.tSubstitute(R.t(k, 'Redeemed {points} points'), { points: pts });
           }
           function earnPhrase(meta) {
             var a = (meta && meta.earnAction) || 'reward';
-            if (a === 'purchase')   return 'Earned points on order';
-            if (a === 'signup')     return 'Earned points for signing up';
-            if (a === 'birthday')   return 'Birthday bonus';
-            if (a === 'review')     return 'Earned points for a review';
-            if (a === 'social')     return 'Earned points for following';
-            if (a === 'newsletter') return 'Earned points for subscribing';
-            if (a === 'anniversary') return 'Anniversary bonus';
-            return 'Earned points';
+            var keyMap = {
+              purchase:    'activity.earnPurchase',
+              signup:      'activity.earnSignup',
+              birthday:    'activity.earnBirthday',
+              review:      'activity.earnReview',
+              social:      'activity.earnSocial',
+              newsletter:  'activity.earnNewsletter',
+              anniversary: 'activity.earnAnniversary',
+            };
+            var k = keyMap[a] || 'activity.earnGeneric';
+            return R.t(k, 'Earned points');
           }
-          // Build a customer-facing label from the structured kind+meta
-          // server-side fields. Falls back to the raw reason string only
-          // when no kind is set.
           function activityLabel(a) {
             var k = a.kind;
             var m = a.meta || {};
             if (k === 'referral_referrer') {
               return m.refereeEmail
-                ? 'Referred ' + m.refereeEmail
-                : 'Referred a friend';
+                ? R.tSubstitute(R.t('activity.referredEmail', 'Referred {email}'), { email: m.refereeEmail })
+                : R.t('activity.referredFriend', 'Referred a friend');
             }
             if (k === 'referral_referee') {
               return m.referrerEmail
-                ? 'Welcome bonus from ' + m.referrerEmail
-                : 'Welcome referral bonus';
+                ? R.tSubstitute(R.t('activity.welcomeBonusFrom', 'Welcome bonus from {email}'), { email: m.referrerEmail })
+                : R.t('activity.welcomeBonus', 'Welcome referral bonus');
             }
             if (k === 'redeem') return redeemPhrase(m);
             if (k === 'earn') return earnPhrase(m);
-            if (k === 'migration') return 'Balance imported';
-            if (k === 'reversal') return 'Redemption reversed';
+            if (k === 'migration') return R.t('activity.balanceImported', 'Balance imported');
+            if (k === 'reversal') return R.t('activity.redemptionReversed', 'Redemption reversed');
             return a.reason;
           }
+          var ptsSuffix = R.t('common.ptsSuffix', ' pts');
           act.innerHTML = (d.activity && d.activity.length)
             ? d.activity.map(function (a) {
                 var dateStr = (function () {
@@ -153,7 +169,7 @@
                 return '<div class="royal-account__activity-row">' +
                   '<div class="royal-account__activity-reason">' + label + '</div>' +
                   '<div class="royal-account__activity-meta">' +
-                    '<span class="royal-account__activity-points">' + (a.points > 0 ? '+' : '') + a.points + ' pts</span>' +
+                    '<span class="royal-account__activity-points">' + (a.points > 0 ? '+' : '') + a.points + ptsSuffix + '</span>' +
                     '<span class="royal-account__activity-date">' + dateStr + '</span>' +
                   '</div>' +
                   '</div>';
@@ -162,11 +178,12 @@
         }
         var rw = document.getElementById('royal-acc-rewards');
         if (rw) {
+          var ptsSuffixR = R.t('common.ptsSuffix', ' pts');
           rw.innerHTML = (d.rewards && d.rewards.length)
             ? d.rewards.map(function (x) {
                 return '<div class="royal-account__reward-row">' +
                   '<span class="royal-account__reward-label">' + R.rewardLabel(x, d.currencyCode) + '</span>' +
-                  '<span class="royal-account__reward-cost">' + x.pointsCost + ' pts</span>' +
+                  '<span class="royal-account__reward-cost">' + x.pointsCost + ptsSuffixR + '</span>' +
                   '</div>';
               }).join('')
             : '<p class="royal-account__muted">' + R.t('empty.rewards', 'No rewards available yet. Check back soon.') + '</p>';
@@ -178,15 +195,15 @@
           if (c) c.addEventListener('click', function () {
             try {
               navigator.clipboard.writeText(d.referralLink);
-              R.setStatus(status, 'success', 'Link copied.');
+              R.setStatus(status, 'success', R.t('common.linkCopied', 'Link copied.'));
             } catch (e) {
-              R.setStatus(status, 'error', 'Could not copy automatically.');
+              R.setStatus(status, 'error', R.t('common.linkCopyFailedAuto', 'Could not copy automatically.'));
             }
           });
         }
       }, function () {
         R.setStatus(status, 'error',
-          "We couldn't load your loyalty status right now. Please try again later.");
+          R.t('account.couldNotLoad', "We couldn't load your loyalty status right now. Please try again later."));
       });
     }
     init();
