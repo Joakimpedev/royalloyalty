@@ -480,6 +480,18 @@
           lines.push("probe c (via api() helper):  " + c.state + "  " + elapsed + extra);
         }
 
+        // loadBalance call log — every invocation with timing + stack
+        if (window.__royalLoadBalanceCalls && window.__royalLoadBalanceCalls.length) {
+          lines.push("loadBalance() calls:        " + window.__royalLoadBalanceCalls.length);
+          for (var lbi = 0; lbi < Math.min(window.__royalLoadBalanceCalls.length, 4); lbi++) {
+            var call = window.__royalLoadBalanceCalls[lbi];
+            lines.push("  #" + (lbi + 1) + " at +" + (call.sinceFirstMs / 1000).toFixed(2) + "s");
+            for (var fi = 0; fi < Math.min(call.stack.length, 3); fi++) {
+              lines.push("     ↳ " + call.stack[fi]);
+            }
+          }
+        }
+
         // Fetch spy — what api() actually sent for each /loyalty/balance call
         if (window.__royalFetchSpy && window.__royalFetchSpy.length) {
           lines.push("fetch spy (first " + Math.min(window.__royalFetchSpy.length, 4) + " /loyalty/balance calls):");
@@ -1038,6 +1050,25 @@
    * shop-wide bits (earn rules, rewards, branding) but no balance/tier. */
   function loadBalance(cfg, onData, onError) {
     var startedAt = Date.now();
+    // Record every loadBalance invocation with a stack trace so the diag
+    // box can show how many times this fired, when, and from where.
+    try {
+      window.__royalLoadBalanceCalls = window.__royalLoadBalanceCalls || [];
+      var stack = "";
+      try { stack = new Error().stack || ""; } catch (e) {}
+      // Trim to first 4 frames so the diag stays readable.
+      var frames = stack.split("\n").slice(1, 5).map(function (s) {
+        return s.trim().replace(/^at\s+/, "");
+      });
+      window.__royalLoadBalanceCalls.push({
+        at: startedAt,
+        sinceFirstMs:
+          window.__royalLoadBalanceCalls.length > 0
+            ? startedAt - window.__royalLoadBalanceCalls[0].at
+            : 0,
+        stack: frames,
+      });
+    } catch (e) {}
     if (window.__royalDiag) {
       window.__royalDiag.lastFetchUrl = (cfg.proxy || "").replace(/\/$/, "") + "/loyalty/balance";
       window.__royalDiag.payloadStatus = "fetching…";
