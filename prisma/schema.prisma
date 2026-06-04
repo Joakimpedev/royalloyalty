@@ -75,6 +75,11 @@ model Shop {
   primaryLocale            String?
   currencyCode             String?
 
+  /// Cap-reached email dedup. The over-cap-email cron writes this on every
+  /// successful send and skips shops whose lastOverCapEmailSentAt is already
+  /// within the current calendar month. See app/routes/api.cron.over-cap-email.tsx.
+  lastOverCapEmailSentAt   DateTime?
+
   members       Member[]
   tiers         Tier[]
   earnRules     EarnRule[]
