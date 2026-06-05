@@ -80,6 +80,21 @@ model Shop {
   /// within the current calendar month. See app/routes/api.cron.over-cap-email.tsx.
   lastOverCapEmailSentAt   DateTime?
 
+  /// Shop owner / contact email, captured lazily on every authenticated
+  /// request by the loader in app/routes/app.tsx. MUST be populated
+  /// pre-uninstall: the uninstall webhook wipes Session rows so we cannot
+  /// call shop.email via the Admin API after that.
+  ownerEmail               String?
+
+  /// Set by app/routes/webhooks.app.uninstalled.tsx so the uninstall-survey
+  /// cron can find shops that uninstalled in the last 6h-7d window.
+  uninstalledAt            DateTime?
+
+  /// Post-uninstall survey send dedup. Updated only on a successful send;
+  /// rows where this is non-null are never emailed again. See
+  /// app/routes/api.cron.uninstall-survey.tsx.
+  uninstallSurveySentAt    DateTime?
+
   members       Member[]
   tiers         Tier[]
   earnRules     EarnRule[]

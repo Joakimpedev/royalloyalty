@@ -5,6 +5,7 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
+import prisma from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -17,6 +18,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // here is meant to be the currency for *display* — server-side billing
   // amounts (Shopify Billing API) intentionally stay in USD; see billing.server.ts.
   const money = await loadShopMoneyContext(admin, session.shop);
+
+  // Capture shop owner email pre-uninstall (uninstall webhook deletes
+  // sessions, so this is the only window to fetch it). Fire-and-forget so a
+  // GraphQL hiccup never blocks the admin shell. Only writes when null.
+  (async () => {
+    try {
+      const existing = await prisma.shop.findUnique({
+        where: { shopDomain: session.shop }, select: { ownerEmail: true },
+      });
+      if (existing?.ownerEmail) return;
+      const res = await admin.graphql(`#graphql query { shop { email } }`);
+      const json = (await res.json()) as { data?: { shop?: { email?: string } } };
+      const email = json?.data?.shop?.email;
+      if (!email) return;
+      await prisma.shop.update({
+        where: { shopDomain: session.shop }, data: { ownerEmail: email },
+      });
+    } catch { /* non-fatal */ }
+  })();
 
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "", money };

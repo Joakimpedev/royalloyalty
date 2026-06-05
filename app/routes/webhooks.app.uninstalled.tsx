@@ -29,7 +29,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   await db.shop.updateMany({
     where: { shopDomain: shop },
-    data: { isActive: false },
+    data: { isActive: false, uninstalledAt: new Date() },
   });
 
   return new Response();
