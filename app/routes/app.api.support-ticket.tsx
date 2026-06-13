@@ -5,12 +5,14 @@ import { C } from "../lib/support-tokens";
 
 // Receives a support request from the bubble / FAQ contact modal and forwards
 // it as an email via Resend. The merchant's email goes in the From display
-// name + Reply-To so hitting Reply in the inbox goes straight to them. Same
-// env vars as the other Royal Loyalty emails (RESEND_API_KEY, and the
-// reloop-returns.com sender -> Dealify inbox transport).
+// name + Reply-To so hitting Reply in the inbox goes straight to them.
+//
+// Addresses are hardcoded on purpose (no env vars): reloop-returns.com is the
+// sending "vehicle" verified in Resend, and the Dealify inbox is where every
+// app's support mail lands. Only the Resend API key stays a secret env var.
 
-const SUPPORT_INBOX = process.env.SUPPORT_INBOX_EMAIL || "dealifynordahl@gmail.com";
-const FROM_ADDRESS = process.env.SUPPORT_FROM_EMAIL || "Royal Loyalty Support <noreply@reloop-returns.com>";
+const SUPPORT_INBOX = "dealifynordahl@gmail.com";
+const FROM_ADDRESS = "Royal Loyalty Support <noreply@reloop-returns.com>";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
