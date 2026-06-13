@@ -598,7 +598,78 @@ export default function Home() {
         </div>
       </s-section>
 
+      <HelpBanner onBrowse={() => nav("/app/help")} />
+
     </s-page>
+  );
+}
+
+// Bottom-of-dashboard banner pointing at the FAQ help page. The chat bubble in
+// the corner is the last-resort path; this banner makes the FAQ the first stop.
+function HelpBanner({ onBrowse }: { onBrowse: () => void }) {
+  return (
+    <div
+      style={{
+        background: "linear-gradient(135deg, #0F1729 0%, #1B2547 100%)",
+        border: "1px solid #1B2547",
+        borderRadius: 12,
+        padding: "18px 22px",
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        flexWrap: "wrap",
+        margin: "16px 0 0",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "#FFD86B",
+            marginBottom: 4,
+          }}
+        >
+          Need a hand?
+        </div>
+        <div style={{ fontSize: 13, color: "#E6ECF7", lineHeight: 1.5 }}>
+          Check the FAQ for instant answers, or message us and we&apos;ll reply
+          by email.
+        </div>
+      </div>
+      <a
+        href="/app/help"
+        onClick={(e) => {
+          e.preventDefault();
+          onBrowse();
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.background =
+            "rgba(242,184,33,0.12)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "transparent";
+        }}
+        style={{
+          padding: "10px 22px",
+          borderRadius: 6,
+          background: "transparent",
+          color: "#F2B821",
+          fontSize: 13,
+          fontWeight: 700,
+          border: "1.5px solid #F2B821",
+          cursor: "pointer",
+          transition: "background 0.15s",
+          textDecoration: "none",
+          display: "inline-block",
+          flexShrink: 0,
+        }}
+      >
+        Browse FAQ
+      </a>
+    </div>
   );
 }
 

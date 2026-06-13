@@ -6,6 +6,7 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
 import { loadShopMoneyContext } from "../lib/shop-context.server";
 import prisma from "../db.server";
+import { SupportBubble } from "../components/SupportBubble";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -39,11 +40,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   })();
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", money };
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", money, shopDomain: session.shop };
 };
 
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, shopDomain } = useLoaderData<typeof loader>();
 
   return (
     <AppProvider embedded apiKey={apiKey}>
@@ -65,6 +66,9 @@ export default function App() {
         <s-link href="/app/billing">Billing</s-link>
       </s-app-nav>
       <Outlet />
+      {/* Floating support widget — present on every admin page. Other pages can
+          pop it open with window.dispatchEvent(new Event("royal:open-support")). */}
+      <SupportBubble shopDomain={shopDomain} />
     </AppProvider>
   );
 }

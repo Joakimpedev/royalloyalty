@@ -43,7 +43,7 @@ import {
   billingTestMode,
 } from "../lib/billing.server";
 import { getQuotaState } from "../lib/quota.server";
-import { AppLink, useAppNavigate } from "../lib/app-navigate";
+import { useAppNavigate } from "../lib/app-navigate";
 
 async function requireShop(shopDomain: string) {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
@@ -744,7 +744,7 @@ function BillingFAQ() {
       items: [
         {
           q: "Can you build something custom?",
-          a: "Yes. Contact us via the support email below; we can scope custom features or a custom plan if your store has specific needs that aren't covered by the standard tiers.",
+          a: "Yes. Click the help button in the bottom-right corner to send us a message; we can scope custom features or a custom plan if your store has specific needs that aren't covered by the standard tiers.",
         },
         {
           q: "Can I migrate from another loyalty app?",
@@ -758,8 +758,21 @@ function BillingFAQ() {
     <s-section heading="Frequently asked questions">
       <s-paragraph>
         Don&apos;t see your answer?{" "}
-        <AppLink href="/app/support">Contact support</AppLink> and we&apos;ll
-        get back to you within one business day.
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            window.dispatchEvent(new Event("royal:open-support"));
+          }}
+          style={{
+            color: "#2c6ecb",
+            textDecoration: "underline",
+            cursor: "pointer",
+          }}
+        >
+          Click here to get help
+        </a>{" "}
+        and we&apos;ll get back to you within one business day.
       </s-paragraph>
       <s-stack direction="block" gap="large">
         {groups.map((g) => (
