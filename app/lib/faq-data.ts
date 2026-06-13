@@ -159,7 +159,7 @@ export const FAQS: Faq[] = [
     id: "tiers-how",
     category: "tiers",
     question: "How do VIP tiers work?",
-    answer: "Tiers reward your most loyal customers with a higher earn rate. When a member passes a tier threshold, they move up and start earning points faster on every action. Royal ships with Silver and Gold tiers out of the box, and each member's tier shows in the widget.",
+    answer: "Tiers reward your most loyal customers with a higher earn rate. When a member passes a tier threshold, they move up and start earning points faster on every action. Royal ships with three tiers out of the box (Bronze, Silver, and Gold), and each member's tier shows in the widget.",
     keywords: ["tier", "vip", "how", "level", "status"],
   },
   {
